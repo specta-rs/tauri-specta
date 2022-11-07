@@ -2,11 +2,14 @@ lockfileVersion: 5.4
 
 importers:
 
+  .:
+    specifiers: {}
+
   example:
     specifiers:
       '@tauri-apps/api': ^1.1.0
       '@tauri-apps/cli': ^1.1.1
-      tauri-specta: workspace:^0.0.1
+      tauri-specta: workspace:*
       typescript: ^4.8.2
       vite: ^3.0.2
     dependencies:
@@ -23,10 +26,9 @@ importers:
       '@tauri-apps/api': ^1.1.0
       rollup: ^3.2.5
       tslib: ^2.4.1
-    dependencies:
-      '@tauri-apps/api': 1.1.0
     devDependencies:
       '@rollup/plugin-typescript': 9.0.2_rollup@3.2.5+tslib@2.4.1
+      '@tauri-apps/api': 1.1.0
       rollup: 3.2.5
       tslib: 2.4.1
 
@@ -87,7 +89,6 @@ packages:
   /@tauri-apps/api/1.1.0:
     resolution: {integrity: sha512-n13pIqdPd3KtaMmmAcrU7BTfdMtIlGNnfZD0dNX8L4p8dgmuNyikm6JAA+yCpl9gqq6I8x5cV2Y0muqdgD0cWw==}
     engines: {node: '>= 12.22.0', npm: '>= 6.6.0', yarn: '>= 1.19.1'}
-    dev: false
 
   /@tauri-apps/cli-darwin-arm64/1.1.1:
     resolution: {integrity: sha512-qBG11ig525/qf0f5OQxn0ON3hT8YdpTfpa4Y4kVqBJhdW50R5fadPv6tv5Dpl2TS2X7nWh/zg5mEXYoCK3HZ9w==}

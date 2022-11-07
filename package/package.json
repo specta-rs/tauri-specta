@@ -1,6 +1,6 @@
 {
   "name": "tauri-specta",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Completely typesafe Tauri commands",
   "keywords": [
     "tauri",
@@ -28,12 +28,13 @@
     "build": "rollup -c",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "dependencies": {
-    "@tauri-apps/api": "^1.1.0"
-  },
   "devDependencies": {
     "@rollup/plugin-typescript": "^9.0.2",
+    "@tauri-apps/api": "^1.1.0",
     "rollup": "^3.2.5",
     "tslib": "^2.4.1"
+  },
+  "peerDependencies": {
+    "@tauri-apps/api": "^1.1.0"
   }
 }
