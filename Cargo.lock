@@ -2854,7 +2854,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "openapiv3",
  "paste",
@@ -2868,7 +2868,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta-macros"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "proc-macro2",
  "quote",

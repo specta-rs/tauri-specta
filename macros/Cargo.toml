@@ -1,7 +1,14 @@
 [package]
 name = "tauri-specta-macros"
-version = "0.1.0"
+description = "Completely typesafe Tauri commands"
+version = "0.0.2"
+authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/oscartbeaumont/tauri-specta"
+documentation = "https://docs.rs/tauri-specta/latest/tauri-specta"
+keywords = ["async", "specta", "rspc", "typescript", "typesafe"]
+categories = ["web-programming", "asynchronous"]
 
 [lib]
 proc-macro = true
@@ -9,4 +16,4 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1.0.47"
 quote = "1.0.21"
-syn = "1.0.103"
+syn = { version = "1.0.103", features = ["full"] }
