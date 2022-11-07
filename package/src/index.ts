@@ -1,5 +1,3 @@
-// TODO: This would be a runtime package hosted on npm or built into the Typescript.
-
 import { invoke } from "@tauri-apps/api";
 
 type CommandDef = {

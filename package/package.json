@@ -1,0 +1,39 @@
+{
+  "name": "tauri-specta",
+  "version": "0.0.1",
+  "description": "Completely typesafe Tauri commands",
+  "keywords": [
+    "tauri",
+    "specta",
+    "typesafe"
+  ],
+  "author": "Oscar Beaumont <oscar@otbeaumont.me>",
+  "license": "MIT",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/cjs/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "browser": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "node": "./dist/cjs/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "rollup -c -w",
+    "build": "rollup -c",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.1.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-typescript": "^9.0.2",
+    "rollup": "^3.2.5",
+    "tslib": "^2.4.1"
+  }
+}

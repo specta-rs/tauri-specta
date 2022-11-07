@@ -1,5 +1,5 @@
 import { Commands } from "./bindings";
-import { typedInvoke } from "./runtime";
+import { typedInvoke } from "tauri-specta";
 
 let greetInputEl: HTMLInputElement | null;
 let greetMsgEl: HTMLElement | null;
