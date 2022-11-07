@@ -2857,6 +2857,7 @@ name = "tauri-specta"
 version = "0.1.0"
 dependencies = [
  "openapiv3",
+ "paste",
  "serde",
  "serde_json",
  "specta",

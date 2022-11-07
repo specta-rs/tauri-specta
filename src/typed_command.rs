@@ -36,100 +36,63 @@ impl<TResultMarker, TResult: TypedCommandResult<TResultMarker>> TypedCommand<TRe
     }
 }
 
-impl<
-        TArg1Marker,
-        TArg1: TypedCommandArg<TArg1Marker>,
-        TResultMarker,
-        TResult: TypedCommandResult<TResultMarker>,
-    > TypedCommand<(TResultMarker, TArg1Marker)> for fn(TArg1) -> TResult
-{
-    fn to_datatype(
-        name: &'static str,
-        type_map: &mut TypeDefs,
-        fields: &[&'static str],
-    ) -> CommandDataType {
-        CommandDataType {
-            name,
-            input: Some(DataType::Object(ObjectType {
-                name: "_unreachable_".into(),
-                generics: vec![],
-                fields: [TArg1::to_datatype(DefOpts {
-                    parent_inline: false,
-                    type_map,
-                })
-                .map(|ty| ObjectField {
-                    name: fields[0].into(),
-                    ty,
-                    optional: false,
-                })]
-                .into_iter()
-                .filter_map(|v| v)
-                .collect(),
-                tag: None,
-                type_id: None,
-            })),
-            result: TResult::to_datatype(DefOpts {
-                parent_inline: false,
-                type_map,
-            }),
+macro_rules! impl_typed_command {
+    ( impl $($i:ident),* ) => {
+       paste::paste! {
+            impl<
+                    TResultMarker,
+                    TResult: TypedCommandResult<TResultMarker>,
+                    $([<$i Marker>]),*,
+                    $($i: TypedCommandArg<[<$i Marker>]>),*
+                > TypedCommand<(TResultMarker, $([<$i Marker>]),*)> for fn($($i),*) -> TResult
+            {
+                fn to_datatype(
+                    name: &'static str,
+                    type_map: &mut TypeDefs,
+                    fields: &[&'static str],
+                ) -> CommandDataType {
+                    let mut fields = fields.into_iter();
+                    CommandDataType {
+                        name,
+                        input: Some(DataType::Object(ObjectType {
+                            name: "_unreachable_".into(),
+                            generics: vec![],
+                            fields: [
+                                $(
+                                    $i::to_datatype(DefOpts {
+                                        parent_inline: false,
+                                        type_map,
+                                    })
+                                    .map(|ty| ObjectField {
+                                        name: fields.next().expect("Tauri Specta reached an unreachable state. The macro returns the incorrect number of fields. Please file this as a bug on GitHub!").to_string(),
+                                        ty: ty,
+                                        optional: false,
+                                    })
+                                ),*,
+                            ]
+                            .into_iter()
+                            .filter_map(|v| v)
+                            .collect(),
+                            tag: None,
+                            type_id: None,
+                        })),
+                        result: TResult::to_datatype(DefOpts {
+                            parent_inline: false,
+                            type_map,
+                        }),
+                    }
+                }
+            }
         }
-    }
+    };
+    ( $i2:ident $(, $i:ident)* ) => {
+        impl_typed_command!(impl $i2 $(, $i)* );
+        impl_typed_command!($($i),*);
+    };
+    () => {};
 }
 
-impl<
-        TArg2Marker,
-        TArg2: TypedCommandArg<TArg2Marker>,
-        TArg1Marker,
-        TArg1: TypedCommandArg<TArg1Marker>,
-        TResultMarker,
-        TResult: TypedCommandResult<TResultMarker>,
-    > TypedCommand<(TResultMarker, TArg1Marker, TArg2Marker)> for fn(TArg1, TArg2) -> TResult
-{
-    fn to_datatype(
-        name: &'static str,
-        type_map: &mut TypeDefs,
-        fields: &[&'static str],
-    ) -> CommandDataType {
-        CommandDataType {
-            name,
-            input: Some(DataType::Object(ObjectType {
-                name: "_unreachable_".into(),
-                generics: vec![],
-                fields: [
-                    TArg1::to_datatype(DefOpts {
-                        parent_inline: false,
-                        type_map,
-                    })
-                    .map(|ty| ObjectField {
-                        name: fields[0].into(),
-                        ty: ty,
-                        optional: false,
-                    }),
-                    TArg2::to_datatype(DefOpts {
-                        parent_inline: false,
-                        type_map,
-                    })
-                    .map(|ty| ObjectField {
-                        name: fields[1].into(),
-                        ty: ty,
-                        optional: false,
-                    }),
-                ]
-                .into_iter()
-                .filter_map(|v| v)
-                .collect(),
-                tag: None,
-                type_id: None,
-            })),
-            result: TResult::to_datatype(DefOpts {
-                parent_inline: false,
-                type_map,
-            }),
-        }
-    }
-}
-
-// TODO: Support up to 16 args.
+impl_typed_command!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
 
 pub fn export_command_datatype<TMarker, T: TypedCommand<TMarker>>(
     _: T,

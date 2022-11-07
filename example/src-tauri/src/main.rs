@@ -5,7 +5,7 @@
 
 use serde::Serialize;
 use specta::Type;
-use tauri_specta::{export_command_datatype, export_to_openapi, export_to_ts};
+use tauri_specta::{export_to_openapi, export_to_ts};
 
 #[tauri::command]
 #[tauri_specta::command]

@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 openapiv3 = "1.0.1"
+paste = "1.0.9"
 serde = "1.0.147"
 serde_json = "1.0.87"
 specta = { git = "https://github.com/oscartbeaumont/rspc", features = ["openapi"] } # TODO: We need this for alpha OpenAPI support
