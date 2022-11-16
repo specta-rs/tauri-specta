@@ -6,7 +6,7 @@ use std::{
 
 use specta::{to_ts, to_ts_export, TypeDefs};
 
-use crate::CommandDataType;
+use specta::CommandDataType;
 
 pub fn export_to_ts(
     (cmds, type_map): (Vec<CommandDataType>, TypeDefs),

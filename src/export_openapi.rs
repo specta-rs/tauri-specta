@@ -8,7 +8,7 @@ use openapiv3::{
 };
 use specta::{to_openapi, TypeDefs};
 
-use crate::CommandDataType;
+use specta::CommandDataType;
 
 pub fn export_to_openapi(
     (cmds, type_map): (Vec<CommandDataType>, TypeDefs),

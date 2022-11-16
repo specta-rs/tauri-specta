@@ -5,16 +5,16 @@
 
 use serde::Serialize;
 use specta::Type;
-use tauri_specta::{export_to_openapi, export_to_ts};
+use tauri_specta::{collate_types, export_to_openapi, export_to_ts};
 
 #[tauri::command]
-#[tauri_specta::command]
+#[specta::command]
 fn greet(name: String) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
 #[tauri::command]
-#[tauri_specta::command]
+#[specta::command]
 fn greet2(name: String) -> impl Serialize + Type {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -25,7 +25,7 @@ pub struct MyStruct {
 }
 
 #[tauri::command]
-#[tauri_specta::command]
+#[specta::command]
 fn greet3() -> MyStruct {
     MyStruct {
         some_field: "Hello World".into(),
@@ -41,17 +41,9 @@ fn main() {
 
     // Would be great if this was integrated directly into Tauri! collate_types and tauri_specta::command could be done away with.
 
-    export_to_ts(
-        tauri_specta::collate_types![greet, greet2, greet3],
-        "../src/bindings.ts",
-    )
-    .unwrap();
+    export_to_ts(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
 
-    export_to_openapi(
-        tauri_specta::collate_types![greet, greet2, greet3],
-        "../src/openapi.json",
-    )
-    .unwrap();
+    export_to_openapi(collate_types![greet, greet2, greet3], "../src/openapi.json").unwrap();
 
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![greet, greet2, greet3])
