@@ -2,9 +2,17 @@
 
 Typesafe Tauri Commands.
 
-Warning: This repo is currently just a technical demo.
+Warning: This repo is under heavy development. Things may change, and quickly.
 
-## Using Specta
+## Install
+
+```bash
+pnpm i tauri-specta
+
+cargo add tauri-specta
+```
+
+## Adding Specta to custom types
 
 ```rust
 use specta::Type;
@@ -26,9 +34,45 @@ pub struct MyCustomArgumentType {
 }
 ```
 
-### Features
+## Annotate your Tauri commands with Specta
 
-TODO: Link to all of the features supported by Specta.
+```rust
+#[tauri::command]
+#[specta] // <-- This bit here
+fn greet3() -> MyStruct {
+    MyStruct {
+        some_field: "Hello World".into(),
+    }
+}
+```
+
+
+## Export your bindings
+
+```rust
+// this example exports your types on startup when in debug mode or in a unit test. You can do whatever.
+
+fn main() {
+    #[cfg(debug_assertions)]
+    export_to_ts(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
+}
+
+
+#[test]
+fn export_bindings() {
+    export_to_ts(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
+}
+```
+
+## Use on frontend
+
+```ts
+import { Commands } from "./bindings"; // This should point to the file we export from Rust
+
+const t = typedInvoke<Commands>();
+
+await t.invoke("greet", { name: 42 });
+```
 
 ## Known limitations
 
@@ -53,6 +97,5 @@ pnpm tauri dev
  - Would be nice for it to be a single macro.
  - Stable OpenAPI support - Currently will crash if your types have generics.
  - Write exports for many different languages. Maybe for support with something like [tauri-sys](https://github.com/JonasKruckenberg/tauri-sys).
- - Move more of the type exporting into Specta. Right now this package uses strings to generate some Typescript which isn't great.
  - Clean up code
  - Proper unit tests

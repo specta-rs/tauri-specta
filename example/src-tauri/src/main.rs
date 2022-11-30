@@ -4,17 +4,17 @@
 )]
 
 use serde::Serialize;
-use specta::Type;
+use specta::{specta, Type};
 use tauri_specta::{collate_types, export_to_openapi, export_to_ts};
 
 #[tauri::command]
-#[specta::command]
+#[specta]
 fn greet(name: String) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
 #[tauri::command]
-#[specta::command]
+#[specta]
 fn greet2(name: String) -> impl Serialize + Type {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -25,7 +25,7 @@ pub struct MyStruct {
 }
 
 #[tauri::command]
-#[specta::command]
+#[specta]
 fn greet3() -> MyStruct {
     MyStruct {
         some_field: "Hello World".into(),

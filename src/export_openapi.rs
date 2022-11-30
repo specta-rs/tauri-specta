@@ -6,12 +6,12 @@ use openapiv3::{
     Components, Info, MediaType, Operation, PathItem, Paths, ReferenceOr, RequestBody, Responses,
     StatusCode,
 };
-use specta::{to_openapi, TypeDefs};
+use specta::{openapi::to_openapi, TypeDefs};
 
-use specta::CommandDataType;
+use crate::Commands;
 
 pub fn export_to_openapi(
-    (cmds, type_map): (Vec<CommandDataType>, TypeDefs),
+    (commands, type_map): (Commands, TypeDefs),
     export_path: impl AsRef<Path>,
 ) -> Result<(), io::Error> {
     let schema = openapiv3::OpenAPI {
@@ -23,7 +23,8 @@ pub fn export_to_openapi(
         },
         servers: vec![],
         paths: Paths {
-            paths: cmds
+            paths: commands
+                .0
                 .iter()
                 .map(|cmd| {
                     (
