@@ -10,6 +10,7 @@ Warning: This repo is under heavy development. Things may change, and quickly.
 pnpm i tauri-specta
 
 cargo add tauri-specta
+cargo add specta --features function,tauri,openapi
 ```
 
 ## Adding Specta to custom types
@@ -38,7 +39,7 @@ pub struct MyCustomArgumentType {
 
 ```rust
 #[tauri::command]
-#[specta] // <-- This bit here
+#[specta::specta] // <-- This bit here
 fn greet3() -> MyStruct {
     MyStruct {
         some_field: "Hello World".into(),
