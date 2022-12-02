@@ -11,7 +11,7 @@ export function typedInvoke<TCommands extends CommandDef>() {
     invoke: <K extends TCommands["name"]>(
       key: K,
       input: Extract<TCommands, { name: K }>["input"]
-    ): Extract<TCommands, { name: K }>["result"] =>
+    ): Promise<Extract<TCommands, { name: K }>["result"]> =>
       invoke(key, input || undefined),
   };
 }
