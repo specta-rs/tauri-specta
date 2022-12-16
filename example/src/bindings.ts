@@ -11,7 +11,7 @@ declare global {
 
 const invoke = window.__TAURI_INVOKE__;
 export type Commands =
-  | { name: "hello_world"; args: { my_name: string }; result: string }
+  | { name: "hello_world"; args: { myName: string }; result: string }
   | { name: "goodbye_world"; args: null; result: string }
   | { name: "some_struct"; args: null; result: MyStruct };
 

@@ -40,7 +40,19 @@ const invoke = window.__TAURI_INVOKE__;
     writeln!(
         file,
         "{}",
-        ts::export_datatype(&Commands(function_types.clone()).into()).unwrap()
+        ts::export_datatype(&{
+            let mut function_types = function_types.clone();
+
+            for t in &mut function_types {
+                for arg in &mut t.args {
+                    arg.0 = arg.0.to_lower_camel_case();
+                }
+            }
+
+            let a = Commands(function_types.clone()).into();
+            a
+        })
+        .unwrap()
     )?;
 
     for function in function_types {

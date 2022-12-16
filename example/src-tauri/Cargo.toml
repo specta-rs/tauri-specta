@@ -17,7 +17,7 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "1.2.1", features = ["api-all"] }
 tauri-specta = { path = "../../" }
-specta = { version = "0.0.6", features = ["function", "tauri", "openapi"] }
+specta = { git = "https://github.com/oscartbeaumont/rspc", branch = "tauri-specta-changes", features = ["function", "tauri"] }
 
 [features]
 default = [ "custom-protocol" ]
