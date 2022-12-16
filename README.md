@@ -10,7 +10,7 @@ Warning: This repo is under heavy development. Things may change, and quickly.
 pnpm i tauri-specta
 
 cargo add tauri-specta
-cargo add specta --features function,tauri,openapi
+cargo add specta --features function,tauri
 ```
 
 ## Adding Specta to custom types
@@ -45,6 +45,12 @@ fn greet3() -> MyStruct {
         some_field: "Hello World".into(),
     }
 }
+
+#[tauri::command]
+#[specta::specta] // <-- This bit here
+fn greet(name: String) -> String {
+  format!("Hello {name}!")
+}
 ```
 
 
@@ -68,11 +74,9 @@ fn export_bindings() {
 ## Use on frontend
 
 ```ts
-import { Commands } from "./bindings"; // This should point to the file we export from Rust
+import * as commands from "./bindings"; // This should point to the file we export from Rust
 
-const t = typedInvoke<Commands>();
-
-await t.invoke("greet", { name: 42 });
+await commands.greet("Brendan");
 ```
 
 ## Known limitations

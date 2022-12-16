@@ -12,15 +12,15 @@ keywords = ["async", "specta", "rspc", "typescript", "typesafe"]
 categories = ["web-programming", "asynchronous"]
 
 [dependencies]
-specta = { version = "0.0.6", features = ["function", "tauri", "openapi"] }
-openapiv3 = "1.0.1"
-paste = "1.0.9"
+# specta = { version = "0.0.6", features = ["function", "tauri"] }
+specta = { git = "https://github.com/oscartbeaumont/rspc", branch = "tauri-specta-changes" }
 serde = "1.0.147"
 serde_json = "1.0.87"
 tauri = "1.1.1"
 thiserror = "1.0.37"
+heck = "0.4.0"
 
 [workspace]
 members = [
-    "example/src-tauri"
+    "example/src-tauri",
 ]
