@@ -16,8 +16,7 @@ openapi = ["dep:openapiv3", "specta/openapi"]
 
 [dependencies]
 # specta = { version = "0.0.6", features = ["function", "tauri"] }
-# specta = { git = "https://github.com/oscartbeaumont/rspc", branch = "tauri-specta-changes", features = ["function", "tauri"] }
-specta = { path = "../rspc/crates/specta", features = ["function", "tauri"] }
+specta = { git = "https://github.com/oscartbeaumont/rspc", branch = "tauri-specta-changes", features = ["function", "tauri"] }
 serde = "1.0.147"
 serde_json = "1.0.87"
 tauri = "1.1.1"
@@ -30,6 +29,3 @@ openapiv3 = { version = "1.0.1", optional = true }
 members = [
     "example/src-tauri",
 ]
-
-[patch.crates-io]
-specta = { path = "../rspc/crates/specta" }
