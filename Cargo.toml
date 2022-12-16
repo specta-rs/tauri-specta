@@ -13,7 +13,7 @@ categories = ["web-programming", "asynchronous"]
 
 [dependencies]
 # specta = { version = "0.0.6", features = ["function", "tauri"] }
-specta = { git = "https://github.com/oscartbeaumont/rspc", branch = "tauri-specta-changes" }
+specta = { git = "https://github.com/oscartbeaumont/rspc", branch = "tauri-specta-changes", features = ["function", "tauri"] }
 serde = "1.0.147"
 serde_json = "1.0.87"
 tauri = "1.1.1"
