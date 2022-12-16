@@ -7,6 +7,9 @@ use std::{
 
 use specta::{function::FunctionDataType, ts, TypeDefs};
 
+#[derive(specta::DataTypeFrom)]
+struct Commands(Vec<FunctionDataType>);
+
 pub fn export_to_ts(
     (function_types, type_map): (Vec<FunctionDataType>, TypeDefs),
     export_path: impl AsRef<Path>,
@@ -32,6 +35,12 @@ declare global {{
 
 const invoke = window.__TAURI_INVOKE__;
     "#
+    )?;
+
+    writeln!(
+        file,
+        "{}",
+        ts::export_datatype(&Commands(function_types.clone()).into()).unwrap()
     )?;
 
     for function in function_types {

@@ -583,7 +583,7 @@ version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",
- "specta 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "specta",
  "tauri",
  "tauri-build",
  "tauri-specta",
@@ -2494,8 +2494,6 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "0.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "427e2820d72e030de0f4e3d57a4b1060d1d5865d822751f9cc21a12ffe4e8c80"
 dependencies = [
  "document-features",
  "once_cell",
@@ -2503,41 +2501,13 @@ dependencies = [
  "paste",
  "serde",
  "serde_json",
- "specta-macros 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "tauri",
-]
-
-[[package]]
-name = "specta"
-version = "0.0.6"
-source = "git+https://github.com/oscartbeaumont/rspc?branch=tauri-specta-changes#dce6351c96a86ec8bd000893956b6424fff37bea"
-dependencies = [
- "document-features",
- "once_cell",
- "paste",
- "serde",
- "serde_json",
- "specta-macros 0.0.6 (git+https://github.com/oscartbeaumont/rspc?branch=tauri-specta-changes)",
+ "specta-macros",
  "tauri",
 ]
 
 [[package]]
 name = "specta-macros"
 version = "0.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fb7a302eb421c00c45715b2c8abb61650dd01d26a475505834f3e8ee23ffcbb"
-dependencies = [
- "Inflector",
- "proc-macro2",
- "quote",
- "syn",
- "termcolor",
-]
-
-[[package]]
-name = "specta-macros"
-version = "0.0.6"
-source = "git+https://github.com/oscartbeaumont/rspc?branch=tauri-specta-changes#dce6351c96a86ec8bd000893956b6424fff37bea"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -2862,9 +2832,10 @@ name = "tauri-specta"
 version = "0.0.2"
 dependencies = [
  "heck 0.4.0",
+ "openapiv3",
  "serde",
  "serde_json",
- "specta 0.0.6 (git+https://github.com/oscartbeaumont/rspc?branch=tauri-specta-changes)",
+ "specta",
  "tauri",
  "thiserror",
 ]
