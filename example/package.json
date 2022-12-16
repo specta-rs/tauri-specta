@@ -11,8 +11,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@tauri-apps/api": "^1.1.0",
-    "tauri-specta": "workspace:*"
+    "@tauri-apps/api": "^1.1.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^1.1.1",
