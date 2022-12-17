@@ -62,12 +62,17 @@ fn greet(name: String) -> String {
 fn main() {
     #[cfg(debug_assertions)]
     export_to_ts(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
+
+    // or export to JS with JSDoc
+    #[cfg(debug_assertions)]
+    export_to_js(collate_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
 }
 
 
 #[test]
 fn export_bindings() {
     export_to_ts(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
+    export_to_js(collate_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
 }
 ```
 
