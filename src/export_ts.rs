@@ -56,13 +56,13 @@ const invoke = window.__TAURI_INVOKE__;
         let arg_usages = arg_usages
             .is_empty()
             .then(Default::default)
-            .unwrap_or_else(|| format!("{{ {} }}", arg_usages.join(",")));
+            .unwrap_or_else(|| format!(", {{ {} }}", arg_usages.join(",")));
 
         write!(
             file,
             r#"
 export function {name_camel}({arg_defs}) {{
-    return invoke<{ret_type}>("{name}", {arg_usages})
+    return invoke<{ret_type}>("{name}"{arg_usages})
 }}
         "#
         )?;

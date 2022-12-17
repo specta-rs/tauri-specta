@@ -11,9 +11,6 @@ documentation = "https://docs.rs/tauri-specta/latest/tauri-specta"
 keywords = ["async", "specta", "rspc", "typescript", "typesafe"]
 categories = ["web-programming", "asynchronous"]
 
-[features]
-openapi = ["dep:openapiv3", "specta/openapi"]
-
 [dependencies]
 # specta = { version = "0.0.6", features = ["function", "tauri"] }
 specta = { git = "https://github.com/oscartbeaumont/rspc", branch = "tauri-specta-changes", features = ["function", "tauri"] }
@@ -22,8 +19,6 @@ serde_json = "1.0.87"
 tauri = "1.1.1"
 thiserror = "1.0.37"
 heck = "0.4.0"
-
-openapiv3 = { version = "1.0.1", optional = true }
 
 [workspace]
 members = [
