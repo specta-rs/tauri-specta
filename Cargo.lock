@@ -1144,7 +1144,6 @@ checksum = "1885e79c1fc4b10f0e172c475f458b7f7b93061064d98c3293e98c5ba0c8b399"
 dependencies = [
  "autocfg",
  "hashbrown",
- "serde",
 ]
 
 [[package]]
@@ -1596,17 +1595,6 @@ checksum = "2078c0039e6a54a0c42c28faa984e115fb4c2d5bf2208f77d1961002df8576f8"
 dependencies = [
  "pathdiff",
  "windows-sys 0.42.0",
-]
-
-[[package]]
-name = "openapiv3"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b1a9f106eb0a780abd17ba9fca8e0843e3461630bcbe2af0ad4d5d3ba4e9aa4"
-dependencies = [
- "indexmap",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2287,18 +2275,18 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.150"
+version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e326c9ec8042f1b5da33252c8a37e9ffbd2c9bef0155215b6e6c80c790e05f91"
+checksum = "97fed41fc1a24994d044e6db6935e69511a1153b52c15eb42493b26fa87feba0"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.150"
+version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42a3df25b0713732468deadad63ab9da1f1fd75a48a15024b50363f128db627e"
+checksum = "255abe9a125a985c05190d687b320c12f9b1f0b99445e608c21ba0782c719ad8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2475,11 +2463,10 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "0.0.6"
-source = "git+https://github.com/oscartbeaumont/rspc?branch=tauri-specta-changes#8dd4a2fc0b9d07909d1a8d8e34fc892d52fda671"
+source = "git+https://github.com/oscartbeaumont/rspc?branch=tauri-specta-changes#b3fbbeffdf56c201453c4284efe582e0d4d981c2"
 dependencies = [
  "document-features",
  "once_cell",
- "openapiv3",
  "paste",
  "serde",
  "serde_json",
@@ -2490,7 +2477,7 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "0.0.6"
-source = "git+https://github.com/oscartbeaumont/rspc?branch=tauri-specta-changes#8dd4a2fc0b9d07909d1a8d8e34fc892d52fda671"
+source = "git+https://github.com/oscartbeaumont/rspc?branch=tauri-specta-changes#b3fbbeffdf56c201453c4284efe582e0d4d981c2"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -2815,7 +2802,6 @@ name = "tauri-specta"
 version = "0.0.2"
 dependencies = [
  "heck 0.4.0",
- "openapiv3",
  "serde",
  "serde_json",
  "specta",

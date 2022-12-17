@@ -19,16 +19,20 @@ fn goodbye_world() -> impl Serialize + Type {
     format!("Goodbye world :(")
 }
 
-#[derive(Serialize, Type)] // For Specta support you must add the `specta::Type` derive macro.
-pub struct MyStruct {
-    some_field: String,
-}
+mod nested {
+    use super::*;
 
-#[tauri::command]
-#[specta]
-fn some_struct() -> MyStruct {
-    MyStruct {
-        some_field: "Hello World".into(),
+    #[tauri::command]
+    #[specta]
+    pub fn some_struct() -> MyStruct {
+        MyStruct {
+            some_field: "Hello World".into(),
+        }
+    }
+
+    #[derive(Serialize, Type)] // For Specta support you must add the `specta::Type` derive macro.
+    pub struct MyStruct {
+        some_field: String,
     }
 }
 
@@ -42,7 +46,7 @@ fn main() {
     // Would be great if this was integrated directly into Tauri! collate_types and tauri_specta::command could be done away with.
 
     export_to_ts(
-        collate_types![hello_world, goodbye_world, some_struct],
+        collate_types![hello_world, goodbye_world, nested::some_struct],
         "../src/bindings.ts",
     )
     .unwrap();
@@ -51,7 +55,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             hello_world,
             goodbye_world,
-            some_struct
+            nested::some_struct
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
