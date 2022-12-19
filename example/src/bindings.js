@@ -9,12 +9,14 @@ const invoke = window.__TAURI_INVOKE__;
 export function helloWorld(myName) {
     return invoke("hello_world", { myName })
 }
+
 /** 
  * @returns { Promise<string> }
  */
 export function goodbyeWorld() {
     return invoke("goodbye_world")
 }
+
 /** 
  * @returns { Promise<MyStruct> }
  */

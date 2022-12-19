@@ -7,17 +7,17 @@ declare global {
 }
 
 const invoke = window.__TAURI_INVOKE__;
-    
+
 export function helloWorld(myName: string) {
     return invoke<string>("hello_world", { myName })
 }
-        
+
 export function goodbyeWorld() {
     return invoke<string>("goodbye_world")
 }
-        
+
 export function someStruct() {
     return invoke<MyStruct>("some_struct")
 }
-        
+
 export type MyStruct = { some_field: string }
