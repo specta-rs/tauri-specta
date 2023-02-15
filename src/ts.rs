@@ -8,16 +8,16 @@ use std::{
 
 use specta::{
     function::FunctionDataType,
-    ts::{self, ExportConfiguration, TsExportError},
+    ts::{self, TsExportError},
     TypeDefs,
 };
 
-pub fn export(
+pub fn export_with_cfg(
     (function_types, type_map): (Vec<FunctionDataType>, TypeDefs),
     export_path: impl AsRef<Path>,
+    cfg: specta::ts::ExportConfiguration,
 ) -> Result<(), TsExportError> {
     let export_path = PathBuf::from(export_path.as_ref());
-    let cfg = ExportConfiguration::default();
 
     if let Some(export_dir) = export_path.parent() {
         fs::create_dir_all(export_dir)?;
@@ -85,4 +85,11 @@ pub fn export(
     }
 
     Ok(())
+}
+
+pub fn export(
+    macro_data: (Vec<FunctionDataType>, TypeDefs),
+    export_path: impl AsRef<Path>,
+) -> Result<(), TsExportError> {
+    export_with_cfg(macro_data, export_path, Default::default())
 }
