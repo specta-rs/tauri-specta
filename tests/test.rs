@@ -6,31 +6,31 @@ use tauri::{State, Window};
 
 #[tauri::command]
 #[specta]
-fn one() -> String {
+fn basic() -> String {
     format!("Hello, world!")
 }
 
 #[tauri::command]
 #[specta]
-fn two() -> Result<String, ()> {
+fn result() -> Result<String, ()> {
     Ok(format!("Hello, world!"))
 }
 
 #[tauri::command(async)]
 #[specta]
-async fn three() -> String {
+async fn async_() -> String {
     format!("Hello, world!")
 }
 
 #[tauri::command(async)]
 #[specta]
-async fn four() -> Result<String, ()> {
+async fn async_result() -> Result<String, ()> {
     Ok(format!("Hello, world!"))
 }
 
 #[tauri::command(async)]
 #[specta]
-async fn six() -> impl Serialize + Type {
+async fn async_impl() -> impl Serialize + Type {
     "Hello, World!"
 }
 
@@ -38,30 +38,30 @@ async fn six() -> impl Serialize + Type {
 
 #[tauri::command]
 #[specta]
-fn seven(input: String) -> String {
+fn value(input: String) -> String {
     format!("Hello, world!")
 }
 
 #[tauri::command]
 #[specta]
-fn eight(state: State<String>) -> String {
+fn state(state: State<String>) -> String {
     format!("Hello, world!")
 }
 
 #[tauri::command]
 #[specta]
-fn nine(window: Window) -> String {
+fn window(window: Window) -> String {
     format!("Hello, world!")
 }
 
 #[tauri::command]
 #[specta]
-fn ten(state: State<()>, a: String) -> String {
+fn state_value(state: State<()>, a: String) -> String {
     format!("Hello, world!")
 }
 
 #[tauri::command]
 #[specta]
-fn eleven(state: State<()>, a: String, b: i32, c: bool, d: Box<u128>) -> String {
+fn state_many_values(state: State<()>, a: String, b: i32, c: bool, d: Box<u128>) -> String {
     format!("Hello, world!")
 }
