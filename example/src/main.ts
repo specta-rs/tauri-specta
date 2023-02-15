@@ -1,21 +1,13 @@
-import { Commands } from "./bindings";
-import { typedInvoke } from "tauri-specta";
+import * as commands from "./bindings";
 
 let greetInputEl: HTMLInputElement | null;
 let greetMsgEl: HTMLElement | null;
 
-const t = typedInvoke<Commands>();
-
 async function greet() {
   if (greetMsgEl && greetInputEl) {
-    greetMsgEl.textContent = await t.invoke("greet", {
-      name: greetInputEl.value,
-    });
+    greetMsgEl.textContent = await commands.helloWorld(greetInputEl.value);
 
-    // @ts-expect-error
-    await t.invoke("greet", { name: 42 });
-    // @ts-expect-error
-    await t.invoke("not-a-function");
+    setTimeout(async () => console.log(await commands.goodbyeWorld()), 1000);
   }
 }
 
