@@ -5,7 +5,7 @@
 
 use serde::Serialize;
 use specta::{specta, Type};
-use tauri_specta::{collate_types, export_to_js, export_to_ts};
+use tauri_specta::*;
 
 #[tauri::command]
 #[specta]
@@ -16,7 +16,7 @@ fn hello_world(my_name: String) -> String {
 #[tauri::command]
 #[specta]
 fn goodbye_world() -> impl Serialize + Type {
-    format!("Goodbye world :(")
+    "Goodbye world :("
 }
 
 mod nested {
@@ -46,13 +46,13 @@ fn main() {
 
     // Would be great if this was integrated directly into Tauri! collate_types and tauri_specta::command could be done away with.
 
-    export_to_ts(
+    ts::export(
         collate_types![hello_world, goodbye_world, nested::some_struct],
         "../src/bindings.ts",
     )
     .unwrap();
 
-    export_to_js(
+    js::export(
         collate_types![hello_world, goodbye_world, nested::some_struct],
         "../src/bindings.js",
     )
