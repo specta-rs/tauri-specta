@@ -103,12 +103,6 @@ cd example/
 pnpm tauri dev
 ```
 
-## Future Work:
+## Credit
 
- - Tauri event support
- - Reexport all the deps that the macro stuff needs.
- - Would be nice for it to be a single macro.
- - Stable OpenAPI support - Currently will crash if your types have generics.
- - Write exports for many different languages. Maybe for support with something like [tauri-sys](https://github.com/JonasKruckenberg/tauri-sys).
- - Clean up code
- - Proper unit tests
+Created by [oscartbeaumont](https://github.com/oscartbeaumont) and [Brendonovich](https://github.com/brendonovich).
