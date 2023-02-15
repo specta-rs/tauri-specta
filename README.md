@@ -2,15 +2,11 @@
 
 Typesafe Tauri Commands.
 
-Warning: This repo is under heavy development. Things may change, and quickly.
-
 ## Install
 
 ```bash
-pnpm i tauri-specta
-
-cargo add tauri-specta
 cargo add specta --features function,tauri
+cargo add tauri-specta
 ```
 
 ## Adding Specta to custom types
@@ -53,7 +49,6 @@ fn greet(name: String) -> String {
 }
 ```
 
-
 ## Export your bindings
 
 ```rust
@@ -61,18 +56,17 @@ fn greet(name: String) -> String {
 
 fn main() {
     #[cfg(debug_assertions)]
-    export_to_ts(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
+    tauri_specta::ts::export(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
 
     // or export to JS with JSDoc
     #[cfg(debug_assertions)]
-    export_to_js(collate_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
+    tauri_specta::js::export(collate_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
 }
-
 
 #[test]
 fn export_bindings() {
-    export_to_ts(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
-    export_to_js(collate_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
+    tauri_specta::ts::export(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
+    tauri_specta::js::export(collate_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
 }
 ```
 
