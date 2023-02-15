@@ -99,7 +99,6 @@ Run the example:
 
 ```bash
 pnpm i
-pnpm package build
 cd example/
 pnpm tauri dev
 ```
