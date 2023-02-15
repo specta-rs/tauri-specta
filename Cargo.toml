@@ -12,16 +12,18 @@ keywords = ["async", "specta", "rspc", "typescript", "typesafe"]
 categories = ["web-programming", "asynchronous"]
 
 [dependencies]
-# specta = { version = "0.0.6", features = ["function", "tauri"] }
-specta = { git = "https://github.com/oscartbeaumont/rspc", branch = "tauri-specta-changes", features = ["function", "tauri"] }
-serde = "1.0.147"
-serde_json = "1.0.87"
-tauri = "1.1.1"
-thiserror = "1.0.37"
-heck = "0.4.0"
-indoc = "1.0.8"
+specta = { version = "0.0.6", features = ["function", "tauri"] }
+serde = "1.0.152"
+serde_json = "1.0.93"
+tauri = "1.2.4"
+thiserror = "1.0.38"
+heck = "0.4.1"
+indoc = "1.0.9"
 
 [workspace]
 members = [
     "example/src-tauri",
 ]
+
+[patch.crates-io]
+specta = { git = "https://github.com/oscartbeaumont/specta.git", rev = "599de1454a5be624816ff87aad4b810ecc5737ff", features = ["function", "tauri"] }

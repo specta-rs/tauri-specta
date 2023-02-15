@@ -2,17 +2,22 @@ use heck::ToLowerCamelCase;
 use indoc::writedoc;
 use std::{
     fs::{self, File},
-    io::{self, Write},
+    io::Write,
     path::{Path, PathBuf},
 };
 
-use specta::{function::FunctionDataType, ts, TypeDefs};
+use specta::{
+    function::FunctionDataType,
+    ts::{self, ExportConfiguration, TsExportError},
+    TypeDefs,
+};
 
 pub fn export_to_ts(
     (function_types, type_map): (Vec<FunctionDataType>, TypeDefs),
     export_path: impl AsRef<Path>,
-) -> Result<(), io::Error> {
+) -> Result<(), TsExportError> {
     let export_path = PathBuf::from(export_path.as_ref());
+    let cfg = ExportConfiguration::default();
 
     if let Some(export_dir) = export_path.parent() {
         fs::create_dir_all(export_dir)?;
@@ -42,11 +47,13 @@ pub fn export_to_ts(
         let arg_defs = function
             .args
             .iter()
-            .map(|(name, typ)| format!("{}: {}", name.to_lower_camel_case(), ts::datatype(typ)))
-            .collect::<Vec<_>>()
+            .map(|(name, typ)| {
+                ts::datatype(&cfg, typ).map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
+            })
+            .collect::<Result<Vec<_>, _>>()?
             .join(", ");
 
-        let ret_type = ts::datatype(&function.result);
+        let ret_type = ts::datatype(&cfg, &function.result)?;
 
         let arg_usages = function
             .args
@@ -72,7 +79,7 @@ pub fn export_to_ts(
 
     for export in type_map
         .values()
-        .filter_map(|v| ts::export_datatype(v).ok())
+        .filter_map(|v| ts::export_datatype(&cfg, v).ok())
     {
         writeln!(file, "\n{export}")?;
     }

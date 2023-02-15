@@ -2,17 +2,22 @@ use heck::ToLowerCamelCase;
 use indoc::writedoc;
 use std::{
     fs::{self, File},
-    io::{self, Write},
+    io::Write,
     path::{Path, PathBuf},
 };
 
-use specta::{function::FunctionDataType, ts, TypeDefs};
+use specta::{
+    function::FunctionDataType,
+    ts::{self, ExportConfiguration, TsExportError},
+    TypeDefs,
+};
 
 pub fn export_to_js(
     (function_types, _): (Vec<FunctionDataType>, TypeDefs),
     export_path: impl AsRef<Path>,
-) -> Result<(), io::Error> {
+) -> Result<(), TsExportError> {
     let export_path = PathBuf::from(export_path.as_ref());
+    let cfg = ExportConfiguration::default();
 
     if let Some(export_dir) = export_path.parent() {
         fs::create_dir_all(export_dir)?;
@@ -50,15 +55,16 @@ pub fn export_to_js(
             .args
             .iter()
             .map(|(name, typ)| {
-                let typ = ts::datatype(typ);
-                let name = name.to_lower_camel_case();
+                ts::datatype(&cfg, typ).and_then(|typ| {
+                    let name = name.to_lower_camel_case();
 
-                format!("\n * @param {{ {typ} }} {name}")
+                    Ok(format!("\n * @param {{ {typ} }} {name}"))
+                })
             })
-            .collect::<Vec<_>>()
+            .collect::<Result<Vec<_>, _>>()?
             .join("\n");
 
-        let ret_type = ts::datatype(&function.result);
+        let ret_type = ts::datatype(&cfg, &function.result)?;
 
         writedoc!(
             file,
