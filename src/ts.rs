@@ -7,7 +7,7 @@ use std::{
 };
 
 use specta::{
-    function::FunctionDataType,
+    functions::FunctionDataType,
     ts::{self, TsExportError},
     TypeDefs,
 };

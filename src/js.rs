@@ -1,7 +1,7 @@
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
-    function::FunctionDataType,
+    functions::FunctionDataType,
     ts::{self, TsExportError},
     TypeDefs,
 };
