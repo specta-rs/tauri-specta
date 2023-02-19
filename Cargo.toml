@@ -28,7 +28,4 @@ members = [
 [workspace.dependencies]
 # TODO: reenable
 # specta = { version = "0.0.6", features = ["functions", "tauri"] }
-specta = { git = "https://github.com/oscartbeaumont/specta.git", rev = "dfb4a66d261d85fab9dfea5744865363da3f3251", features = ["functions", "tauri"] }
-
-[patch.crates-io]
-specta = { git = "https://github.com/oscartbeaumont/specta.git", rev = "dfb4a66d261d85fab9dfea5744865363da3f3251" }
+specta = { git = "https://github.com/oscartbeaumont/specta.git", rev = "3d8f2d965077f1a02a58a814cb31cc9e66d558ea", features = ["functions", "tauri"] }

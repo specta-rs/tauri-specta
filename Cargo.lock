@@ -2502,7 +2502,7 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "0.0.6"
-source = "git+https://github.com/oscartbeaumont/specta.git?rev=dfb4a66d261d85fab9dfea5744865363da3f3251#dfb4a66d261d85fab9dfea5744865363da3f3251"
+source = "git+https://github.com/oscartbeaumont/specta.git?rev=3d8f2d965077f1a02a58a814cb31cc9e66d558ea#3d8f2d965077f1a02a58a814cb31cc9e66d558ea"
 dependencies = [
  "document-features",
  "indoc",
@@ -2518,7 +2518,7 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "0.0.6"
-source = "git+https://github.com/oscartbeaumont/specta.git?rev=dfb4a66d261d85fab9dfea5744865363da3f3251#dfb4a66d261d85fab9dfea5744865363da3f3251"
+source = "git+https://github.com/oscartbeaumont/specta.git?rev=3d8f2d965077f1a02a58a814cb31cc9e66d558ea#3d8f2d965077f1a02a58a814cb31cc9e66d558ea"
 dependencies = [
  "Inflector",
  "itertools",
