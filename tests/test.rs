@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use serde::Serialize;
 use specta::{specta, Type};
 use tauri::{State, Window};

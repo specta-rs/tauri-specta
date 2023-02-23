@@ -3,7 +3,7 @@ use indoc::formatdoc;
 use specta::{
     functions::FunctionDataType,
     ts::{self, TsExportError},
-    TypeDefs,
+    ExportError, TypeDefs,
 };
 use std::{
     fs::{self, File},
@@ -102,8 +102,8 @@ pub fn export_with_cfg(
 }
 
 pub fn export(
-    macro_data: (Vec<FunctionDataType>, TypeDefs),
+    macro_data: Result<(Vec<FunctionDataType>, TypeDefs), ExportError>,
     export_path: impl AsRef<Path>,
 ) -> Result<(), TsExportError> {
-    export_with_cfg(macro_data, export_path, Default::default())
+    export_with_cfg(macro_data?, export_path, Default::default())
 }

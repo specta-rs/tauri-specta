@@ -9,7 +9,7 @@ use std::{
 use specta::{
     functions::FunctionDataType,
     ts::{self, TsExportError},
-    TypeDefs,
+    ExportError, TypeDefs,
 };
 
 pub fn header() -> String {
@@ -82,9 +82,9 @@ pub fn render(
 
     let other_types = type_map
         .values()
-        .filter_map(|v| ts::export_datatype(cfg, v).ok())
-        .map(|export| format!("\n{export}"))
-        .collect::<String>();
+        .filter_map(|v| v.as_ref())
+        .map(|v| ts::export_datatype(cfg, v).map(|export| format!("\n{export}")))
+        .collect::<Result<String, TsExportError>>()?;
 
     Ok(header() + &functions + &other_types)
 }
@@ -108,8 +108,8 @@ pub fn export_with_cfg(
 }
 
 pub fn export(
-    macro_data: (Vec<FunctionDataType>, TypeDefs),
+    macro_data: Result<(Vec<FunctionDataType>, TypeDefs), ExportError>,
     export_path: impl AsRef<Path>,
 ) -> Result<(), TsExportError> {
-    export_with_cfg(macro_data, Default::default(), export_path)
+    export_with_cfg(macro_data?, Default::default(), export_path)
 }
