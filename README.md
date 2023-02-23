@@ -92,7 +92,7 @@ await commands.greet("Brendan");
 
 ## Known limitations
 
- - Your command can only take up to 16 arguments. Any more and you'll get a compile error. If you need more just use a struct.
+ - Your command can only take up to 10 arguments. Any more and you'll get a compile error. If you need more just use a struct.
  - Exporting your schema within a directory tracked by Tauri's hot reload will cause an infinite reload loop.
 
 ## Development
