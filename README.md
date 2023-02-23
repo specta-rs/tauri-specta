@@ -15,8 +15,8 @@
 ## Install
 
 ```bash
-cargo add specta --features function,tauri
-cargo add tauri-specta
+cargo add specta
+cargo add tauri-specta --features javascript,typescript
 ```
 
 ## Adding Specta to custom types
@@ -30,8 +30,7 @@ use serde::{Deserialize, Serialize};
 // If you want to use a type from an external crate you may need to enable the feature on Specta.
 #[derive(Serialize, Type)]
 pub struct MyCustomReturnType {
-    pub foo: String,
-    pub bar: i32,
+    pub some_field: String,
 }
 
 #[derive(Deserialize, Type)]
@@ -46,8 +45,8 @@ pub struct MyCustomArgumentType {
 ```rust
 #[tauri::command]
 #[specta::specta] // <-- This bit here
-fn greet3() -> MyStruct {
-    MyStruct {
+fn greet3() -> MyCustomReturnType {
+    MyCustomReturnType {
         some_field: "Hello World".into(),
     }
 }
@@ -62,21 +61,24 @@ fn greet(name: String) -> String {
 ## Export your bindings
 
 ```rust
+use specta::collect_types;
+use tauri_specta::{ts, js};
+
 // this example exports your types on startup when in debug mode or in a unit test. You can do whatever.
 
 fn main() {
     #[cfg(debug_assertions)]
-    tauri_specta::ts::export(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
+    ts::export(collect_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
 
     // or export to JS with JSDoc
     #[cfg(debug_assertions)]
-    tauri_specta::js::export(collate_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
+    js::export(collect_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
 }
 
 #[test]
 fn export_bindings() {
-    tauri_specta::ts::export(collate_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
-    tauri_specta::js::export(collate_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
+    ts::export(collect_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
+    js::export(collect_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
 }
 ```
 

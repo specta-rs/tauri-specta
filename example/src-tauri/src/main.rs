@@ -4,7 +4,7 @@
 )]
 
 use serde::Serialize;
-use specta::{specta, Type};
+use specta::{collect_types, specta, Type};
 use tauri_specta::*;
 
 #[tauri::command]
@@ -47,13 +47,13 @@ fn main() {
     // Would be great if this was integrated directly into Tauri! collate_types and tauri_specta::command could be done away with.
 
     ts::export(
-        collate_types![hello_world, goodbye_world, nested::some_struct],
+        collect_types![hello_world, goodbye_world, nested::some_struct],
         "../src/bindings.ts",
     )
     .unwrap();
 
     js::export(
-        collate_types![hello_world, goodbye_world, nested::some_struct],
+        collect_types![hello_world, goodbye_world, nested::some_struct],
         "../src/bindings.js",
     )
     .unwrap();

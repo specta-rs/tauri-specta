@@ -11,6 +11,16 @@ documentation = "https://docs.rs/tauri-specta/latest/tauri-specta"
 keywords = ["async", "specta", "rspc", "typescript", "typesafe"]
 categories = ["web-programming", "asynchronous"]
 
+# /bin/sh RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
+[package.metadata."docs.rs"]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = []
+javascript = []
+typescript = ["specta/typescript"]
+
 [dependencies]
 specta = { version = "1.0.0", features = ["functions", "tauri"] }
 serde = "1.0.152"
@@ -20,6 +30,9 @@ thiserror = "1.0.38"
 heck = "0.4.1"
 indoc = "2.0.0"
 
+[dev-dependencies]
+doc-comment = "0.3.3"
+
 [workspace]
 members = [
     "example/src-tauri",
@@ -27,3 +40,4 @@ members = [
 
 [patch.crates-io]
 # specta = { path = "../specta" }
+

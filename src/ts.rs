@@ -12,6 +12,7 @@ use specta::{
     ExportError, TypeDefs,
 };
 
+/// header returns the header of the TypeScript file.
 pub fn header() -> String {
     formatdoc! {
         r#"
@@ -28,6 +29,7 @@ pub fn header() -> String {
     }
 }
 
+/// render_functions a collection of [FunctionDataType] into a TypeScript string.
 pub fn render_functions(
     function_types: Vec<FunctionDataType>,
     cfg: &specta::ts::ExportConfiguration,
@@ -73,6 +75,7 @@ pub fn render_functions(
         .collect()
 }
 
+/// render combines the output of [header], [render_functions] and all of the dependant types into a single TypeScript string.
 pub fn render(
     function_types: Vec<FunctionDataType>,
     type_map: TypeDefs,
@@ -89,6 +92,7 @@ pub fn render(
     Ok(header() + &functions + &other_types)
 }
 
+/// Convert a collection of [FunctionDataType] into a TypeScript file which can be used on the frontend.
 pub fn export_with_cfg(
     (function_types, type_map): (Vec<FunctionDataType>, TypeDefs),
     cfg: specta::ts::ExportConfiguration,
@@ -107,6 +111,7 @@ pub fn export_with_cfg(
     Ok(())
 }
 
+/// Convert a collection of [FunctionDataType] into a TypeScript file which can be used on the frontend.
 pub fn export(
     macro_data: Result<(Vec<FunctionDataType>, TypeDefs), ExportError>,
     export_path: impl AsRef<Path>,
