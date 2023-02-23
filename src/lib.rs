@@ -101,7 +101,7 @@ pub mod js;
 #[cfg_attr(docsrs, doc(cfg(feature = "typescript")))]
 pub mod ts;
 
-/// This remains for backwards compatibility. Please use [specta::collect_types] instead!
+/// This remains for backwards compatibility. Please use [`specta::collect_types`] instead!
 #[macro_export]
 #[deprecated(
     note = "Please use `specta::collect_types` instead! This alias will be removed in a future release."
