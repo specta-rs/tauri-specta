@@ -2514,6 +2514,8 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a27c41db2eeac1d45f34554de1f2a4f33c0ff357abdeb87a85c4398cbc29917"
 dependencies = [
  "document-features",
  "indoc 1.0.9",
@@ -2529,6 +2531,8 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf06715ef4029f77b5e4796cddf59577b0411174769e7c9120c9e9486e4bab3b"
 dependencies = [
  "Inflector",
  "itertools",

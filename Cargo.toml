@@ -37,6 +37,3 @@ doc-comment = "0.3.3"
 members = [
     "example/src-tauri",
 ]
-
-[patch.crates-io]
-specta = { path = "../specta" }
