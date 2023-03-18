@@ -3,24 +3,27 @@
 
 const invoke = window.__TAURI_INVOKE__;
 
-/** 
+/**
+ * HELLO
+ * WORLD
+ * !!!!
  * @param { string } myName
  * @returns { Promise<string> }
  */
-export function helloWorld(myName) {
+ export function helloWorld(myName) {
     return invoke("hello_world", { myName })
 }
 
-/** 
+/**
  * @returns { Promise<string> }
  */
-export function goodbyeWorld() {
+ export function goodbyeWorld() {
     return invoke("goodbye_world")
 }
 
-/** 
+/**
  * @returns { Promise<MyStruct> }
  */
-export function someStruct() {
+ export function someStruct() {
     return invoke("some_struct")
 }

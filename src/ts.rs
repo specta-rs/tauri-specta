@@ -71,9 +71,11 @@ pub mod internal {
                     .then(Default::default)
                     .unwrap_or_else(|| format!(", {{ {} }}", arg_usages.join(",")));
 
+                let docs = specta::ts::js_doc(&function.docs);
+
                 Ok(formatdoc!(
                     r#"
-                    export function {name_camel}({arg_defs}) {{
+                    {docs}export function {name_camel}({arg_defs}) {{
                         return invoke<{ret_type}>("{name}"{arg_usages})
                     }}"#
                 ))

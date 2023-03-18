@@ -7,6 +7,9 @@ use serde::Serialize;
 use specta::{collect_types, specta, Type};
 use tauri_specta::*;
 
+/// HELLO
+/// WORLD
+/// !!!!
 #[tauri::command]
 #[specta]
 fn hello_world(my_name: String) -> String {

@@ -9,6 +9,11 @@ declare global {
 
 const invoke = window.__TAURI_INVOKE__;
 
+/**
+ * HELLO
+ * WORLD
+ * !!!!
+ */
 export function helloWorld(myName: string) {
     return invoke<string>("hello_world", { myName })
 }

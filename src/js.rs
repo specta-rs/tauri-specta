@@ -53,27 +53,34 @@ pub mod internal {
                     .then(Default::default)
                     .unwrap_or_else(|| format!(", {{ {} }}", arg_list.join(", ")));
 
-                let arg_jsdocs = function
-                    .args
-                    .iter()
-                    .map(|(name, typ)| {
-                        ts::datatype(cfg, typ).map(|typ| {
-                            let name = name.to_lower_camel_case();
-
-                            format!("\n * @param {{ {typ} }} {name}")
-                        })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?
-                    .join("\n");
-
                 let ret_type = ts::datatype(cfg, &function.result)?;
+
+                let jsdoc = {
+                    let vec = []
+                        .into_iter()
+                        .chain(
+                            function
+                                .docs
+                                .into_iter()
+                                .map(str::to_owned)
+                                .collect::<Vec<_>>(),
+                        )
+                        .chain(function.args.iter().flat_map(|(name, typ)| {
+                            ts::datatype(cfg, typ).map(|typ| {
+                                let name = name.to_lower_camel_case();
+
+                                format!("@param {{ {typ} }} {name}")
+                            })
+                        }))
+                        .chain([format!("@returns {{ Promise<{ret_type}> }}")])
+                        .collect::<Vec<_>>();
+
+                    specta::ts::js_doc(&vec.iter().map(|s| s.as_str()).collect::<Vec<_>>())
+                };
 
                 Ok(formatdoc! {
                     r#"
-                    /** {arg_jsdocs}
-                     * @returns {{ Promise<{ret_type}> }}
-                     */
-                    export function {name_camel}({arg_defs}) {{
+                    {jsdoc} export function {name_camel}({arg_defs}) {{
                         return invoke("{name}"{arg_usages})
                     }}"#
                 })
