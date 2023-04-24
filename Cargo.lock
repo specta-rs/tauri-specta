@@ -2855,7 +2855,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "doc-comment",
  "heck 0.4.1",
