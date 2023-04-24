@@ -91,6 +91,20 @@
 #![warn(clippy::all, clippy::unwrap_used, clippy::panic, missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+use std::{
+    borrow::Cow,
+    fs::{self, File},
+    io::Write,
+    marker::PhantomData,
+    path::{Path, PathBuf},
+};
+
+use specta::{
+    functions::FunctionDataType,
+    ts::{ExportConfiguration, TsExportError},
+    ExportError, TypeDefs,
+};
+
 /// The exporter for [Javascript](https://www.javascript.com).
 #[cfg(feature = "javascript")]
 #[cfg_attr(docsrs, doc(cfg(feature = "javascript")))]
@@ -124,3 +138,87 @@ pub(crate) const CRINGE_ESLINT_DISABLE: &str = "/* eslint-disable */
 // TODO
 // #[cfg(doctest)]
 // doc_comment::doctest!("../README.md");
+
+/// A set of functions that produce language-specific code
+pub trait ExportLanguage {
+    /// Type definitions and constants that the generated functions rely on
+    fn globals() -> String;
+
+    /// Renders a collection of [`FunctionDataType`] into a string.
+    fn render_functions(
+        function_types: Vec<FunctionDataType>,
+        cfg: &specta::ts::ExportConfiguration,
+    ) -> Result<String, TsExportError>;
+
+    /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
+    fn render(
+        function_types: Vec<FunctionDataType>,
+        type_map: TypeDefs,
+        cfg: &specta::ts::ExportConfiguration,
+    ) -> Result<String, TsExportError>;
+}
+
+/// General exporter, takes a generic for the specific language that is being exported to.
+pub struct Exporter<TLang: ExportLanguage> {
+    macro_data: Result<(Vec<FunctionDataType>, TypeDefs), ExportError>,
+    export_path: PathBuf,
+    cfg: Option<ExportConfiguration>,
+    header: Cow<'static, str>,
+    lang: PhantomData<TLang>,
+}
+
+impl<TLang: ExportLanguage> Exporter<TLang> {
+    /// Creates a new TypeScript exporter
+    pub fn new(
+        macro_data: Result<(Vec<FunctionDataType>, TypeDefs), ExportError>,
+        export_path: impl AsRef<Path>,
+    ) -> Self {
+        Self {
+            macro_data,
+            export_path: export_path.as_ref().into(),
+            cfg: None,
+            header: CRINGE_ESLINT_DISABLE.into(), // TODO: Remove this as a default. SemVer moment.
+            lang: Default::default(),
+        }
+    }
+
+    /// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
+    pub fn with_cfg(mut self, cfg: ExportConfiguration) -> Self {
+        self.cfg = Some(cfg);
+        self
+    }
+
+    /// Allows for specifying a custom header to
+    pub fn with_header(mut self, header: &'static str) -> Self {
+        self.header = header.into();
+        self
+    }
+
+    /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
+    pub fn export(self) -> Result<(), TsExportError> {
+        let Self {
+            macro_data,
+            export_path,
+            cfg,
+            header,
+            ..
+        } = self;
+
+        let (function_types, type_map) = macro_data?;
+
+        if let Some(export_dir) = export_path.parent() {
+            fs::create_dir_all(export_dir)?;
+        }
+
+        let mut file = File::create(export_path)?;
+
+        write!(
+            file,
+            "{}{}",
+            header,
+            TLang::render(function_types, type_map, &cfg.unwrap_or_default())?
+        )?;
+
+        Ok(())
+    }
+}
