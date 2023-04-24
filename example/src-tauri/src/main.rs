@@ -61,6 +61,15 @@ fn main() {
     )
     .unwrap();
 
+    // This is useful for custom eslint, prettier overrides at the top of the file.
+    // ts::export_with_cfg_with_header(
+    //     collect_types![hello_world, goodbye_world, nested::some_struct].unwrap(),
+    //     Default::default(),
+    //     "../src/bindings2.ts",
+    //     "// My custom header\n".into(),
+    // )
+    // .unwrap();
+
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             hello_world,
