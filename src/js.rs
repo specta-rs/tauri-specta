@@ -26,7 +26,8 @@ pub mod internal {
     pub fn globals() -> String {
         formatdoc! {
             r#"
-            const invoke = window.__TAURI_INVOKE__;"#
+            // Late bind to avoid 'window not defined' in SSR
+            const invoke = () => window.__TAURI_INVOKE__;"#
         }
     }
 
@@ -82,7 +83,7 @@ pub mod internal {
                 Ok(formatdoc! {
                     r#"
                     {jsdoc} export function {name_camel}({arg_defs}) {{
-                        return invoke("{name}"{arg_usages})
+                        return invoke()("{name}"{arg_usages})
                     }}"#
                 })
             })

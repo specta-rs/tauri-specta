@@ -34,7 +34,8 @@ pub mod internal {
                 }}
             }}
 
-            const invoke = window.__TAURI_INVOKE__;"#
+            // Function avoids 'window not defined' in SSR
+            const invoke = () => window.__TAURI_INVOKE__;"#
         }
     }
 
@@ -77,7 +78,7 @@ pub mod internal {
                 Ok(formatdoc!(
                     r#"
                     {docs}export function {name_camel}({arg_defs}) {{
-                        return invoke<{ret_type}>("{name}"{arg_usages})
+                        return invoke()<{ret_type}>("{name}"{arg_usages})
                     }}"#
                 ))
             })
