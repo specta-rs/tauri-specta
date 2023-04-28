@@ -22,6 +22,12 @@ fn goodbye_world() -> impl Serialize + Type {
     "Goodbye world :("
 }
 
+#[tauri::command]
+#[specta]
+fn has_error() -> Result<&'static str, i32> {
+    Err(32)
+}
+
 mod nested {
     use super::*;
 
@@ -50,13 +56,13 @@ fn main() {
     // Would be great if this was integrated directly into Tauri! collate_types and tauri_specta::command could be done away with.
 
     ts::export(
-        collect_types![hello_world, goodbye_world, nested::some_struct],
+        collect_types![hello_world, goodbye_world, nested::some_struct, has_error],
         "../src/bindings.ts",
     )
     .unwrap();
 
     js::export(
-        collect_types![hello_world, goodbye_world, nested::some_struct],
+        collect_types![hello_world, goodbye_world, nested::some_struct, has_error],
         "../src/bindings.js",
     )
     .unwrap();
@@ -74,7 +80,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             hello_world,
             goodbye_world,
-            nested::some_struct
+            nested::some_struct,
+            has_error
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
