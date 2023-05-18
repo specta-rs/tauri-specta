@@ -82,7 +82,7 @@ fn export_bindings() {
 }
 ```
 
-## Use on frontend
+## Usage on frontend
 
 ```ts
 import * as commands from "./bindings"; // This should point to the file we export from Rust
