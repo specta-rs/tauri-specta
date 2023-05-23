@@ -39,4 +39,4 @@ members = [
 ]
 
 [patch.crates-io]
-specta = { git = "https://github.com/oscartbeaumont/specta", rev = "c1265c13a1c8a78dce583f687b88b2f0c1b881ae" }
+specta = { git = "https://github.com/oscartbeaumont/specta", branch = "v2" }
