@@ -16,6 +16,7 @@ pub mod internal {
     use specta::{
         functions::FunctionDataType,
         ts::{self, TsExportError},
+        TypeDefs,
     };
 
     /// Constants that the generated functions rely on
@@ -29,7 +30,7 @@ pub mod internal {
 
     /// Renders a collection of [`FunctionDataType`] into a JavaScript string.
     pub fn render_functions(
-        function_types: Vec<FunctionDataType>,
+        (function_types, type_map): (Vec<FunctionDataType>, TypeDefs),
         cfg: &specta::ts::ExportConfiguration,
     ) -> Result<String, TsExportError> {
         function_types
@@ -51,7 +52,7 @@ pub mod internal {
                     .then(Default::default)
                     .unwrap_or_else(|| format!(", {{ {} }}", arg_list.join(", ")));
 
-                let ret_type = ts::datatype(cfg, &function.result)?;
+                let ret_type = ts::datatype(cfg, &function.result, &type_map)?;
 
                 let jsdoc = {
                     let vec = []
@@ -64,7 +65,7 @@ pub mod internal {
                                 .collect::<Vec<_>>(),
                         )
                         .chain(function.args.iter().flat_map(|(name, typ)| {
-                            ts::datatype(cfg, typ).map(|typ| {
+                            ts::datatype(cfg, typ, &type_map).map(|typ| {
                                 let name = name.to_lower_camel_case();
 
                                 format!("@param {{ {typ} }} {name}")
@@ -89,12 +90,12 @@ pub mod internal {
 
     /// Renders the output of [`globals`] and [`render_functions`] into a TypeScript string.
     pub fn render(
-        function_types: Vec<FunctionDataType>,
+        macro_data: (Vec<FunctionDataType>, TypeDefs),
         cfg: &specta::ts::ExportConfiguration,
     ) -> Result<String, TsExportError> {
         let globals = globals();
 
-        let functions = render_functions(function_types, cfg)?;
+        let functions = render_functions(macro_data, cfg)?;
 
         Ok(formatdoc! {
             r#"
@@ -120,18 +121,17 @@ impl ExportLanguage for Language {
     }
 
     fn render_functions(
-        function_types: Vec<FunctionDataType>,
+        macro_data: (Vec<FunctionDataType>, TypeDefs),
         cfg: &specta::ts::ExportConfiguration,
     ) -> Result<String, TsExportError> {
-        internal::render_functions(function_types, cfg)
+        internal::render_functions(macro_data, cfg)
     }
 
     fn render(
-        function_types: Vec<FunctionDataType>,
-        _: TypeDefs,
+        macro_data: (Vec<FunctionDataType>, TypeDefs),
         cfg: &specta::ts::ExportConfiguration,
     ) -> Result<String, TsExportError> {
-        internal::render(function_types, cfg)
+        internal::render(macro_data, cfg)
     }
 }
 
