@@ -94,7 +94,7 @@ pub mod internal {
         let dependant_types = type_map
             .values()
             .filter_map(|v| v.as_ref())
-            .map(|v| ts::export_datatype(cfg, v))
+            .map(|v| ts::export_datatype(cfg, v, &type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
