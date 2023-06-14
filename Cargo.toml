@@ -39,4 +39,4 @@ members = [
 ]
 
 [workspace.dependencies]
-specta = { git = "https://github.com/oscartbeaumont/specta", branch = "function-results" }
+specta = { git = "https://github.com/oscartbeaumont/specta", rev = "c4b25c8aa1eca81da97aaa29c19768ec6d559bdd" }
