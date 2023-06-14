@@ -3,7 +3,7 @@
 
 declare global {
     interface Window {
-        __TAURI_INVOKE__<T>(cmd: string, args?: Record<string, unknown>): Promise<T>;
+        __TAURI_INVOKE__(cmd: string, args?: Record<string, unknown>): Promise<any>;
     }
 }
 
@@ -15,16 +15,25 @@ const invoke = () => window.__TAURI_INVOKE__;
  * WORLD
  * !!!!
  */
-export function helloWorld(myName: string) {
-    return invoke()<string>("hello_world", { myName })
+export async function helloWorld(myName: string): Promise<string> {
+return await invoke()("hello_world", { myName });
 }
 
-export function goodbyeWorld() {
-    return invoke()<string>("goodbye_world")
+export async function goodbyeWorld(): Promise<string> {
+return await invoke()("goodbye_world");
 }
 
-export function someStruct() {
-    return invoke()<MyStruct>("some_struct")
+export async function someStruct(): Promise<MyStruct> {
+return await invoke()("some_struct");
+}
+
+export async function hasError(): Promise<[string, undefined] | [undefined, number]> {
+try {
+    return [await invoke()("has_error"), undefined];
+} catch (e: any) {
+    if(e instanceof Error) throw e;
+    else return [undefined, e];
+}
 }
 
 export type MyStruct = { some_field: string }

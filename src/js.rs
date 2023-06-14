@@ -14,7 +14,7 @@ pub mod internal {
 
     use crate::DO_NOT_EDIT;
     use specta::{
-        functions::FunctionDataType,
+        functions::{FunctionDataType, SpectaFunctionResultVariant},
         ts::{self, TsExportError},
     };
 
@@ -22,7 +22,7 @@ pub mod internal {
     pub fn globals() -> String {
         formatdoc! {
             r#"
-            // Late bind to avoid 'window not defined' in SSR
+            // Function avoids 'window not defined' in SSR
             const invoke = () => window.__TAURI_INVOKE__;"#
         }
     }
@@ -35,25 +35,18 @@ pub mod internal {
         function_types
             .into_iter()
             .map(|function| {
-                let name = &function.name;
-                let name_camel = function.name.to_lower_camel_case();
-
-                let arg_list = function
-                    .args
-                    .iter()
-                    .map(|(name, _)| name.to_lower_camel_case())
-                    .collect::<Vec<_>>();
-
-                let arg_defs = arg_list.join(", ");
-
-                let arg_usages = arg_list
-                    .is_empty()
-                    .then(Default::default)
-                    .unwrap_or_else(|| format!(", {{ {} }}", arg_list.join(", ")));
-
-                let ret_type = ts::datatype(cfg, &function.result)?;
-
                 let jsdoc = {
+                    let ret_type = match &function.result {
+                        SpectaFunctionResultVariant::Value(t) => ts::datatype(cfg, t)?,
+                        SpectaFunctionResultVariant::Result(t, e) => {
+                            format!(
+                                "[{}, undefined] | [undefined, {}]",
+                                ts::datatype(cfg, t)?,
+                                ts::datatype(cfg, e)?
+                            )
+                        }
+                    };
+
                     let vec = []
                         .into_iter()
                         .chain(
@@ -76,10 +69,44 @@ pub mod internal {
                     specta::ts::js_doc(&vec.iter().map(|s| s.as_str()).collect::<Vec<_>>())
                 };
 
+                let name_camel = function.name.to_lower_camel_case();
+
+                let arg_list = function
+                    .args
+                    .iter()
+                    .map(|(name, _)| name.to_lower_camel_case())
+                    .collect::<Vec<_>>();
+
+                let arg_defs = arg_list.join(", ");
+
+                let body = {
+                    let name = &function.name;
+
+                    let arg_usages = arg_list
+                        .is_empty()
+                        .then(Default::default)
+                        .unwrap_or_else(|| format!(", {{ {} }}", arg_list.join(", ")));
+
+                    let invoke = format!("await invoke()(\"{name}\"{arg_usages})");
+
+                    match &function.result {
+                        SpectaFunctionResultVariant::Value(_) => format!("return {invoke};"),
+                        SpectaFunctionResultVariant::Result(_, _) => formatdoc!(
+                            r#"
+                            try {{
+                                return [{invoke}, undefined];
+                            }} catch (e) {{
+                                if(e instanceof Error) throw e;
+                                else return [undefined, e];
+                            }}"#
+                        ),
+                    }
+                };
+
                 Ok(formatdoc! {
                     r#"
-                    {jsdoc} export function {name_camel}({arg_defs}) {{
-                        return invoke()("{name}"{arg_usages})
+                    {jsdoc}export async function {name_camel}({arg_defs}) {{
+                    {body} 
                     }}"#
                 })
             })
