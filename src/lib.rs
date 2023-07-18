@@ -79,7 +79,7 @@
 //! }
 //! ```
 //!
-//! ## Use on frontend
+//! ## Usage on frontend
 //!
 //! ```ts
 //! import * as commands from "./bindings"; // This should point to the file we export from Rust
@@ -146,14 +146,13 @@ pub trait ExportLanguage {
 
     /// Renders a collection of [`FunctionDataType`] into a string.
     fn render_functions(
-        function_types: Vec<FunctionDataType>,
+        macro_data: (Vec<FunctionDataType>, TypeDefs),
         cfg: &specta::ts::ExportConfiguration,
     ) -> Result<String, TsExportError>;
 
     /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
     fn render(
-        function_types: Vec<FunctionDataType>,
-        type_map: TypeDefs,
+        macro_data: (Vec<FunctionDataType>, TypeDefs),
         cfg: &specta::ts::ExportConfiguration,
     ) -> Result<String, TsExportError>;
 }
@@ -216,7 +215,7 @@ impl<TLang: ExportLanguage> Exporter<TLang> {
             file,
             "{}{}",
             header,
-            TLang::render(function_types, type_map, &cfg.unwrap_or_default())?
+            TLang::render((function_types, type_map), &cfg.unwrap_or_default())?
         )?;
 
         Ok(())

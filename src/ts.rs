@@ -36,7 +36,7 @@ pub mod internal {
 
     /// Renders a collection of [`FunctionDataType`] into a TypeScript string.
     pub fn render_functions(
-        function_types: Vec<FunctionDataType>,
+        (function_types, type_map): (Vec<FunctionDataType>, TypeDefs),
         cfg: &specta::ts::ExportConfiguration,
     ) -> Result<String, TsExportError> {
         function_types
@@ -50,19 +50,19 @@ pub mod internal {
                     .args
                     .iter()
                     .map(|(name, typ)| {
-                        ts::datatype(cfg, typ)
+                        ts::datatype(cfg, typ, &type_map)
                             .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
                     })
                     .collect::<Result<Vec<_>, _>>()?
                     .join(", ");
 
                 let ret_type = match &function.result {
-                    SpectaFunctionResultVariant::Value(t) => ts::datatype(cfg, t)?,
+                    SpectaFunctionResultVariant::Value(t) => ts::datatype(cfg, t, &type_map)?,
                     SpectaFunctionResultVariant::Result(t, e) => {
                         format!(
                             "[{}, undefined] | [undefined, {}]",
-                            ts::datatype(cfg, t)?,
-                            ts::datatype(cfg, e)?
+                            ts::datatype(cfg, t, &type_map)?,
+                            ts::datatype(cfg, e, &type_map)?
                         )
                     }
                 };
@@ -110,20 +110,20 @@ pub mod internal {
 
     /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
     pub fn render(
-        function_types: Vec<FunctionDataType>,
-        type_map: TypeDefs,
+        macro_data: (Vec<FunctionDataType>, TypeDefs),
         cfg: &specta::ts::ExportConfiguration,
     ) -> Result<String, TsExportError> {
         let globals = globals();
 
-        let functions = render_functions(function_types, cfg)?;
-
-        let dependant_types = type_map
+        let dependant_types = macro_data
+            .1
             .values()
             .filter_map(|v| v.as_ref())
-            .map(|v| ts::export_datatype(cfg, v))
+            .map(|v| ts::export_datatype(cfg, v, &macro_data.1))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
+
+        let functions = render_functions(macro_data, cfg)?;
 
         Ok(formatdoc! {
             r#"
@@ -151,18 +151,17 @@ impl ExportLanguage for Language {
     }
 
     fn render_functions(
-        function_types: Vec<FunctionDataType>,
+        macro_data: (Vec<FunctionDataType>, TypeDefs),
         cfg: &specta::ts::ExportConfiguration,
     ) -> Result<String, TsExportError> {
-        internal::render_functions(function_types, cfg)
+        internal::render_functions(macro_data, cfg)
     }
 
     fn render(
-        function_types: Vec<FunctionDataType>,
-        type_map: TypeDefs,
+        macro_data: (Vec<FunctionDataType>, TypeDefs),
         cfg: &specta::ts::ExportConfiguration,
     ) -> Result<String, TsExportError> {
-        internal::render(function_types, type_map, cfg)
+        internal::render(macro_data, cfg)
     }
 }
 
