@@ -99,11 +99,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use specta::{
-    functions::FunctionDataType,
-    ts::{ExportConfiguration, TsExportError},
-    ExportError, TypeDefs,
-};
+use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeDefs};
+use crate::ts::ExportConfiguration;
 
 /// The exporter for [Javascript](https://www.javascript.com).
 #[cfg(feature = "javascript")]
@@ -147,13 +144,13 @@ pub trait ExportLanguage {
     /// Renders a collection of [`FunctionDataType`] into a string.
     fn render_functions(
         macro_data: (Vec<FunctionDataType>, TypeDefs),
-        cfg: &specta::ts::ExportConfiguration,
+        cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError>;
 
     /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
     fn render(
         macro_data: (Vec<FunctionDataType>, TypeDefs),
-        cfg: &specta::ts::ExportConfiguration,
+        cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError>;
 }
 
