@@ -34,9 +34,9 @@ pub mod internal {
 
     impl ExportConfiguration {
         /// Creates a new [`ExportConfiguration`] from a [`specta::ts::ExportConfiguration`]
-        pub fn new(specta_config: specta::ts::ExportConfiguration) -> Self {
+        pub fn new(inner: specta::ts::ExportConfiguration) -> Self {
             Self {
-                inner: specta_config,
+                inner,
                 ..Default::default()
             }
         }
