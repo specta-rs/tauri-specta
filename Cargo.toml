@@ -17,7 +17,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default = []
+default = ["typescript", "javascript"]
 javascript = []
 typescript = ["specta/typescript"]
 

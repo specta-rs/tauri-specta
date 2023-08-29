@@ -101,7 +101,7 @@ use std::{
 
 use specta::{
     functions::FunctionDataType,
-    ts::{ExportConfiguration, TsExportError},
+    ts::{ExportConfiguration as SpectaExportConfiguration, TsExportError},
     ExportError, TypeDefs,
 };
 
@@ -139,6 +139,17 @@ pub(crate) const CRINGE_ESLINT_DISABLE: &str = "/* eslint-disable */
 // #[cfg(doctest)]
 // doc_comment::doctest!("../README.md");
 
+/// The configuration for the generator
+#[derive(Default)]
+pub struct ExportConfiguration {
+    /// The name of the plugin to invoke.
+    ///
+    /// If there is no plugin name (i.e. this is an app), this should be `None`.
+    pub(crate) plugin_name: Option<String>,
+    /// The specta export configuration
+    pub(crate) spectra_config: SpectaExportConfiguration,
+}
+
 /// A set of functions that produce language-specific code
 pub trait ExportLanguage {
     /// Type definitions and constants that the generated functions rely on
@@ -147,13 +158,13 @@ pub trait ExportLanguage {
     /// Renders a collection of [`FunctionDataType`] into a string.
     fn render_functions(
         macro_data: (Vec<FunctionDataType>, TypeDefs),
-        cfg: &specta::ts::ExportConfiguration,
+        cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError>;
 
     /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
     fn render(
         macro_data: (Vec<FunctionDataType>, TypeDefs),
-        cfg: &specta::ts::ExportConfiguration,
+        cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError>;
 }
 

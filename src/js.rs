@@ -2,7 +2,7 @@ use std::path::Path;
 
 use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeDefs};
 
-use crate::ExportLanguage;
+use crate::{ExportConfiguration, ExportLanguage};
 
 /// Building blocks for [`export`] and [`export_with_cfg`].
 ///
@@ -12,7 +12,7 @@ pub mod internal {
     use heck::ToLowerCamelCase;
     use indoc::formatdoc;
 
-    use crate::DO_NOT_EDIT;
+    use crate::{ExportConfiguration, DO_NOT_EDIT};
     use specta::{
         functions::{FunctionDataType, SpectaFunctionResultVariant},
         ts::{self, TsExportError},
@@ -31,7 +31,7 @@ pub mod internal {
     /// Renders a collection of [`FunctionDataType`] into a JavaScript string.
     pub fn render_functions(
         (function_types, type_map): (Vec<FunctionDataType>, TypeDefs),
-        cfg: &specta::ts::ExportConfiguration,
+        cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError> {
         function_types
             .into_iter()
@@ -48,12 +48,14 @@ pub mod internal {
 
                 let jsdoc = {
                     let ret_type = match &function.result {
-                        SpectaFunctionResultVariant::Value(t) => ts::datatype(cfg, t, &type_map)?,
+                        SpectaFunctionResultVariant::Value(t) => {
+                            ts::datatype(&cfg.spectra_config, t, &type_map)?
+                        }
                         SpectaFunctionResultVariant::Result(t, e) => {
                             format!(
                                 "[{}, undefined] | [undefined, {}]",
-                                ts::datatype(cfg, t, &type_map)?,
-                                ts::datatype(cfg, e, &type_map)?
+                                ts::datatype(&cfg.spectra_config, t, &type_map)?,
+                                ts::datatype(&cfg.spectra_config, e, &type_map)?
                             )
                         }
                     };
@@ -68,7 +70,7 @@ pub mod internal {
                                 .collect::<Vec<_>>(),
                         )
                         .chain(function.args.iter().flat_map(|(name, typ)| {
-                            ts::datatype(cfg, typ, &type_map).map(|typ| {
+                            ts::datatype(&cfg.spectra_config, typ, &type_map).map(|typ| {
                                 let name = name.to_lower_camel_case();
 
                                 format!("@param {{ {typ} }} {name}")
@@ -81,7 +83,11 @@ pub mod internal {
                 };
 
                 let body = {
-                    let name = &function.name;
+                    let name = if let Some(ref plugin_name) = cfg.plugin_name {
+                        format!("plugin:{}|{}", plugin_name, function.name)
+                    } else {
+                        function.name.to_string()
+                    };
 
                     let arg_usages = arg_list
                         .is_empty()
@@ -118,7 +124,7 @@ pub mod internal {
     /// Renders the output of [`globals`] and [`render_functions`] into a TypeScript string.
     pub fn render(
         macro_data: (Vec<FunctionDataType>, TypeDefs),
-        cfg: &specta::ts::ExportConfiguration,
+        cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError> {
         let globals = globals();
 
@@ -149,14 +155,14 @@ impl ExportLanguage for Language {
 
     fn render_functions(
         macro_data: (Vec<FunctionDataType>, TypeDefs),
-        cfg: &specta::ts::ExportConfiguration,
+        cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError> {
         internal::render_functions(macro_data, cfg)
     }
 
     fn render(
         macro_data: (Vec<FunctionDataType>, TypeDefs),
-        cfg: &specta::ts::ExportConfiguration,
+        cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError> {
         internal::render(macro_data, cfg)
     }
@@ -167,7 +173,7 @@ impl ExportLanguage for Language {
 pub fn export_with_cfg(
     result: (Vec<FunctionDataType>, TypeDefs),
     export_path: impl AsRef<Path>,
-    cfg: specta::ts::ExportConfiguration,
+    cfg: ExportConfiguration,
 ) -> Result<(), TsExportError> {
     Exporter::new(Ok(result), export_path)
         .with_cfg(cfg)
