@@ -100,7 +100,7 @@ use std::{
 };
 
 use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeDefs};
-use ts::ExportConfiguration;
+use crate::ts::ExportConfiguration;
 
 /// The exporter for [Javascript](https://www.javascript.com).
 #[cfg(feature = "javascript")]
