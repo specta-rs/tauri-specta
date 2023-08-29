@@ -99,11 +99,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use specta::{
-    functions::FunctionDataType,
-    ts::{ExportConfiguration as SpectaExportConfiguration, TsExportError},
-    ExportError, TypeDefs,
-};
+use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeDefs};
+use ts::internal::ExportConfiguration;
 
 /// The exporter for [Javascript](https://www.javascript.com).
 #[cfg(feature = "javascript")]
@@ -138,45 +135,6 @@ pub(crate) const CRINGE_ESLINT_DISABLE: &str = "/* eslint-disable */
 // TODO
 // #[cfg(doctest)]
 // doc_comment::doctest!("../README.md");
-
-/// The configuration for the generator
-#[derive(Default)]
-pub struct ExportConfiguration {
-    /// The name of the plugin to invoke.
-    ///
-    /// If there is no plugin name (i.e. this is an app), this should be `None`.
-    pub(crate) plugin_name: Option<Cow<'static, str>>,
-    /// The specta export configuration
-    pub(crate) inner: SpectaExportConfiguration,
-}
-
-impl ExportConfiguration {
-    /// Creates a new [`ExportConfiguration`] with the given plugin name.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Sets the plugin name for this [`ExportConfiguration`].
-    pub fn plugin_name(mut self, plugin_name: impl Into<Cow<'static, str>>) -> Self {
-        self.plugin_name = Some(plugin_name.into());
-        self
-    }
-
-    /// Sets the [`SpectaExportConfiguration`] for this [`ExportConfiguration`].
-    pub fn specta_config(mut self, specta_config: SpectaExportConfiguration) -> Self {
-        self.inner = specta_config;
-        self
-    }
-}
-
-impl From<SpectaExportConfiguration> for ExportConfiguration {
-    fn from(spectra_config: SpectaExportConfiguration) -> Self {
-        Self {
-            inner: spectra_config,
-            ..Default::default()
-        }
-    }
-}
 
 /// A set of functions that produce language-specific code
 pub trait ExportLanguage {

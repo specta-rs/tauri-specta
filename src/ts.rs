@@ -9,7 +9,8 @@ use crate::{ExportConfiguration, ExportLanguage};
 /// These are made available for advanced use cases where you may combine Tauri Specta with another
 /// Specta-enabled library.
 pub mod internal {
-    use crate::ExportConfiguration;
+    use std::borrow::Cow;
+
     use heck::ToLowerCamelCase;
     use indoc::formatdoc;
 
@@ -19,6 +20,42 @@ pub mod internal {
         ts::{self, TsExportError},
         TypeDefs,
     };
+
+    /// The configuration for the generator
+    #[derive(Default)]
+    pub struct ExportConfiguration {
+        /// The name of the plugin to invoke.
+        ///
+        /// If there is no plugin name (i.e. this is an app), this should be `None`.
+        pub(crate) plugin_name: Option<Cow<'static, str>>,
+        /// The specta export configuration
+        pub(crate) inner: specta::ts::ExportConfiguration,
+    }
+
+    impl ExportConfiguration {
+        /// Creates a new [`ExportConfiguration`] from a [`specta::ts::ExportConfiguration`]
+        pub fn new(specta_config: specta::ts::ExportConfiguration) -> Self {
+            Self {
+                inner: specta_config,
+                ..Default::default()
+            }
+        }
+
+        /// Sets the plugin name for this [`ExportConfiguration`].
+        pub fn plugin_name(mut self, plugin_name: impl Into<Cow<'static, str>>) -> Self {
+            self.plugin_name = Some(plugin_name.into());
+            self
+        }
+    }
+
+    impl From<specta::ts::ExportConfiguration> for ExportConfiguration {
+        fn from(spectra_config: specta::ts::ExportConfiguration) -> Self {
+            Self {
+                inner: spectra_config,
+                ..Default::default()
+            }
+        }
+    }
 
     /// Type definitions and constants that the generated functions rely on
     pub fn globals() -> String {
