@@ -49,13 +49,13 @@ pub mod internal {
                 let jsdoc = {
                     let ret_type = match &function.result {
                         SpectaFunctionResultVariant::Value(t) => {
-                            ts::datatype(&cfg.spectra_config, t, &type_map)?
+                            ts::datatype(&cfg.inner, t, &type_map)?
                         }
                         SpectaFunctionResultVariant::Result(t, e) => {
                             format!(
                                 "[{}, undefined] | [undefined, {}]",
-                                ts::datatype(&cfg.spectra_config, t, &type_map)?,
-                                ts::datatype(&cfg.spectra_config, e, &type_map)?
+                                ts::datatype(&cfg.inner, t, &type_map)?,
+                                ts::datatype(&cfg.inner, e, &type_map)?
                             )
                         }
                     };
@@ -70,7 +70,7 @@ pub mod internal {
                                 .collect::<Vec<_>>(),
                         )
                         .chain(function.args.iter().flat_map(|(name, typ)| {
-                            ts::datatype(&cfg.spectra_config, typ, &type_map).map(|typ| {
+                            ts::datatype(&cfg.inner, typ, &type_map).map(|typ| {
                                 let name = name.to_lower_camel_case();
 
                                 format!("@param {{ {typ} }} {name}")
@@ -169,7 +169,7 @@ impl ExportLanguage for Language {
 }
 
 /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a JavaScript file.
-/// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
+/// Allows for specifying a custom [`ExportConfiguration`](ExportConfiguration).
 pub fn export_with_cfg(
     result: (Vec<FunctionDataType>, TypeDefs),
     export_path: impl AsRef<Path>,

@@ -147,7 +147,35 @@ pub struct ExportConfiguration {
     /// If there is no plugin name (i.e. this is an app), this should be `None`.
     pub(crate) plugin_name: Option<String>,
     /// The specta export configuration
-    pub(crate) spectra_config: SpectaExportConfiguration,
+    pub(crate) inner: SpectaExportConfiguration,
+}
+
+impl ExportConfiguration {
+    /// Creates a new [`ExportConfiguration`] with the given plugin name.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the plugin name for this [`ExportConfiguration`].
+    pub fn plugin_name(mut self, plugin_name: impl Into<String>) -> Self {
+        self.plugin_name = Some(plugin_name.into());
+        self
+    }
+
+    /// Sets the [`SpectaExportConfiguration`] for this [`ExportConfiguration`].
+    pub fn specta_config(mut self, specta_config: SpectaExportConfiguration) -> Self {
+        self.inner = specta_config;
+        self
+    }
+}
+
+impl From<SpectaExportConfiguration> for ExportConfiguration {
+    fn from(spectra_config: SpectaExportConfiguration) -> Self {
+        Self {
+            inner: spectra_config,
+            ..Default::default()
+        }
+    }
 }
 
 /// A set of functions that produce language-specific code

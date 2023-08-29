@@ -51,7 +51,7 @@ pub mod internal {
                     .args
                     .iter()
                     .map(|(name, typ)| {
-                        ts::datatype(&cfg.spectra_config, typ, &type_map)
+                        ts::datatype(&cfg.inner, typ, &type_map)
                             .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
                     })
                     .collect::<Result<Vec<_>, _>>()?
@@ -59,13 +59,13 @@ pub mod internal {
 
                 let ret_type = match &function.result {
                     SpectaFunctionResultVariant::Value(t) => {
-                        ts::datatype(&cfg.spectra_config, t, &type_map)?
+                        ts::datatype(&cfg.inner, t, &type_map)?
                     }
                     SpectaFunctionResultVariant::Result(t, e) => {
                         format!(
                             "[{}, undefined] | [undefined, {}]",
-                            ts::datatype(&cfg.spectra_config, t, &type_map)?,
-                            ts::datatype(&cfg.spectra_config, e, &type_map)?
+                            ts::datatype(&cfg.inner, t, &type_map)?,
+                            ts::datatype(&cfg.inner, e, &type_map)?
                         )
                     }
                 };
@@ -126,7 +126,7 @@ pub mod internal {
             .1
             .values()
             .filter_map(|v| v.as_ref())
-            .map(|v| ts::export_datatype(&cfg.spectra_config, v, &macro_data.1))
+            .map(|v| ts::export_datatype(&cfg.inner, v, &macro_data.1))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
