@@ -145,7 +145,7 @@ pub struct ExportConfiguration {
     /// The name of the plugin to invoke.
     ///
     /// If there is no plugin name (i.e. this is an app), this should be `None`.
-    pub(crate) plugin_name: Option<String>,
+    pub(crate) plugin_name: Option<Cow<'static, str>>,
     /// The specta export configuration
     pub(crate) inner: SpectaExportConfiguration,
 }
@@ -157,7 +157,7 @@ impl ExportConfiguration {
     }
 
     /// Sets the plugin name for this [`ExportConfiguration`].
-    pub fn plugin_name(mut self, plugin_name: impl Into<String>) -> Self {
+    pub fn plugin_name(mut self, plugin_name: impl Into<Cow<'static, str>>) -> Self {
         self.plugin_name = Some(plugin_name.into());
         self
     }
