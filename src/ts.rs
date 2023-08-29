@@ -173,7 +173,7 @@ impl ExportLanguage for Language {
 }
 
 /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
-/// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
+/// Allows for specifying a custom [`ExportConfiguration`](ExportConfiguration).
 pub fn export_with_cfg(
     result: (Vec<FunctionDataType>, TypeDefs),
     cfg: ExportConfiguration,
