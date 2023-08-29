@@ -2,7 +2,7 @@ use std::path::Path;
 
 use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeDefs};
 
-use crate::{ExportConfiguration, ExportLanguage};
+use crate::{ts::ExportConfiguration, ExportLanguage};
 
 /// Building blocks for [`export`] and [`export_with_cfg`].
 ///
