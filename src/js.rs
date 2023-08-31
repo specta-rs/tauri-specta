@@ -17,13 +17,7 @@ pub type Exporter<TRuntime> = crate::Exporter<Language, NoCommands<TRuntime>, No
 
 impl ExportLanguage for Language {
     fn globals() -> String {
-        formatdoc! {
-            r#"
-			// @ts-ignore
-			import {{ invoke as TAURI_INVOKE }} from "@tauri-apps/api";
-			// @ts-ignore
-			import {{ listen as TAURI_LISTEN, once as TAURI_ONCE, emit as TAURI_EMIT }} from "@tauri-apps/api/event""#
-        }
+        include_str!("./globals.js").to_string()
     }
 
     /// Renders a collection of [`FunctionDataType`] into a JavaScript string.
@@ -124,7 +118,29 @@ impl ExportLanguage for Language {
         type_map: &TypeDefs,
         cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError> {
-        todo!()
+        if events.is_empty() {
+            return Ok(Default::default());
+        }
+
+        let events = events
+            .iter()
+            .map(|event| {
+                let name = event.name;
+                let typ = ts::datatype(&cfg.inner, &event.typ, type_map)?;
+
+                let name_camel = name.to_lower_camel_case();
+
+                Ok(format!(r#"	{name_camel}: __makeEvent__("{name}")"#))
+            })
+            .collect::<Result<Vec<_>, TsExportError>>()?
+            .join(",\n");
+
+        Ok(formatdoc! {
+            r#"
+	        export const events = {{
+	        {events}
+	        }}"#
+        })
     }
 
     fn render(
@@ -135,15 +151,17 @@ impl ExportLanguage for Language {
     ) -> Result<String, TsExportError> {
         let globals = Self::globals();
 
-        let functions = Self::render_commands(commands, &type_map, cfg)?;
+        let commands = Self::render_commands(commands, &type_map, cfg)?;
+        let events = Self::render_events(events, &type_map, cfg)?;
 
         Ok(formatdoc! {
             r#"
-	            {DO_NOT_EDIT}
+            {DO_NOT_EDIT}
 
-	            {globals}
+            {globals}
+			{events}
 
-	            {functions}
+            {commands}
 	        "#
         })
     }

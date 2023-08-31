@@ -20,3 +20,5 @@ function __makeEvent__<T>(name: string): __EventObj__<T> {
     emit: ((payload?: T) => TAURI_API_EVENT.emit(name, payload)) as any,
   };
 }
+
+type __Result__<T, E> = [T, undefined] | [undefined, E];

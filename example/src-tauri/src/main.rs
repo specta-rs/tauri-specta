@@ -80,7 +80,7 @@ fn main() {
 
             let handle = app.handle();
 
-            EmptyEvent::listen_global(handle.clone(), move |event| {
+            EmptyEvent::listen_global(handle.clone(), move |_| {
                 EmptyEvent.emit_all(handle.clone()).ok();
             });
 

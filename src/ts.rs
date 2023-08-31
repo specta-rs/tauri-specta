@@ -52,10 +52,10 @@ impl ExportLanguage for Language {
                 };
 
                 let ret_type = match &function.result {
-                    SpectaFunctionResultVariant::Value(t) => ok_type.clone(),
-                    SpectaFunctionResultVariant::Result(t, e) => {
+                    SpectaFunctionResultVariant::Value(_) => ok_type.clone(),
+                    SpectaFunctionResultVariant::Result(_, e) => {
                         format!(
-                            "[{ok_type}, undefined] | [undefined, {}]",
+                            "__Result__<{ok_type}, {}>",
                             ts::datatype(&cfg.inner, e, &type_map)?
                         )
                     }
