@@ -1,12 +1,10 @@
-use crate::{
-    ts::ExportConfiguration, EventMeta, ExportLanguage, NoCommands, NoEvents, DO_NOT_EDIT,
-};
+use crate::{ts::ExportConfig, EventMeta, ExportLanguage, NoCommands, NoEvents, DO_NOT_EDIT};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
-    functions::{FunctionDataType, SpectaFunctionResultVariant},
+    functions::FunctionDataType,
     ts::{self, TsExportError},
-    TypeDefs,
+    DataType, TypeMap,
 };
 
 /// Implements [`ExportLanguage`] for JS exporting
@@ -23,8 +21,8 @@ impl ExportLanguage for Language {
     /// Renders a collection of [`FunctionDataType`] into a JavaScript string.
     fn render_commands(
         commands: &[FunctionDataType],
-        type_map: &TypeDefs,
-        cfg: &ExportConfiguration,
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
         let commands = commands
             .into_iter()
@@ -41,16 +39,16 @@ impl ExportLanguage for Language {
 
                 let jsdoc = {
                     let ret_type = match &function.result {
-                        SpectaFunctionResultVariant::Value(t) => {
-                            ts::datatype(&cfg.inner, t, &type_map)?
-                        }
-                        SpectaFunctionResultVariant::Result(t, e) => {
+                        DataType::Result(t) => {
+                            let (t, e) = t.as_ref();
+
                             format!(
                                 "[{}, undefined] | [undefined, {}]",
                                 ts::datatype(&cfg.inner, t, &type_map)?,
                                 ts::datatype(&cfg.inner, e, &type_map)?
                             )
                         }
+                        t => ts::datatype(&cfg.inner, t, &type_map)?,
                     };
 
                     let vec = []
@@ -66,7 +64,7 @@ impl ExportLanguage for Language {
                         .chain([format!("@returns {{ Promise<{ret_type}> }}")])
                         .collect::<Vec<_>>();
 
-                    specta::ts::js_doc(&vec.iter().map(|s| s.as_str()).collect::<Vec<_>>())
+                    specta::ts::js_doc(&vec.into_iter().map(|s| s.into()).collect::<Vec<_>>())
                 };
 
                 let body = {
@@ -89,8 +87,7 @@ impl ExportLanguage for Language {
                     let invoke = format!("await invoke()(\"{name}\"{arg_usages})");
 
                     match &function.result {
-                        SpectaFunctionResultVariant::Value(_) => format!("return {invoke};"),
-                        SpectaFunctionResultVariant::Result(_, _) => formatdoc!(
+                        DataType::Result(_) => formatdoc!(
                             r#"
 	                        try {{
 	                            return [{invoke}, undefined];
@@ -99,6 +96,7 @@ impl ExportLanguage for Language {
 	                            else return [undefined, e];
 	                        }}"#
                         ),
+                        _ => format!("return {invoke};"),
                     }
                 };
 
@@ -122,8 +120,8 @@ impl ExportLanguage for Language {
 
     fn render_events(
         events: &[EventMeta],
-        type_map: &TypeDefs,
-        cfg: &ExportConfiguration,
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
         if events.is_empty() {
             return Ok(Default::default());
@@ -155,7 +153,7 @@ impl ExportLanguage for Language {
         Ok(formatdoc! {
             r#"
             /**
-             * @type {{__makeEvents__<{{
+             * @type {{typeof __makeEvents__<{{
             {events}
              * }}>}}
              */
@@ -170,31 +168,31 @@ impl ExportLanguage for Language {
     fn render(
         commands: &[FunctionDataType],
         events: &[EventMeta],
-        type_map: &TypeDefs,
-        cfg: &ExportConfiguration,
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
         let globals = Self::globals();
 
         let commands = Self::render_commands(commands, &type_map, cfg)?;
         let events = Self::render_events(events, &type_map, cfg)?;
 
-        // let dependant_types = type_map
-        //     .values()
-        //     .filter_map(|v| v.as_ref())
-        //     .map(|v| {
-        //         ts::export_datatype(&cfg.inner, v, &type_map).map(|typ| {
-        //             let name = v.name;
+        let dependant_types = type_map
+            .values()
+            .filter_map(|v| v.as_ref())
+            .map(|v| {
+                ts::named_datatype(&cfg.inner, v, &type_map).map(|typ| {
+                    let name = &v.name;
 
-        //             formatdoc! {
-        //                 r#"
-        //                 /**
-        //                  * @typedef {{ {typ} }} {name}
-        //                  */"#
-        //             }
-        //         })
-        //     })
-        //     .collect::<Result<Vec<_>, _>>()
-        //     .map(|v| v.join("\n"))?;
+                    formatdoc! {
+                        r#"
+                        /**
+                         * @typedef {{ {typ} }} {name}
+                         */"#
+                    }
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(|v| v.join("\n"))?;
 
         Ok(formatdoc! {
             r#"
@@ -203,6 +201,8 @@ impl ExportLanguage for Language {
             {commands}
 
 			{events}
+
+			{dependant_types}
 
             {globals}
 	        "#

@@ -175,7 +175,7 @@ pub struct EventMeta {
 pub(crate) type CollectEventsTuple = (
     EventRegistry,
     Result<Vec<EventMeta>, specta::ExportError>,
-    specta::TypeDefs,
+    specta::TypeMap,
 );
 
 #[macro_export]

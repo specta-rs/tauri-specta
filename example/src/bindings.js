@@ -38,7 +38,7 @@ export const commands = {
 };
 
 /**
- * @type {__makeEvents__<{
+ * @type {typeof __makeEvents__<{
  *   demoEvent: DemoEvent,
  *   emptyEvent: EmptyEvent
  * }>}
@@ -49,6 +49,16 @@ export const events = __typedMakeEvents__({
   demoEvent: "demo-event",
   emptyEvent: "empty-event",
 });
+
+/**
+ * @typedef { { some_field: string } } MyStruct
+ */
+/**
+ * @typedef { string } DemoEvent
+ */
+/**
+ * @typedef { null } EmptyEvent
+ */
 
 import { invoke as TAURI_INVOKE } from "@tauri-apps/api";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";

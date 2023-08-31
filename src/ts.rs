@@ -2,9 +2,9 @@ use crate::{EventMeta, ExportLanguage, NoCommands, NoEvents, DO_NOT_EDIT};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
-    functions::{FunctionDataType, SpectaFunctionResultVariant},
+    functions::FunctionDataType,
     ts::{self, TsExportError},
-    TypeDefs,
+    DataType, TypeMap,
 };
 use std::borrow::Cow;
 
@@ -22,8 +22,8 @@ impl ExportLanguage for Language {
     /// Renders a collection of [`FunctionDataType`] into a TypeScript string.
     fn render_commands(
         commands: &[FunctionDataType],
-        type_map: &TypeDefs,
-        cfg: &ExportConfiguration,
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
         let commands = commands
             .into_iter()
@@ -43,22 +43,24 @@ impl ExportLanguage for Language {
                     .join(", ");
 
                 let ok_type = match &function.result {
-                    SpectaFunctionResultVariant::Value(t) => {
+                    DataType::Result(t) => {
+                        let (t, _) = t.as_ref();
+
                         ts::datatype(&cfg.inner, t, &type_map)?
                     }
-                    SpectaFunctionResultVariant::Result(t, _) => {
-                        ts::datatype(&cfg.inner, t, &type_map)?
-                    }
+                    t => ts::datatype(&cfg.inner, t, &type_map)?,
                 };
 
                 let ret_type = match &function.result {
-                    SpectaFunctionResultVariant::Value(_) => ok_type.clone(),
-                    SpectaFunctionResultVariant::Result(_, e) => {
+                    DataType::Result(t) => {
+                        let (_, e) = t.as_ref();
+
                         format!(
                             "__Result__<{ok_type}, {}>",
                             ts::datatype(&cfg.inner, e, &type_map)?
                         )
                     }
+                    _ => ok_type.clone(),
                 };
 
                 let body = {
@@ -87,8 +89,7 @@ impl ExportLanguage for Language {
                     let invoke = format!("await TAURI_INVOKE<{ok_type}>(\"{name}\"{arg_usages})");
 
                     match &function.result {
-                        SpectaFunctionResultVariant::Value(_) => format!("return {invoke};"),
-                        SpectaFunctionResultVariant::Result(_, _) => formatdoc!(
+                        DataType::Result(_) => formatdoc!(
                             r#"
 	                        try {{
 	                            return [{invoke}, undefined];
@@ -97,6 +98,7 @@ impl ExportLanguage for Language {
 	                            else return [undefined, e];
 	                        }}"#
                         ),
+                        _ => format!("return {invoke};"),
                     }
                 };
 
@@ -120,8 +122,8 @@ impl ExportLanguage for Language {
 
     fn render_events(
         events: &[EventMeta],
-        type_map: &TypeDefs,
-        cfg: &ExportConfiguration,
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
         if events.is_empty() {
             return Ok(Default::default());
@@ -163,8 +165,8 @@ impl ExportLanguage for Language {
     fn render(
         commands: &[FunctionDataType],
         events: &[EventMeta],
-        type_map: &TypeDefs,
-        cfg: &ExportConfiguration,
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
         let globals = Self::globals();
 
@@ -174,7 +176,7 @@ impl ExportLanguage for Language {
         let dependant_types = type_map
             .values()
             .filter_map(|v| v.as_ref())
-            .map(|v| ts::export_datatype(&cfg.inner, v, &type_map))
+            .map(|v| ts::export_named_datatype(&cfg.inner, v, &type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
@@ -196,19 +198,19 @@ impl ExportLanguage for Language {
 
 /// The configuration for the generator
 #[derive(Default)]
-pub struct ExportConfiguration {
+pub struct ExportConfig {
     /// The name of the plugin to invoke.
     ///
     /// If there is no plugin name (i.e. this is an app), this should be `None`.
     pub(crate) plugin_name: Option<Cow<'static, str>>,
     /// The specta export configuration
-    pub(crate) inner: specta::ts::ExportConfiguration,
+    pub(crate) inner: specta::ts::ExportConfig,
     pub(crate) plugin_prefix: bool,
 }
 
-impl ExportConfiguration {
+impl ExportConfig {
     /// Creates a new [`ExportConfiguration`] from a [`specta::ts::ExportConfiguration`]
-    pub fn new(config: specta::ts::ExportConfiguration) -> Self {
+    pub fn new(config: specta::ts::ExportConfig) -> Self {
         Self {
             inner: config,
             ..Default::default()
@@ -222,8 +224,8 @@ impl ExportConfiguration {
     }
 }
 
-impl From<specta::ts::ExportConfiguration> for ExportConfiguration {
-    fn from(config: specta::ts::ExportConfiguration) -> Self {
+impl From<specta::ts::ExportConfig> for ExportConfig {
+    fn from(config: specta::ts::ExportConfig) -> Self {
         Self {
             inner: config,
             ..Default::default()

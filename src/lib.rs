@@ -101,8 +101,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::ts::ExportConfiguration;
-use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeDefs};
+use crate::ts::ExportConfig;
+use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeMap};
 
 use tauri::Manager;
 pub use tauri_specta_macros::Event;
@@ -122,7 +122,7 @@ mod event;
 pub use event::*;
 
 pub type CollectCommandsTuple<TInvokeHandler> = (
-    Result<(Vec<FunctionDataType>, TypeDefs), ExportError>,
+    Result<(Vec<FunctionDataType>, TypeMap), ExportError>,
     TInvokeHandler,
 );
 
@@ -130,12 +130,12 @@ pub type CollectCommandsTuple<TInvokeHandler> = (
 macro_rules! collect_commands {
  	(type_map: $type_map:ident, $($command:path),*) => {
         (
-        	specta::functions::collect_types![type_map: $type_map, $($command),*],
+        	specta::collect_functions![$type_map; $($command),*],
        		::tauri::generate_handler![$($command),*],
         )
     };
     ($($command:path),*) => {{
-        let mut type_map = specta::TypeDefs::default();
+        let mut type_map = specta::TypeMap::default();
         $crate::collect_commands![type_map: type_map, $($command),*]
     }};
 }
@@ -156,23 +156,23 @@ pub trait ExportLanguage {
 
     fn render_events(
         events: &[EventMeta],
-        type_map: &TypeDefs,
-        cfg: &ExportConfiguration,
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError>;
 
     /// Renders a collection of [`FunctionDataType`] into a string.
     fn render_commands(
         commands: &[FunctionDataType],
-        type_map: &TypeDefs,
-        cfg: &ExportConfiguration,
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError>;
 
     /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
     fn render(
         commands: &[FunctionDataType],
         events: &[EventMeta],
-        type_map: &TypeDefs,
-        cfg: &ExportConfiguration,
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError>;
 }
 
@@ -260,7 +260,7 @@ pub struct Exporter<TLang, TCommands, TEvents> {
     lang: PhantomData<TLang>,
     commands: TCommands,
     events: TEvents,
-    cfg: Option<ExportConfiguration>,
+    cfg: Option<ExportConfig>,
     header: Cow<'static, str>,
 }
 
@@ -311,7 +311,7 @@ impl<TLang, TCommands> Exporter<TLang, TCommands, NoEvents> {
 
 impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents> {
     /// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
-    pub fn with_cfg(mut self, cfg: ExportConfiguration) -> Self {
+    pub fn with_cfg(mut self, cfg: ExportConfig) -> Self {
         self.cfg = Some(cfg);
         self
     }
