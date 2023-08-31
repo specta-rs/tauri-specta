@@ -189,7 +189,7 @@ impl ExportLanguage for Language {
 }
 
 /// The configuration for the generator
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ExportConfig {
     /// The name of the plugin to invoke.
     ///

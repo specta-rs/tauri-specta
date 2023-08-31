@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use specta::{specta, Type};
-use tauri_specta::*;
+use tauri_specta::{ts::ExportConfig, *};
 
 /// HELLO
 /// WORLD
@@ -55,13 +55,16 @@ fn main() {
     tauri::Builder::default()
         .plugin(
             ts::Exporter::new("../src/bindings.ts")
-                .with_commands(tauri_specta::collect_commands![
+                .commands(tauri_specta::collect_commands![
                     hello_world,
                     goodbye_world,
                     has_error,
                     nested::some_struct
                 ])
-                .with_events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
+                .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
+                .cfg(ExportConfig::from(
+                    specta::ts::ExportConfig::default().formatter(specta::ts::prettier),
+                ))
                 .to_plugin(),
         )
         .setup(|app| {
