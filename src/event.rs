@@ -4,17 +4,12 @@ use serde::{de::DeserializeOwned, Serialize};
 use specta::DataType;
 use tauri::{EventHandler, Manager, Runtime, Window};
 
+#[derive(Default)]
 pub struct EventRegistry(pub(crate) BTreeSet<&'static str>);
 
 impl EventRegistry {
     pub fn register<E: Event>(&mut self) {
         self.0.insert(E::NAME);
-    }
-}
-
-impl Default for EventRegistry {
-    fn default() -> Self {
-        Self(BTreeSet::new())
     }
 }
 
