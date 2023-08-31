@@ -127,24 +127,36 @@ impl ExportLanguage for Language {
             return Ok(Default::default());
         }
 
-        let events = events
+        let events_map = events
             .iter()
             .map(|event| {
                 let name = event.name;
-                let typ = ts::datatype(&cfg.inner, &event.typ, type_map)?;
-
                 let name_camel = name.to_lower_camel_case();
 
-                Ok(format!(r#"	{name_camel}: __makeEvent__<{typ}>("{name}")"#))
+                format!(r#"	{name_camel}: "{name}""#)
+            })
+            .collect::<Vec<_>>()
+            .join(",\n");
+
+        let events = events
+            .iter()
+            .map(|event| {
+                let name_camel = event.name.to_lower_camel_case();
+
+                let typ = ts::datatype(&cfg.inner, &event.typ, type_map)?;
+
+                Ok(format!(r#"	{name_camel}: {typ}"#))
             })
             .collect::<Result<Vec<_>, TsExportError>>()?
             .join(",\n");
 
         Ok(formatdoc! {
             r#"
-            export const events = {{
+            export const events = __makeEvents__<{{
             {events}
-            }}"#
+            }}>({{
+            {events_map}
+            }})"#
         })
     }
 
@@ -170,13 +182,13 @@ impl ExportLanguage for Language {
             r#"
 	            {DO_NOT_EDIT}
 
-				{globals}
-
 				{commands}
 
 				{events}
 
 	            {dependant_types}
+
+				{globals}
 	        "#
         })
     }

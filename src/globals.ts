@@ -13,12 +13,31 @@ type __EventObj__<T> = {
     : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
-function __makeEvent__<T>(name: string): __EventObj__<T> {
-  return {
-    listen: (cb) => TAURI_API_EVENT.listen(name, cb),
-    once: (cb) => TAURI_API_EVENT.once(name, cb),
-    emit: ((payload?: T) => TAURI_API_EVENT.emit(name, payload)) as any,
-  };
-}
-
 type __Result__<T, E> = [T, undefined] | [undefined, E];
+
+function __makeEvents__<T extends Record<string, any>>(
+  mappings: Record<keyof T, string>
+) {
+  return new Proxy(
+    {} as unknown as {
+      [K in keyof T]: __EventObj__<T[K]>;
+    },
+    {
+      get: (_, event) =>
+        new Proxy({} as __EventObj__<any>, {
+          get: (_, command: keyof __EventObj__<any>) => {
+            const name = mappings[event as keyof T];
+
+            switch (command) {
+              case "listen":
+                return (arg: any) => TAURI_API_EVENT.listen(name, arg);
+              case "once":
+                return (arg: any) => TAURI_API_EVENT.once(name, arg);
+              case "emit":
+                return (arg: any) => TAURI_API_EVENT.emit(name, arg);
+            }
+          },
+        }),
+    }
+  );
+}

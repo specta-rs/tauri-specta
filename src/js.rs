@@ -26,7 +26,7 @@ impl ExportLanguage for Language {
         type_map: &TypeDefs,
         cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError> {
-        commands
+        let commands = commands
             .into_iter()
             .map(|function| {
                 let name_camel = function.name.to_lower_camel_case();
@@ -104,13 +104,20 @@ impl ExportLanguage for Language {
 
                 Ok(formatdoc! {
                     r#"
-	                {jsdoc}export async function {name_camel}({arg_defs}) {{
+	                {jsdoc}async {name_camel}({arg_defs}) {{
 	                {body}
 	                }}"#
                 })
             })
-            .collect::<Result<Vec<_>, _>>()
-            .map(|v| v.join("\n\n"))
+            .collect::<Result<Vec<_>, TsExportError>>()?
+            .join(",\n");
+
+        Ok(formatdoc! {
+            r#"
+            export const commands = {{
+            {commands}
+            }}"#
+        })
     }
 
     fn render_events(
@@ -122,24 +129,41 @@ impl ExportLanguage for Language {
             return Ok(Default::default());
         }
 
-        let events = events
+        let events_map = events
             .iter()
             .map(|event| {
                 let name = event.name;
-                // let typ = ts::datatype(&cfg.inner, &event.typ, type_map)?;
-
                 let name_camel = name.to_lower_camel_case();
 
-                Ok(format!(r#"	{name_camel}: __makeEvent__("{name}")"#))
+                format!(r#"	{name_camel}: "{name}""#)
+            })
+            .collect::<Vec<_>>()
+            .join(",\n");
+
+        let events = events
+            .iter()
+            .map(|event| {
+                let typ = ts::datatype(&cfg.inner, &event.typ, type_map)?;
+
+                let name_camel = event.name.to_lower_camel_case();
+
+                Ok(format!(r#" *   {name_camel}: {typ}"#))
             })
             .collect::<Result<Vec<_>, TsExportError>>()?
             .join(",\n");
 
         Ok(formatdoc! {
             r#"
-	        export const events = {{
-	        {events}
-	        }}"#
+            /**
+             * @type {{__makeEvents__<{{
+            {events}
+             * }}>}}
+             */
+            const __typedMakeEvents__ = __makeEvents__;
+
+	        export const events = __typedMakeEvents__({{
+	        {events_map}
+	        }})"#
         })
     }
 
@@ -154,14 +178,33 @@ impl ExportLanguage for Language {
         let commands = Self::render_commands(commands, &type_map, cfg)?;
         let events = Self::render_events(events, &type_map, cfg)?;
 
+        // let dependant_types = type_map
+        //     .values()
+        //     .filter_map(|v| v.as_ref())
+        //     .map(|v| {
+        //         ts::export_datatype(&cfg.inner, v, &type_map).map(|typ| {
+        //             let name = v.name;
+
+        //             formatdoc! {
+        //                 r#"
+        //                 /**
+        //                  * @typedef {{ {typ} }} {name}
+        //                  */"#
+        //             }
+        //         })
+        //     })
+        //     .collect::<Result<Vec<_>, _>>()
+        //     .map(|v| v.join("\n"))?;
+
         Ok(formatdoc! {
             r#"
             {DO_NOT_EDIT}
 
-            {globals}
+            {commands}
+
 			{events}
 
-            {commands}
+            {globals}
 	        "#
         })
     }
