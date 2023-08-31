@@ -53,7 +53,7 @@ pub struct EmptyEvent;
 fn main() {
     tauri::Builder::default()
         .plugin(
-            js::Exporter::new("../src/bindings.js")
+            ts::Exporter::new("../src/bindings.ts")
                 .commands(tauri_specta::collect_commands![
                     hello_world,
                     goodbye_world,

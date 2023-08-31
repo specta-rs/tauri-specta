@@ -6,29 +6,12 @@ type __EventObj__<T> = {
   listen: (
     cb: TAURI_API_EVENT.EventCallback<T>
   ) => ReturnType<typeof TAURI_API_EVENT.listen<T>>;
-  listenFor: (
-    window: __WebviewWindowHandle__,
-    cb: TAURI_API_EVENT.EventCallback<T>
-  ) => ReturnType<typeof TAURI_API_EVENT.listen<T>>;
   once: (
-    cb: TAURI_API_EVENT.EventCallback<T>
-  ) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
-  onceFor: (
-    window: __WebviewWindowHandle__,
     cb: TAURI_API_EVENT.EventCallback<T>
   ) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
   emit: T extends null
     ? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
     : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
-  emitFor: T extends null
-    ? (
-        window: __WebviewWindowHandle__,
-        payload?: T
-      ) => ReturnType<typeof TAURI_API_EVENT.emit>
-    : (
-        window: __WebviewWindowHandle__,
-        payload: T
-      ) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
 type __Result__<T, E> = [T, undefined] | [undefined, E];
@@ -38,33 +21,32 @@ function __makeEvents__<T extends Record<string, any>>(
 ) {
   return new Proxy(
     {} as unknown as {
-      [K in keyof T]: __EventObj__<T[K]>;
+      [K in keyof T]: __EventObj__<T[K]> & {
+        (handle: __WebviewWindowHandle__): __EventObj__<T[K]>;
+      };
     },
     {
-      get: (_, event) =>
-        new Proxy({} as __EventObj__<any>, {
-          get: (_, command: keyof __EventObj__<any>) => {
-            const name = mappings[event as keyof T];
+      get: (_, event) => {
+        const name = mappings[event as keyof T];
 
+        return new Proxy((() => {}) as any, {
+          apply: (_, __, [window]: [__WebviewWindowHandle__]) => ({
+            listen: (arg: any) => window.listen(name, arg),
+            once: (arg: any) => window.once(name, arg),
+            emit: (arg: any) => window.emit(name, arg),
+          }),
+          get: (_, command: keyof __EventObj__<any>) => {
             switch (command) {
               case "listen":
                 return (arg: any) => TAURI_API_EVENT.listen(name, arg);
-              case "listenFor":
-                return (window: __WebviewWindowHandle__, arg: any) =>
-                  window.listen(name, arg);
               case "once":
                 return (arg: any) => TAURI_API_EVENT.once(name, arg);
-              case "onceFor":
-                return (window: __WebviewWindowHandle__, arg: any) =>
-                  window.once(name, arg);
               case "emit":
                 return (arg: any) => TAURI_API_EVENT.emit(name, arg);
-              case "emitFor":
-                return (window: __WebviewWindowHandle__, arg: any) =>
-                  window.emit(name, arg);
             }
           },
-        }),
+        });
+      },
     }
   );
 }

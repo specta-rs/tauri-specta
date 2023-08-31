@@ -27,4 +27,4 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 events.emptyEvent.listen((e) => console.log(e));
-events.emptyEvent.listenFor(appWindow, (e) => console.log(e));
+events.emptyEvent(appWindow).listen((e) => console.log(e));
