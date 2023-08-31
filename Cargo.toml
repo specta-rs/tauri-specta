@@ -23,6 +23,7 @@ typescript = ["specta/typescript"]
 
 [dependencies]
 specta = { workspace = true, features = ["functions", "tauri"] }
+tauri-specta-macros = { path = "./macros" }
 serde = "1.0.152"
 serde_json = "1.0.93"
 tauri = "1.2.4"
@@ -36,8 +37,10 @@ doc-comment = "0.3.3"
 [workspace]
 members = [
     "example/src-tauri",
+    "macros"
 ]
 
 
 [workspace.dependencies]
-specta = { version = "=2.0.0-rc.1" }
+# specta = { version = "=2.0.0-rc.1" }
+specta = { git = "https://github.com/oscartbeaumont/specta", rev = "51816227ad56bb885fcc78f973221409e75de3ec" }

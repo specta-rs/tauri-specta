@@ -1,4 +1,4 @@
-import * as commands from "./bindings";
+import { commands, events } from "./bindings";
 
 let greetInputEl: HTMLInputElement | null;
 let greetMsgEl: HTMLElement | null;
@@ -17,4 +17,12 @@ window.addEventListener("DOMContentLoaded", () => {
   document
     .querySelector("#greet-button")
     ?.addEventListener("click", () => greet());
+
+  document
+    .querySelector("#send-event-button")
+    ?.addEventListener("click", () => {
+      events.emptyEvent.emit();
+    });
 });
+
+events.emptyEvent.listen((e) => console.log(e));
