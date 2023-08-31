@@ -4,7 +4,7 @@ use std::{
 };
 
 use serde::{de::DeserializeOwned, Serialize};
-use specta::{DataType, NamedType, Type, TypeSid};
+use specta::{DataType, NamedType, SpectaID, Type};
 use tauri::{EventHandler, Manager, Runtime, Window};
 
 use crate::PluginName;
@@ -22,7 +22,7 @@ impl EventRegistryMeta {
 }
 
 #[derive(Default)]
-pub struct EventCollection(pub(crate) BTreeSet<TypeSid>, BTreeSet<&'static str>);
+pub struct EventCollection(pub(crate) BTreeSet<SpectaID>, BTreeSet<&'static str>);
 
 impl EventCollection {
     pub fn register<E: Event>(&mut self) {
@@ -37,7 +37,7 @@ impl EventCollection {
 }
 
 #[derive(Default)]
-pub(crate) struct EventRegistry(pub(crate) RwLock<BTreeMap<TypeSid, EventRegistryMeta>>);
+pub(crate) struct EventRegistry(pub(crate) RwLock<BTreeMap<SpectaID, EventRegistryMeta>>);
 
 impl EventRegistry {
     pub fn register_collection(&self, collection: EventCollection, plugin_name: PluginName) {
@@ -68,7 +68,7 @@ pub struct TypedEvent<T: Event> {
 }
 
 fn get_meta_from_registry<R: Runtime>(
-    sid: TypeSid,
+    sid: SpectaID,
     name: &str,
     handle: &impl Manager<R>,
 ) -> EventRegistryMeta {

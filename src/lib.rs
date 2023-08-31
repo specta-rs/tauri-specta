@@ -243,7 +243,7 @@ pub struct Exporter<TLang, TCommands, TEvents> {
     lang: PhantomData<TLang>,
     commands: TCommands,
     events: TEvents,
-    cfg: Option<ExportConfig>,
+    cfg: ExportConfig,
     header: Cow<'static, str>,
 }
 
@@ -254,7 +254,7 @@ impl<TLang, TRuntime> Exporter<TLang, NoCommands<TRuntime>, NoEvents> {
             lang: PhantomData,
             commands: NoCommands(Default::default()),
             events: NoEvents,
-            cfg: None,
+            cfg: ExportConfig::default(),
             header: CRINGE_ESLINT_DISABLE.into(),
         }
     }
@@ -264,7 +264,7 @@ impl<TLang, TEvents, TRuntime> Exporter<TLang, NoCommands<TRuntime>, TEvents>
 where
     TRuntime: tauri::Runtime,
 {
-    pub fn with_commands<TInvokeHandler: Fn(tauri::Invoke<TRuntime>) + Send + Sync + 'static>(
+    pub fn commands<TInvokeHandler: Fn(tauri::Invoke<TRuntime>) + Send + Sync + 'static>(
         self,
         commands: CollectCommandsTuple<TInvokeHandler>,
     ) -> Exporter<TLang, Commands<TRuntime, TInvokeHandler>, TEvents> {
@@ -280,7 +280,7 @@ where
 }
 
 impl<TLang, TCommands> Exporter<TLang, TCommands, NoEvents> {
-    pub fn with_events(self, events: CollectEventsTuple) -> Exporter<TLang, TCommands, Events> {
+    pub fn events(self, events: CollectEventsTuple) -> Exporter<TLang, TCommands, Events> {
         Exporter {
             export_path: self.export_path,
             lang: self.lang,
@@ -294,8 +294,8 @@ impl<TLang, TCommands> Exporter<TLang, TCommands, NoEvents> {
 
 impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents> {
     /// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
-    pub fn with_cfg(mut self, cfg: ExportConfig) -> Self {
-        self.cfg = Some(cfg);
+    pub fn cfg(mut self, cfg: specta::ts::ExportConfig) -> Self {
+        self.cfg = ExportConfig::new(cfg);
         self
     }
 
@@ -351,7 +351,7 @@ where
     {
         let plugin_name = PluginName::new(plugin_name);
 
-        self.cfg.get_or_insert_with(Default::default).plugin_name = plugin_name;
+        self.cfg.plugin_name = plugin_name;
 
         let (invoke_handler, event_collection) = self.export_inner().unwrap();
 
@@ -367,6 +367,7 @@ where
 
     fn export_inner(self) -> Result<(TCommands::InvokeHandler, EventCollection), TsExportError> {
         let path = self.export_path.clone();
+        let cfg = self.cfg.clone();
 
         let (rendered, ret) = self.render()?;
 
@@ -376,9 +377,11 @@ where
 
         #[cfg(debug_assertions)]
         {
-            let mut file = File::create(path)?;
+            let mut file = File::create(&path)?;
 
             write!(file, "{}", rendered)?;
+
+            cfg.inner.run_format(path)?;
         }
 
         Ok(ret)
@@ -407,7 +410,7 @@ where
                 .into_iter()
                 .chain(events_type_map)
                 .collect(),
-            &cfg.unwrap_or_default(),
+            &cfg,
         )?;
 
         Ok((
@@ -431,7 +434,7 @@ where
     }
 
     pub fn export_for_plugin(mut self, plugin_name: &'static str) -> Result<(), TsExportError> {
-        self.cfg.get_or_insert_with(Default::default).plugin_name = PluginName::new(plugin_name);
+        self.cfg.plugin_name = PluginName::new(plugin_name);
 
         self.export_inner().map(|_| ())
     }

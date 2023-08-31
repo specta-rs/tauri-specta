@@ -183,7 +183,7 @@ impl ExportLanguage for Language {
             .filter_map(|v| v.as_ref())
             .map(|v| {
                 ts::named_datatype(&cfg.inner, v, &type_map).map(|typ| {
-                    let name = &v.name;
+                    let name = v.name();
 
                     js_doc(&[format!("@typedef {{ {typ} }} {name}").into()])
                 })
