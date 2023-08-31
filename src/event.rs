@@ -30,6 +30,23 @@ fn check_event_in_registry_state<R: Runtime>(name: &str, handle: &impl Manager<R
     }
 }
 
+macro_rules! make_handler {
+    ($handler:ident) => {
+        move |event| {
+            let value: serde_json::Value = event
+                .payload()
+                .and_then(|p| serde_json::from_str(p).ok())
+                .unwrap_or(serde_json::Value::Null);
+
+            $handler(TypedEvent {
+                id: event.id(),
+                payload: serde_json::from_value(value)
+                    .expect("Failed to deserialize event payload"),
+            });
+        }
+    };
+}
+
 pub trait Event: Serialize + DeserializeOwned + Clone {
     const NAME: &'static str;
 
@@ -63,17 +80,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
         #[cfg(debug_assertions)]
         check_event_in_registry_state(Self::NAME, handle);
 
-        handle.listen_global(Self::NAME, move |event| {
-            let value: serde_json::Value = event
-                .payload()
-                .and_then(|p| serde_json::from_str(p).ok())
-                .unwrap_or(serde_json::Value::Null);
-
-            handler(TypedEvent {
-                id: event.id(),
-                payload: serde_json::from_value(value).unwrap(),
-            });
-        })
+        handle.listen_global(Self::NAME, make_handler!(handler))
     }
 
     fn once_global<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventHandler
@@ -83,17 +90,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
         #[cfg(debug_assertions)]
         check_event_in_registry_state(Self::NAME, handle);
 
-        handle.once_global(Self::NAME, move |event| {
-            let value: serde_json::Value = event
-                .payload()
-                .and_then(|p| serde_json::from_str(p).ok())
-                .unwrap_or(serde_json::Value::Null);
-
-            handler(TypedEvent {
-                id: event.id(),
-                payload: serde_json::from_value(value).unwrap(),
-            });
-        })
+        handle.once_global(Self::NAME, make_handler!(handler))
     }
 
     // Window functions
@@ -126,17 +123,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
         #[cfg(debug_assertions)]
         check_event_in_registry_state(Self::NAME, window);
 
-        window.listen(Self::NAME, move |event| {
-            let value: serde_json::Value = event
-                .payload()
-                .and_then(|p| serde_json::from_str(p).ok())
-                .unwrap_or(serde_json::Value::Null);
-
-            handler(TypedEvent {
-                id: event.id(),
-                payload: serde_json::from_value(value).unwrap(),
-            });
-        })
+        window.listen(Self::NAME, make_handler!(handler))
     }
 
     fn once<F>(window: &Window<impl Runtime>, handler: F) -> EventHandler
@@ -146,17 +133,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
         #[cfg(debug_assertions)]
         check_event_in_registry_state(Self::NAME, window);
 
-        window.once(Self::NAME, move |event| {
-            let value: serde_json::Value = event
-                .payload()
-                .and_then(|p| serde_json::from_str(p).ok())
-                .unwrap_or(serde_json::Value::Null);
-
-            handler(TypedEvent {
-                id: event.id(),
-                payload: serde_json::from_value(value).unwrap(),
-            });
-        })
+        window.once(Self::NAME, make_handler!(handler))
     }
 }
 
