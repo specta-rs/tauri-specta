@@ -1,8 +1,10 @@
 {
-  "name": "root",
   "private": true,
   "version": "0.0.0",
   "scripts": {
     "example": "pnpm --filter example -- "
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.2.0"
   }
 }

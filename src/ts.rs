@@ -1,160 +1,219 @@
-use std::path::Path;
+use crate::{EventDataType, ExportLanguage, ItemType, PluginName, DO_NOT_EDIT};
+use heck::ToLowerCamelCase;
+use indoc::formatdoc;
+use specta::{
+    functions::FunctionDataType,
+    ts::{self, TsExportError},
+    DataType, TypeMap,
+};
 
-use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeDefs};
+/// Implements [`ExportLanguage`] for TypeScript exporting
+pub struct Language;
 
-use crate::ExportLanguage;
+/// [`Exporter`](crate::Exporter) for TypeScript
+pub type Exporter<TCommands, TEvents> = crate::Exporter<Language, TCommands, TEvents>;
 
-/// Building blocks for [`export`] and [`export_with_cfg`].
-///
-/// These are made available for advanced use cases where you may combine Tauri Specta with another
-/// Specta-enabled library.
-pub mod internal {
-    use heck::ToLowerCamelCase;
-    use indoc::formatdoc;
-
-    use crate::DO_NOT_EDIT;
-    use specta::{
-        functions::FunctionDataType,
-        ts::{self, TsExportError},
-        TypeDefs,
-    };
-
-    /// Type definitions and constants that the generated functions rely on
-    pub fn globals() -> String {
-        formatdoc! {
-            r#"
-            declare global {{
-                interface Window {{
-                    __TAURI_INVOKE__<T>(cmd: string, args?: Record<string, unknown>): Promise<T>;
-                }}
-            }}
-
-            // Function avoids 'window not defined' in SSR
-            const invoke = () => window.__TAURI_INVOKE__;"#
-        }
+impl ExportLanguage for Language {
+    fn globals() -> String {
+        include_str!("./globals.ts").to_string()
     }
 
     /// Renders a collection of [`FunctionDataType`] into a TypeScript string.
-    pub fn render_functions(
-        function_types: Vec<FunctionDataType>,
-        cfg: &specta::ts::ExportConfiguration,
+    fn render_commands(
+        commands: &[FunctionDataType],
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
-        function_types
+        let commands = commands
             .into_iter()
             .map(|function| {
-                let name = &function.name;
+                let docs = specta::ts::js_doc(&function.docs);
+
                 let name_camel = function.name.to_lower_camel_case();
 
                 let arg_defs = function
                     .args
                     .iter()
                     .map(|(name, typ)| {
-                        ts::datatype(cfg, typ)
+                        ts::datatype(&cfg.inner, typ, &type_map)
                             .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
                     })
                     .collect::<Result<Vec<_>, _>>()?
                     .join(", ");
 
-                let ret_type = ts::datatype(cfg, &function.result)?;
+                let ok_type = match &function.result {
+                    DataType::Result(t) => {
+                        let (t, _) = t.as_ref();
 
-                let arg_usages = function
-                    .args
-                    .iter()
-                    .map(|(name, _)| name.to_lower_camel_case())
-                    .collect::<Vec<_>>();
+                        ts::datatype(&cfg.inner, t, &type_map)?
+                    }
+                    t => ts::datatype(&cfg.inner, t, &type_map)?,
+                };
 
-                let arg_usages = arg_usages
-                    .is_empty()
-                    .then(Default::default)
-                    .unwrap_or_else(|| format!(", {{ {} }}", arg_usages.join(",")));
+                let ret_type = match &function.result {
+                    DataType::Result(t) => {
+                        let (_, e) = t.as_ref();
 
-                let docs = specta::ts::js_doc(&function.docs);
+                        format!(
+                            "__Result__<{ok_type}, {}>",
+                            ts::datatype(&cfg.inner, e, &type_map)?
+                        )
+                    }
+                    _ => ok_type.clone(),
+                };
+
+                let body = {
+                    let name = cfg
+                        .plugin_name
+                        .apply_as_prefix(&function.name, ItemType::Command);
+
+                    let arg_usages = function
+                        .args
+                        .iter()
+                        .map(|(name, _)| name.to_lower_camel_case())
+                        .collect::<Vec<_>>();
+
+                    let arg_usages = arg_usages
+                        .is_empty()
+                        .then(Default::default)
+                        .unwrap_or_else(|| format!(", {{ {} }}", arg_usages.join(",")));
+
+                    let invoke = format!("await TAURI_INVOKE<{ok_type}>(\"{name}\"{arg_usages})");
+
+                    match &function.result {
+                        DataType::Result(_) => formatdoc!(
+                            r#"
+	                        try {{
+	                            return [{invoke}, undefined];
+	                        }} catch (e: any) {{
+	                            if(e instanceof Error) throw e;
+	                            else return [undefined, e];
+	                        }}"#
+                        ),
+                        _ => format!("return {invoke};"),
+                    }
+                };
 
                 Ok(formatdoc!(
                     r#"
-                    {docs}export function {name_camel}({arg_defs}) {{
-                        return invoke()<{ret_type}>("{name}"{arg_usages})
-                    }}"#
+	                {docs}async {name_camel}({arg_defs}): Promise<{ret_type}> {{
+	                {body}
+	                }}"#
                 ))
             })
-            .collect::<Result<Vec<_>, _>>()
-            .map(|v| v.join("\n\n"))
+            .collect::<Result<Vec<_>, TsExportError>>()?
+            .join(",\n");
+
+        Ok(formatdoc! {
+            r#"
+            export const commands = {{
+            {commands}
+            }}"#
+        })
     }
 
-    /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
-    pub fn render(
-        function_types: Vec<FunctionDataType>,
-        type_map: TypeDefs,
-        cfg: &specta::ts::ExportConfiguration,
+    fn render_events(
+        events: &[EventDataType],
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
-        let globals = globals();
+        if events.is_empty() {
+            return Ok(Default::default());
+        }
 
-        let functions = render_functions(function_types, cfg)?;
+        let events_map = events
+            .iter()
+            .map(|event| {
+                let name_str = cfg.plugin_name.apply_as_prefix(event.name, ItemType::Event);
+                let name_camel = event.name.to_lower_camel_case();
+
+                format!(r#"{name_camel}: "{name_str}""#)
+            })
+            .collect::<Vec<_>>()
+            .join(",\n");
+
+        let events = events
+            .iter()
+            .map(|event| {
+                let name_camel = event.name.to_lower_camel_case();
+
+                let typ = ts::datatype(&cfg.inner, &event.typ, type_map)?;
+
+                Ok(format!(r#"	{name_camel}: {typ}"#))
+            })
+            .collect::<Result<Vec<_>, TsExportError>>()?
+            .join(",\n");
+
+        Ok(formatdoc! {
+            r#"
+            export const events = __makeEvents__<{{
+            {events}
+            }}>({{
+            {events_map}
+            }})"#
+        })
+    }
+
+    fn render(
+        commands: &[FunctionDataType],
+        events: &[EventDataType],
+        type_map: &TypeMap,
+        cfg: &ExportConfig,
+    ) -> Result<String, TsExportError> {
+        let globals = Self::globals();
+
+        let commands = Self::render_commands(commands, &type_map, cfg)?;
+        let events = Self::render_events(events, &type_map, cfg)?;
 
         let dependant_types = type_map
             .values()
             .filter_map(|v| v.as_ref())
-            .map(|v| ts::export_datatype(cfg, v))
+            .map(|v| ts::export_named_datatype(&cfg.inner, v, &type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
         Ok(formatdoc! {
             r#"
-                {DO_NOT_EDIT}
+	            {DO_NOT_EDIT}
 
-                {globals}
+				{commands}
 
-                {functions}
+				{events}
 
-                {dependant_types}
-            "#
+	            {dependant_types}
+
+				{globals}
+	        "#
         })
     }
 }
 
-/// Implements [`ExportLanguage`] for TypeScript exporting
-pub struct Language;
+/// The configuration for the generator
+#[derive(Default, Clone)]
+pub struct ExportConfig {
+    /// The name of the plugin to invoke.
+    ///
+    /// If there is no plugin name (i.e. this is an app), this should be `None`.
+    pub(crate) plugin_name: PluginName,
+    /// The specta export configuration
+    pub(crate) inner: specta::ts::ExportConfig,
+}
 
-/// [`Exporter`](crate::Exporter) for TypeScript
-pub type Exporter = crate::Exporter<Language>;
-
-impl ExportLanguage for Language {
-    fn globals() -> String {
-        internal::globals()
-    }
-
-    fn render_functions(
-        function_types: Vec<FunctionDataType>,
-        cfg: &specta::ts::ExportConfiguration,
-    ) -> Result<String, TsExportError> {
-        internal::render_functions(function_types, cfg)
-    }
-
-    fn render(
-        function_types: Vec<FunctionDataType>,
-        type_map: TypeDefs,
-        cfg: &specta::ts::ExportConfiguration,
-    ) -> Result<String, TsExportError> {
-        internal::render(function_types, type_map, cfg)
+impl ExportConfig {
+    /// Creates a new [`ExportConfiguration`] from a [`specta::ts::ExportConfiguration`]
+    pub fn new(config: specta::ts::ExportConfig) -> Self {
+        Self {
+            inner: config,
+            ..Default::default()
+        }
     }
 }
 
-/// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
-/// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
-pub fn export_with_cfg(
-    result: (Vec<FunctionDataType>, TypeDefs),
-    cfg: specta::ts::ExportConfiguration,
-    export_path: impl AsRef<Path>,
-) -> Result<(), TsExportError> {
-    Exporter::new(Ok(result), export_path)
-        .with_cfg(cfg)
-        .export()
-}
-
-/// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
-pub fn export(
-    macro_data: Result<(Vec<FunctionDataType>, TypeDefs), ExportError>,
-    export_path: impl AsRef<Path>,
-) -> Result<(), TsExportError> {
-    Exporter::new(macro_data, export_path).export()
+impl From<specta::ts::ExportConfig> for ExportConfig {
+    fn from(config: specta::ts::ExportConfig) -> Self {
+        Self {
+            inner: config,
+            ..Default::default()
+        }
+    }
 }
