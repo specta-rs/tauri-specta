@@ -294,8 +294,8 @@ impl<TLang, TCommands> Exporter<TLang, TCommands, NoEvents> {
 
 impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents> {
     /// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
-    pub fn cfg(mut self, cfg: ExportConfig) -> Self {
-        self.cfg = cfg;
+    pub fn cfg(mut self, cfg: specta::ts::ExportConfig) -> Self {
+        self.cfg = ExportConfig::new(cfg);
         self
     }
 

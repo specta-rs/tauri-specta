@@ -62,9 +62,7 @@ fn main() {
                     nested::some_struct
                 ])
                 .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
-                .cfg(ExportConfig::from(
-                    specta::ts::ExportConfig::default().formatter(specta::ts::prettier),
-                ))
+                .cfg(specta::ts::ExportConfig::default().formatter(specta::ts::prettier))
                 .to_plugin(),
         )
         .setup(|app| {
