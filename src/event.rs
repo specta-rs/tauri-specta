@@ -22,11 +22,17 @@ impl EventRegistryMeta {
 }
 
 #[derive(Default)]
-pub struct EventCollection(pub(crate) BTreeSet<TypeSid>);
+pub struct EventCollection(pub(crate) BTreeSet<TypeSid>, BTreeSet<&'static str>);
 
 impl EventCollection {
     pub fn register<E: Event>(&mut self) {
-        self.0.insert(E::SID);
+        if !self.0.insert(E::SID) {
+            panic!("Event {} registered twice!", E::NAME)
+        }
+
+        if !self.1.insert(E::NAME) {
+            panic!("Another event with name {} is already registered!", E::NAME)
+        }
     }
 }
 
