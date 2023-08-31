@@ -88,7 +88,9 @@
 //! ```
 //!
 #![forbid(unsafe_code)]
-#![warn(clippy::all, clippy::unwrap_used, clippy::panic, missing_docs)]
+#![warn(clippy::all, clippy::unwrap_used, clippy::panic
+	// , missing_docs
+)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 use std::{
@@ -99,8 +101,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeDefs};
 use crate::ts::ExportConfiguration;
+use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeDefs};
+
+use tauri::Manager;
+pub use tauri_specta_macros::Event;
 
 /// The exporter for [Javascript](https://www.javascript.com).
 #[cfg(feature = "javascript")]
@@ -112,18 +117,26 @@ pub mod js;
 #[cfg_attr(docsrs, doc(cfg(feature = "typescript")))]
 pub mod ts;
 
-/// This remains for backwards compatibility. Please use [`specta::collect_types`] instead!
+mod event;
+
+pub use event::*;
+
+pub type CollectCommandsTuple<TInvokeHandler> = (
+    Result<(Vec<FunctionDataType>, TypeDefs), ExportError>,
+    TInvokeHandler,
+);
+
 #[macro_export]
-#[deprecated(
-    note = "Please use `specta::collect_types` instead! This alias will be removed in a future release."
-)]
-macro_rules! collate_types {
-    (type_map: $type_map:ident, $($command:path),*) => {{
-        specta::functions::collect_types!(type_map: $type_map, $($command),*)
-    }};
+macro_rules! collect_commands {
+ 	(type_map: $type_map:ident, $($command:path),*) => {
+        (
+        	specta::functions::collect_types![type_map: $type_map, $($command),*],
+       		::tauri::generate_handler![$($command),*],
+        )
+    };
     ($($command:path),*) => {{
         let mut type_map = specta::TypeDefs::default();
-        specta::functions::collect_types!(type_map: type_map, $($command),*)
+        $crate::collect_commands![type_map: type_map, $($command),*]
     }};
 }
 
@@ -141,43 +154,162 @@ pub trait ExportLanguage {
     /// Type definitions and constants that the generated functions rely on
     fn globals() -> String;
 
+    fn render_events(
+        events: &[EventMeta],
+        type_map: &TypeDefs,
+        cfg: &ExportConfiguration,
+    ) -> Result<String, TsExportError>;
+
     /// Renders a collection of [`FunctionDataType`] into a string.
-    fn render_functions(
-        macro_data: (Vec<FunctionDataType>, TypeDefs),
+    fn render_commands(
+        commands: &[FunctionDataType],
+        type_map: &TypeDefs,
         cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError>;
 
     /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
     fn render(
-        macro_data: (Vec<FunctionDataType>, TypeDefs),
+        commands: &[FunctionDataType],
+        events: &[EventMeta],
+        type_map: &TypeDefs,
         cfg: &ExportConfiguration,
     ) -> Result<String, TsExportError>;
 }
 
-/// General exporter, takes a generic for the specific language that is being exported to.
-pub struct Exporter<TLang: ExportLanguage> {
-    macro_data: Result<(Vec<FunctionDataType>, TypeDefs), ExportError>,
-    export_path: PathBuf,
-    cfg: Option<ExportConfiguration>,
-    header: Cow<'static, str>,
-    lang: PhantomData<TLang>,
+pub trait CommandsTypeState {
+    type Runtime: tauri::Runtime;
+    type InvokeHandler;
+
+    fn split(self) -> CollectCommandsTuple<Self::InvokeHandler>;
+
+    fn apply_invoke_handler_to_builder(
+        _: Self::InvokeHandler,
+        builder: tauri::plugin::Builder<Self::Runtime>,
+    ) -> tauri::plugin::Builder<Self::Runtime>;
 }
 
-impl<TLang: ExportLanguage> Exporter<TLang> {
-    /// Creates a new TypeScript exporter
-    pub fn new(
-        macro_data: Result<(Vec<FunctionDataType>, TypeDefs), ExportError>,
-        export_path: impl AsRef<Path>,
-    ) -> Self {
-        Self {
-            macro_data,
-            export_path: export_path.as_ref().into(),
-            cfg: None,
-            header: CRINGE_ESLINT_DISABLE.into(), // TODO: Remove this as a default. SemVer moment.
-            lang: Default::default(),
-        }
+pub struct NoCommands<TRuntime>(PhantomData<TRuntime>);
+
+impl<TRuntime> CommandsTypeState for NoCommands<TRuntime>
+where
+    TRuntime: tauri::Runtime,
+{
+    type Runtime = TRuntime;
+    type InvokeHandler = ();
+
+    fn split(self) -> CollectCommandsTuple<Self::InvokeHandler> {
+        (Ok(Default::default()), ())
     }
 
+    fn apply_invoke_handler_to_builder(
+        _: Self::InvokeHandler,
+        builder: tauri::plugin::Builder<Self::Runtime>,
+    ) -> tauri::plugin::Builder<Self::Runtime> {
+        builder
+    }
+}
+
+pub struct Commands<TRuntime, TInvokeHandler>(
+    CollectCommandsTuple<TInvokeHandler>,
+    PhantomData<TRuntime>,
+);
+
+impl<TRuntime, TInvokeHandler> CommandsTypeState for Commands<TRuntime, TInvokeHandler>
+where
+    TRuntime: tauri::Runtime,
+    TInvokeHandler: Fn(tauri::Invoke<TRuntime>) + Send + Sync + 'static,
+{
+    type Runtime = TRuntime;
+    type InvokeHandler = TInvokeHandler;
+
+    fn split(self) -> CollectCommandsTuple<TInvokeHandler> {
+        self.0
+    }
+
+    fn apply_invoke_handler_to_builder(
+        invoke_handler: Self::InvokeHandler,
+        builder: tauri::plugin::Builder<TRuntime>,
+    ) -> tauri::plugin::Builder<TRuntime> {
+        builder.invoke_handler(invoke_handler)
+    }
+}
+
+pub trait EventsTypeState {
+    fn get(self) -> CollectEventsTuple;
+}
+
+pub struct NoEvents;
+
+impl EventsTypeState for NoEvents {
+    fn get(self) -> CollectEventsTuple {
+        (Default::default(), Ok(vec![]), Default::default())
+    }
+}
+
+pub struct Events(CollectEventsTuple);
+
+impl EventsTypeState for Events {
+    fn get(self) -> CollectEventsTuple {
+        self.0
+    }
+}
+
+/// General exporter, takes a generic for the specific language that is being exported to.
+pub struct Exporter<TLang, TCommands, TEvents> {
+    export_path: PathBuf,
+    lang: PhantomData<TLang>,
+    commands: TCommands,
+    events: TEvents,
+    cfg: Option<ExportConfiguration>,
+    header: Cow<'static, str>,
+}
+
+impl<TLang, TRuntime> Exporter<TLang, NoCommands<TRuntime>, NoEvents> {
+    pub fn new(export_path: impl AsRef<Path>) -> Self {
+        Self {
+            export_path: export_path.as_ref().into(),
+            lang: PhantomData,
+            commands: NoCommands(Default::default()),
+            events: NoEvents,
+            cfg: None,
+            header: CRINGE_ESLINT_DISABLE.into(),
+        }
+    }
+}
+
+impl<TLang, TEvents, TRuntime> Exporter<TLang, NoCommands<TRuntime>, TEvents>
+where
+    TRuntime: tauri::Runtime,
+{
+    pub fn with_commands<TInvokeHandler: Fn(tauri::Invoke<TRuntime>) + Send + Sync + 'static>(
+        self,
+        commands: CollectCommandsTuple<TInvokeHandler>,
+    ) -> Exporter<TLang, Commands<TRuntime, TInvokeHandler>, TEvents> {
+        Exporter {
+            export_path: self.export_path,
+            lang: self.lang,
+            commands: Commands(commands, Default::default()),
+            events: self.events,
+            cfg: self.cfg,
+            header: self.header,
+        }
+    }
+}
+
+impl<TLang, TCommands> Exporter<TLang, TCommands, NoEvents> {
+    pub fn with_events(mut self, events: CollectEventsTuple) -> Exporter<TLang, TCommands, Events> {
+        Exporter {
+            export_path: self.export_path,
+            lang: self.lang,
+            events: Events(events),
+            commands: self.commands,
+            cfg: self.cfg,
+            header: self.header,
+        }
+    }
+}
+
+impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents> {
     /// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
     pub fn with_cfg(mut self, cfg: ExportConfiguration) -> Self {
         self.cfg = Some(cfg);
@@ -189,32 +321,89 @@ impl<TLang: ExportLanguage> Exporter<TLang> {
         self.header = header.into();
         self
     }
+}
 
-    /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
-    pub fn export(self) -> Result<(), TsExportError> {
+impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents>
+where
+    TLang: ExportLanguage,
+    TCommands: CommandsTypeState,
+    TEvents: EventsTypeState,
+{
+    pub fn build_plugin(mut self) -> tauri::plugin::TauriPlugin<TCommands::Runtime> {
+        self.cfg.get_or_insert_with(Default::default).plugin_prefix = true;
+
+        let (invoke_handler, registry) = self.export_inner().unwrap();
+
+        let builder = tauri::plugin::Builder::new("tauri-specta");
+
+        let builder = TCommands::apply_invoke_handler_to_builder(invoke_handler, builder);
+
+        builder
+            .setup(move |app| {
+                app.manage(registry);
+
+                Ok(())
+            })
+            .build()
+    }
+
+    fn render(self) -> Result<(String, (TCommands::InvokeHandler, EventRegistry)), TsExportError> {
         let Self {
-            macro_data,
-            export_path,
+            commands,
             cfg,
             header,
+            events,
             ..
         } = self;
 
-        let (function_types, type_map) = macro_data?;
+        let (macro_data, invoke_handler) = commands.split();
+        let (commands, commands_type_map) = macro_data?;
 
-        if let Some(export_dir) = export_path.parent() {
+        let (events_registry, events, events_type_map) = events.get();
+
+        let rendered = TLang::render(
+            &commands,
+            &events?,
+            &commands_type_map
+                .into_iter()
+                .chain(events_type_map)
+                .collect(),
+            &cfg.unwrap_or_default(),
+        )?;
+
+        Ok((
+            format!("{header}{rendered}"),
+            (invoke_handler, events_registry),
+        ))
+    }
+
+    fn export_inner(self) -> Result<(TCommands::InvokeHandler, EventRegistry), TsExportError> {
+        let path = self.export_path.clone();
+
+        let (rendered, ret) = self.render()?;
+
+        if let Some(export_dir) = path.parent() {
             fs::create_dir_all(export_dir)?;
         }
 
-        let mut file = File::create(export_path)?;
+        let mut file = File::create(path)?;
 
-        write!(
-            file,
-            "{}{}",
-            header,
-            TLang::render((function_types, type_map), &cfg.unwrap_or_default())?
-        )?;
+        write!(file, "{}", rendered)?;
 
-        Ok(())
+        Ok(ret)
+    }
+}
+
+type HardcodedRuntime = tauri::Wry;
+
+impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents>
+where
+    TLang: ExportLanguage,
+    TCommands: CommandsTypeState<Runtime = HardcodedRuntime>,
+    TEvents: EventsTypeState,
+{
+    /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
+    pub fn export(self) -> Result<(), TsExportError> {
+        self.export_inner().map(|_| ())
     }
 }

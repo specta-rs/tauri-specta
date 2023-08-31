@@ -3,8 +3,8 @@
     windows_subsystem = "windows"
 )]
 
-use serde::Serialize;
-use specta::{collect_types, specta, Type};
+use serde::{Deserialize, Serialize};
+use specta::{specta, Type};
 use tauri_specta::*;
 
 /// HELLO
@@ -53,36 +53,39 @@ fn main() {
     // This means someone could theoretically build a type exporter for any language into their own code or an external package.
     // I am going to be working on the ability to export to Rust in the near future for rspc
 
-    // Would be great if this was integrated directly into Tauri! collate_types and tauri_specta::command could be done away with.
+    #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
+    pub struct DemoEvent(String);
 
-    ts::export(
-        collect_types![hello_world, goodbye_world, nested::some_struct, has_error],
-        "../src/bindings.ts",
-    )
-    .unwrap();
-
-    js::export(
-        collect_types![hello_world, goodbye_world, nested::some_struct, has_error],
-        "../src/bindings.js",
-    )
-    .unwrap();
-
-    // This is useful for custom eslint, prettier overrides at the top of the file.
-    // ts::export_with_cfg_with_header(
-    //     collect_types![hello_world, goodbye_world, nested::some_struct].unwrap(),
-    //     Default::default(),
-    //     "../src/bindings2.ts",
-    //     "// My custom header\n".into(),
-    // )
-    // .unwrap();
+    #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
+    pub struct EmptyEvent;
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            hello_world,
-            goodbye_world,
-            nested::some_struct,
-            has_error
-        ])
+        .plugin(
+            ts::Exporter::new("../src/bindings.ts")
+                .with_commands(tauri_specta::collect_commands![
+                    hello_world,
+                    goodbye_world,
+                    nested::some_struct,
+                    has_error
+                ])
+                .with_events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
+                .build_plugin(),
+        )
+        .setup(|app| {
+            DemoEvent::listen_global(app.handle(), |event| {
+                dbg!(event.payload);
+            });
+
+            DemoEvent("Test".to_string()).emit_all(app.handle()).ok();
+
+            let handle = app.handle();
+
+            EmptyEvent::listen_global(handle.clone(), move |event| {
+                EmptyEvent.emit_all(handle.clone()).ok();
+            });
+
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
