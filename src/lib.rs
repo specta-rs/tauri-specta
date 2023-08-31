@@ -104,7 +104,7 @@ use std::{
 use crate::ts::ExportConfig;
 use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeMap};
 
-use tauri::{Invoke, Runtime};
+use tauri::{Invoke, Manager, Runtime};
 pub use tauri_specta_macros::Event;
 
 /// The exporter for [Javascript](https://www.javascript.com).
@@ -150,7 +150,7 @@ pub(crate) const CRINGE_ESLINT_DISABLE: &str = "/* eslint-disable */
 // doc_comment::doctest!("../README.md");
 
 /// A set of functions that produce language-specific code
-pub trait ExportLanguage {
+pub trait ExportLanguage: 'static {
     /// Type definitions and constants that the generated functions rely on
     fn globals() -> String;
 
@@ -176,7 +176,7 @@ pub trait ExportLanguage {
     ) -> Result<String, TsExportError>;
 }
 
-pub trait CommandsTypeState {
+pub trait CommandsTypeState: 'static {
     type Runtime: tauri::Runtime;
     type InvokeHandler: Fn(tauri::Invoke<Self::Runtime>) + Send + Sync + 'static;
 
@@ -217,7 +217,7 @@ where
     }
 }
 
-pub trait EventsTypeState {
+pub trait EventsTypeState: 'static {
     fn get(self) -> CollectEventsTuple;
 }
 
@@ -306,9 +306,18 @@ impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents> {
     }
 }
 
-// pub struct AugmentPlugin<TInvokeHandler> {
-//     invoke_handler: TInvokeHandler,
-// }
+pub struct PluginUtils<TCommands, TManager, TSetup>
+where
+    TCommands: CommandsTypeState,
+    TManager: Manager<TCommands::Runtime>,
+    TSetup: FnOnce(&TManager),
+{
+    pub invoke_handler: TCommands::InvokeHandler,
+    pub setup: TSetup,
+    phantom: PhantomData<TManager>,
+}
+
+const PLUGIN_NAME: &str = "tauri-specta";
 
 impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents>
 where
@@ -317,39 +326,44 @@ where
     TEvents: EventsTypeState,
 {
     #[must_use]
-    pub fn build_plugin(mut self) -> tauri::plugin::TauriPlugin<TCommands::Runtime> {
-        const PLUGIN_NAME: &str = "tauri-specta";
-
-        let plugin_name = PluginName::new(PLUGIN_NAME);
-
-        self.cfg.get_or_insert_with(Default::default).plugin_name = plugin_name;
-
-        let (invoke_handler, event_collection) = self.export_inner().unwrap();
-
+    pub fn to_plugin(self) -> tauri::plugin::TauriPlugin<TCommands::Runtime> {
         let builder = tauri::plugin::Builder::new(PLUGIN_NAME);
 
+        let plugin_utils = self.to_utils_for_plugin(PLUGIN_NAME);
+
         builder
-            .invoke_handler(invoke_handler)
+            .invoke_handler(plugin_utils.invoke_handler)
             .setup(move |app| {
-                let registry = EventRegistry::get_or_manage(app);
-                registry.register_collection(event_collection, plugin_name);
+                (plugin_utils.setup)(app);
 
                 Ok(())
             })
             .build()
     }
 
-    // pub fn augment_plugin(mut self) -> AugmentPlugin<TCommands::InvokeHandler> {
-    //     let (invoke_handler, registry) = self.export_inner().unwrap();
+    #[must_use]
+    pub fn to_utils_for_plugin<TManager>(
+        mut self,
+        plugin_name: &'static str,
+    ) -> PluginUtils<TCommands, TManager, impl FnOnce(&TManager)>
+    where
+        TManager: Manager<TCommands::Runtime>,
+    {
+        let plugin_name = PluginName::new(plugin_name);
 
-    //     // builder.setup(move |app| {
-    //     //     app.manage(registry);
+        self.cfg.get_or_insert_with(Default::default).plugin_name = plugin_name;
 
-    //     //     Ok(())
-    //     // });
+        let (invoke_handler, event_collection) = self.export_inner().unwrap();
 
-    //     AugmentPlugin { invoke_handler }
-    // }
+        PluginUtils {
+            invoke_handler,
+            setup: move |app| {
+                let registry = EventRegistry::get_or_manage(app);
+                registry.register_collection(event_collection, plugin_name);
+            },
+            phantom: PhantomData,
+        }
+    }
 
     fn export_inner(self) -> Result<(TCommands::InvokeHandler, EventCollection), TsExportError> {
         let path = self.export_path.clone();
@@ -405,43 +419,52 @@ where
 
 type HardcodedRuntime = tauri::Wry;
 
-impl<TLang, TCommands> Exporter<TLang, TCommands, NoEvents>
+impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents>
 where
     TLang: ExportLanguage,
     TCommands: CommandsTypeState<Runtime = HardcodedRuntime>,
+    TEvents: EventsTypeState,
 {
     /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
     pub fn export(self) -> Result<(), TsExportError> {
+        self.export_for_plugin(PLUGIN_NAME)
+    }
+
+    pub fn export_for_plugin(mut self, plugin_name: &'static str) -> Result<(), TsExportError> {
+        self.cfg.get_or_insert_with(Default::default).plugin_name = PluginName::new(plugin_name);
+
         self.export_inner().map(|_| ())
     }
 }
 
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct PluginName(pub Option<&'static str>);
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct PluginName(&'static str);
 
 pub(crate) enum ItemType {
     Event,
     Command,
 }
 
+impl Default for PluginName {
+    fn default() -> Self {
+        PluginName(PLUGIN_NAME)
+    }
+}
+
 impl PluginName {
     pub fn new(plugin_name: &'static str) -> Self {
-        Self(Some(plugin_name))
+        Self(plugin_name)
     }
 
     pub fn apply_as_prefix(&self, s: &str, item_type: ItemType) -> String {
-        match &self.0 {
-            Some(plugin_name) => {
-                format!(
-                    "plugin:{plugin_name}{}{}",
-                    match item_type {
-                        ItemType::Event => ":",
-                        ItemType::Command => "|",
-                    },
-                    s,
-                )
-            }
-            None => s.to_string(),
-        }
+        format!(
+            "plugin:{}{}{}",
+            self.0,
+            match item_type {
+                ItemType::Event => ":",
+                ItemType::Command => "|",
+            },
+            s,
+        )
     }
 }

@@ -62,7 +62,7 @@ fn main() {
                     nested::some_struct
                 ])
                 .with_events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
-                .build_plugin(),
+                .to_plugin(),
         )
         .setup(|app| {
             let handle = app.handle();

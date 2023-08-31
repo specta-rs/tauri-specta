@@ -207,12 +207,6 @@ impl ExportConfig {
             ..Default::default()
         }
     }
-
-    /// Sets the plugin name for this [`ExportConfiguration`].
-    pub fn plugin_name(mut self, plugin_name: &'static str) -> Self {
-        self.plugin_name = PluginName::new(plugin_name);
-        self
-    }
 }
 
 impl From<specta::ts::ExportConfig> for ExportConfig {
