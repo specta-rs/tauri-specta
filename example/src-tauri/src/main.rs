@@ -4,26 +4,25 @@
 )]
 
 use serde::{Deserialize, Serialize};
-use specta::{specta, Type};
-use tauri_specta::{ts::ExportConfig, *};
+use tauri_specta::*;
 
 /// HELLO
 /// WORLD
 /// !!!!
 #[tauri::command]
-#[specta]
+#[specta::specta]
 fn hello_world(my_name: String) -> String {
     format!("Hello, {my_name}! You've been greeted from Rust!")
 }
 
 #[tauri::command]
-#[specta]
-fn goodbye_world() -> impl Serialize + Type {
+#[specta::specta]
+fn goodbye_world() -> impl Serialize + specta::Type {
     "Goodbye world :("
 }
 
 #[tauri::command]
-#[specta]
+#[specta::specta]
 fn has_error() -> Result<&'static str, i32> {
     Err(32)
 }
@@ -32,14 +31,14 @@ mod nested {
     use super::*;
 
     #[tauri::command]
-    #[specta]
+    #[specta::specta]
     pub fn some_struct() -> MyStruct {
         MyStruct {
             some_field: "Hello World".into(),
         }
     }
 
-    #[derive(Serialize, Type)] // For Specta support you must add the `specta::Type` derive macro.
+    #[derive(Serialize, specta::Type)] // For Specta support you must add the `specta::Type` derive macro.
     pub struct MyStruct {
         some_field: String,
     }

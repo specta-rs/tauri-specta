@@ -39,12 +39,13 @@ export const events = __makeEvents__<{
   emptyEvent: "plugin:tauri-specta:empty-event",
 });
 
+export type EmptyEvent = null;
 export type MyStruct = { some_field: string };
 export type DemoEvent = string;
-export type EmptyEvent = null;
 
 import { invoke as TAURI_INVOKE } from "@tauri-apps/api";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";
+import { type WebviewWindowHandle as __WebviewWindowHandle__ } from "@tauri-apps/api/window";
 
 type __EventObj__<T> = {
   listen: (
@@ -65,14 +66,21 @@ function __makeEvents__<T extends Record<string, any>>(
 ) {
   return new Proxy(
     {} as unknown as {
-      [K in keyof T]: __EventObj__<T[K]>;
+      [K in keyof T]: __EventObj__<T[K]> & {
+        (handle: __WebviewWindowHandle__): __EventObj__<T[K]>;
+      };
     },
     {
-      get: (_, event) =>
-        new Proxy({} as __EventObj__<any>, {
-          get: (_, command: keyof __EventObj__<any>) => {
-            const name = mappings[event as keyof T];
+      get: (_, event) => {
+        const name = mappings[event as keyof T];
 
+        return new Proxy((() => {}) as any, {
+          apply: (_, __, [window]: [__WebviewWindowHandle__]) => ({
+            listen: (arg: any) => window.listen(name, arg),
+            once: (arg: any) => window.once(name, arg),
+            emit: (arg: any) => window.emit(name, arg),
+          }),
+          get: (_, command: keyof __EventObj__<any>) => {
             switch (command) {
               case "listen":
                 return (arg: any) => TAURI_API_EVENT.listen(name, arg);
@@ -82,7 +90,8 @@ function __makeEvents__<T extends Record<string, any>>(
                 return (arg: any) => TAURI_API_EVENT.emit(name, arg);
             }
           },
-        }),
+        });
+      },
     }
   );
 }

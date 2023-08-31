@@ -1,3 +1,4 @@
+import { appWindow } from "@tauri-apps/api/window";
 import { commands, events } from "./bindings";
 
 let greetInputEl: HTMLInputElement | null;
@@ -26,3 +27,4 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 events.emptyEvent.listen((e) => console.log(e));
+events.emptyEvent(appWindow).listen((e) => console.log(e));
