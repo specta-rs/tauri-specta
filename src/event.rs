@@ -13,7 +13,7 @@ impl EventRegistry {
     }
 }
 
-pub struct EventObj<T: Event> {
+pub struct TypedEvent<T: Event> {
     pub id: EventHandler,
     pub payload: T,
 }
@@ -60,7 +60,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
 
     fn listen_global<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventHandler
     where
-        F: Fn(EventObj<Self>) + Send + 'static,
+        F: Fn(TypedEvent<Self>) + Send + 'static,
     {
         #[cfg(debug_assertions)]
         Self::check_event_in_registry_state(&handle.app_handle());
@@ -71,7 +71,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
                 .and_then(|p| serde_json::from_str(p).ok())
                 .unwrap_or(serde_json::Value::Null);
 
-            handler(EventObj {
+            handler(TypedEvent {
                 id: event.id(),
                 payload: serde_json::from_value(value).unwrap(),
             });
@@ -80,7 +80,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
 
     fn once_global<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventHandler
     where
-        F: FnOnce(EventObj<Self>) + Send + 'static,
+        F: FnOnce(TypedEvent<Self>) + Send + 'static,
     {
         #[cfg(debug_assertions)]
         Self::check_event_in_registry_state(handle);
@@ -91,7 +91,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
                 .and_then(|p| serde_json::from_str(p).ok())
                 .unwrap_or(serde_json::Value::Null);
 
-            handler(EventObj {
+            handler(TypedEvent {
                 id: event.id(),
                 payload: serde_json::from_value(value).unwrap(),
             });
@@ -123,7 +123,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
 
     fn listen<F>(window: &Window<impl Runtime>, handler: F) -> EventHandler
     where
-        F: Fn(EventObj<Self>) + Send + 'static,
+        F: Fn(TypedEvent<Self>) + Send + 'static,
     {
         #[cfg(debug_assertions)]
         Self::check_event_in_registry_state(window);
@@ -134,7 +134,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
                 .and_then(|p| serde_json::from_str(p).ok())
                 .unwrap_or(serde_json::Value::Null);
 
-            handler(EventObj {
+            handler(TypedEvent {
                 id: event.id(),
                 payload: serde_json::from_value(value).unwrap(),
             });
@@ -143,7 +143,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
 
     fn once<F>(window: &Window<impl Runtime>, handler: F) -> EventHandler
     where
-        F: FnOnce(EventObj<Self>) + Send + 'static,
+        F: FnOnce(TypedEvent<Self>) + Send + 'static,
     {
         #[cfg(debug_assertions)]
         Self::check_event_in_registry_state(window);
@@ -154,7 +154,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
                 .and_then(|p| serde_json::from_str(p).ok())
                 .unwrap_or(serde_json::Value::Null);
 
-            handler(EventObj {
+            handler(TypedEvent {
                 id: event.id(),
                 payload: serde_json::from_value(value).unwrap(),
             });
