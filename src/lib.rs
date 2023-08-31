@@ -317,6 +317,8 @@ where
     phantom: PhantomData<TManager>,
 }
 
+const PLUGIN_NAME: &str = "tauri-specta";
+
 impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents>
 where
     TLang: ExportLanguage,
@@ -324,12 +326,10 @@ where
     TEvents: EventsTypeState,
 {
     #[must_use]
-    pub fn build_plugin(self) -> tauri::plugin::TauriPlugin<TCommands::Runtime> {
-        const PLUGIN_NAME: &str = "tauri-specta";
-
+    pub fn to_plugin(self) -> tauri::plugin::TauriPlugin<TCommands::Runtime> {
         let builder = tauri::plugin::Builder::new(PLUGIN_NAME);
 
-        let plugin_utils = self.build_plugin_utils(PLUGIN_NAME);
+        let plugin_utils = self.to_utils_for_plugin(PLUGIN_NAME);
 
         builder
             .invoke_handler(plugin_utils.invoke_handler)
@@ -342,7 +342,7 @@ where
     }
 
     #[must_use]
-    pub fn build_plugin_utils<TManager>(
+    pub fn to_utils_for_plugin<TManager>(
         mut self,
         plugin_name: &'static str,
     ) -> PluginUtils<TCommands, TManager, impl FnOnce(&TManager)>
@@ -419,43 +419,52 @@ where
 
 type HardcodedRuntime = tauri::Wry;
 
-impl<TLang, TCommands> Exporter<TLang, TCommands, NoEvents>
+impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents>
 where
     TLang: ExportLanguage,
     TCommands: CommandsTypeState<Runtime = HardcodedRuntime>,
+    TEvents: EventsTypeState,
 {
     /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
     pub fn export(self) -> Result<(), TsExportError> {
+        self.export_for_plugin(PLUGIN_NAME)
+    }
+
+    pub fn export_for_plugin(mut self, plugin_name: &'static str) -> Result<(), TsExportError> {
+        self.cfg.get_or_insert_with(Default::default).plugin_name = PluginName::new(plugin_name);
+
         self.export_inner().map(|_| ())
     }
 }
 
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct PluginName(pub Option<&'static str>);
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct PluginName(&'static str);
 
 pub(crate) enum ItemType {
     Event,
     Command,
 }
 
+impl Default for PluginName {
+    fn default() -> Self {
+        PluginName(PLUGIN_NAME)
+    }
+}
+
 impl PluginName {
     pub fn new(plugin_name: &'static str) -> Self {
-        Self(Some(plugin_name))
+        Self(plugin_name)
     }
 
     pub fn apply_as_prefix(&self, s: &str, item_type: ItemType) -> String {
-        match &self.0 {
-            Some(plugin_name) => {
-                format!(
-                    "plugin:{plugin_name}{}{}",
-                    match item_type {
-                        ItemType::Event => ":",
-                        ItemType::Command => "|",
-                    },
-                    s,
-                )
-            }
-            None => s.to_string(),
-        }
+        format!(
+            "plugin:{}{}{}",
+            self.0,
+            match item_type {
+                ItemType::Event => ":",
+                ItemType::Command => "|",
+            },
+            s,
+        )
     }
 }
