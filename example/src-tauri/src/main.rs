@@ -45,43 +45,39 @@ mod nested {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
+pub struct DemoEvent(String);
+
+#[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
+pub struct EmptyEvent;
+
 fn main() {
-    // Theses could be exported anywhere.
-    // We found that a unit test for CI and to export on startup when debug assertions are enabled worked well for Spacedrive.
-
-    // Specta provides the ability to introspect Rust types.
-    // This means someone could theoretically build a type exporter for any language into their own code or an external package.
-    // I am going to be working on the ability to export to Rust in the near future for rspc
-
-    #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
-    pub struct DemoEvent(String);
-
-    #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
-    pub struct EmptyEvent;
-
     tauri::Builder::default()
         .plugin(
             ts::Exporter::new("../src/bindings.ts")
                 .with_commands(tauri_specta::collect_commands![
                     hello_world,
                     goodbye_world,
-                    nested::some_struct,
-                    has_error
+                    has_error,
+                    nested::some_struct
                 ])
                 .with_events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
                 .build_plugin(),
         )
         .setup(|app| {
-            DemoEvent::listen_global(app.handle(), |event| {
+            let handle = app.handle();
+
+            DemoEvent::listen_global(&handle, |event| {
                 dbg!(event.payload);
             });
 
-            DemoEvent("Test".to_string()).emit_all(app.handle()).ok();
+            DemoEvent("Test".to_string()).emit_all(&handle).ok();
 
-            let handle = app.handle();
-
-            EmptyEvent::listen_global(handle.clone(), move |_| {
-                EmptyEvent.emit_all(handle.clone()).ok();
+            EmptyEvent::listen_global(&handle, {
+                let handle = handle.clone();
+                move |_| {
+                    EmptyEvent.emit_all(&handle).ok();
+                }
             });
 
             Ok(())

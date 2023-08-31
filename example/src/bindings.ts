@@ -40,9 +40,6 @@ export const commands = {
   async goodbyeWorld(): Promise<string> {
     return await TAURI_INVOKE<string>("plugin:tauri-specta|goodbye_world");
   },
-  async someStruct(): Promise<MyStruct> {
-    return await TAURI_INVOKE<MyStruct>("plugin:tauri-specta|some_struct");
-  },
   async hasError(): Promise<__Result__<string, number>> {
     try {
       return [
@@ -54,6 +51,9 @@ export const commands = {
       else return [undefined, e];
     }
   },
+  async someStruct(): Promise<MyStruct> {
+    return await TAURI_INVOKE<MyStruct>("plugin:tauri-specta|some_struct");
+  },
 };
 
 export const events = {
@@ -61,6 +61,6 @@ export const events = {
   emptyEvent: __makeEvent__<EmptyEvent>("empty-event"),
 };
 
-export type EmptyEvent = null;
 export type MyStruct = { some_field: string };
 export type DemoEvent = string;
+export type EmptyEvent = null;

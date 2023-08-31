@@ -126,7 +126,7 @@ impl ExportLanguage for Language {
             .iter()
             .map(|event| {
                 let name = event.name;
-                let typ = ts::datatype(&cfg.inner, &event.typ, type_map)?;
+                // let typ = ts::datatype(&cfg.inner, &event.typ, type_map)?;
 
                 let name_camel = name.to_lower_camel_case();
 
