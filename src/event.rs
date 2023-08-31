@@ -18,42 +18,40 @@ pub struct TypedEvent<T: Event> {
     pub payload: T,
 }
 
+#[cfg(debug_assertions)]
+fn check_event_in_registry_state<R: Runtime>(name: &str, handle: &impl Manager<R>) {
+    let Some(registry) = handle.try_state::<EventRegistry>() else {
+		println!("EventRegistry not found in Tauri state - Did you forget to call Exporter::with_events?");
+		return;
+	};
+
+    if !registry.0.contains(name) {
+        println!("Event {name} not registered!");
+    }
+}
+
 pub trait Event: Serialize + DeserializeOwned + Clone {
     const NAME: &'static str;
-
-    #[cfg(debug_assertions)]
-    fn check_event_in_registry_state<R: Runtime>(handle: &impl Manager<R>) {
-        let Some(registry) = handle.try_state::<EventRegistry>() else {
-       		println!("EventRegistry not found in Tauri state - Did you forget to call Exporter::with_events?");
-         	return;
-        };
-
-        let name = Self::NAME;
-
-        if !registry.0.contains(name) {
-            println!("Event {name} not registered!");
-        }
-    }
 
     // Manager functions
 
     fn emit_all<R: Runtime>(self, handle: &impl Manager<R>) -> tauri::Result<()> {
         #[cfg(debug_assertions)]
-        Self::check_event_in_registry_state(handle);
+        check_event_in_registry_state(Self::NAME, handle);
 
         handle.emit_all(Self::NAME, self)
     }
 
     fn emit_to<R: Runtime>(self, handle: &impl Manager<R>, label: &str) -> tauri::Result<()> {
         #[cfg(debug_assertions)]
-        Self::check_event_in_registry_state(handle);
+        check_event_in_registry_state(Self::NAME, handle);
 
         handle.emit_to(Self::NAME, label, self)
     }
 
     fn trigger_global<R: Runtime>(self, handle: &impl Manager<R>) {
         #[cfg(debug_assertions)]
-        Self::check_event_in_registry_state(handle);
+        check_event_in_registry_state(Self::NAME, handle);
 
         handle.trigger_global(Self::NAME, serde_json::to_string(&self).ok());
     }
@@ -63,7 +61,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
         F: Fn(TypedEvent<Self>) + Send + 'static,
     {
         #[cfg(debug_assertions)]
-        Self::check_event_in_registry_state(&handle.app_handle());
+        check_event_in_registry_state(Self::NAME, handle);
 
         handle.listen_global(Self::NAME, move |event| {
             let value: serde_json::Value = event
@@ -83,7 +81,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
         F: FnOnce(TypedEvent<Self>) + Send + 'static,
     {
         #[cfg(debug_assertions)]
-        Self::check_event_in_registry_state(handle);
+        check_event_in_registry_state(Self::NAME, handle);
 
         handle.once_global(Self::NAME, move |event| {
             let value: serde_json::Value = event
@@ -102,21 +100,21 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
 
     fn emit(self, window: &Window<impl Runtime>) -> tauri::Result<()> {
         #[cfg(debug_assertions)]
-        Self::check_event_in_registry_state(window);
+        check_event_in_registry_state(Self::NAME, window);
 
         window.emit(Self::NAME, self)
     }
 
     fn trigger(self, window: &Window<impl Runtime>) {
         #[cfg(debug_assertions)]
-        Self::check_event_in_registry_state(window);
+        check_event_in_registry_state(Self::NAME, window);
 
         window.trigger(Self::NAME, serde_json::to_string(&self).ok());
     }
 
     fn emit_and_trigger(self, window: &Window<impl Runtime>) -> tauri::Result<()> {
         #[cfg(debug_assertions)]
-        Self::check_event_in_registry_state(window);
+        check_event_in_registry_state(Self::NAME, window);
 
         window.emit_and_trigger(Self::NAME, self)
     }
@@ -126,7 +124,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
         F: Fn(TypedEvent<Self>) + Send + 'static,
     {
         #[cfg(debug_assertions)]
-        Self::check_event_in_registry_state(window);
+        check_event_in_registry_state(Self::NAME, window);
 
         window.listen(Self::NAME, move |event| {
             let value: serde_json::Value = event
@@ -146,7 +144,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
         F: FnOnce(TypedEvent<Self>) + Send + 'static,
     {
         #[cfg(debug_assertions)]
-        Self::check_event_in_registry_state(window);
+        check_event_in_registry_state(Self::NAME, window);
 
         window.once(Self::NAME, move |event| {
             let value: serde_json::Value = event
