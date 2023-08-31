@@ -45,6 +45,13 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
         handle.emit_all(Self::NAME, self)
     }
 
+    fn emit_to<R: Runtime>(self, handle: impl Manager<R>, label: &str) -> tauri::Result<()> {
+        #[cfg(debug_assertions)]
+        check_event_in_registry_state(Self::NAME, &handle);
+
+        handle.emit_to(Self::NAME, label, self)
+    }
+
     fn trigger_global<R: Runtime>(self, handle: impl Manager<R>) {
         #[cfg(debug_assertions)]
         check_event_in_registry_state(Self::NAME, &handle);
@@ -60,6 +67,26 @@ pub trait Event: Serialize + DeserializeOwned + Clone {
         check_event_in_registry_state(Self::NAME, &handle);
 
         handle.listen_global(Self::NAME, move |event| {
+            let value: serde_json::Value = event
+                .payload()
+                .and_then(|p| serde_json::from_str(p).ok())
+                .unwrap_or(serde_json::Value::Null);
+
+            handler(EventObj {
+                id: event.id(),
+                payload: serde_json::from_value(value).unwrap(),
+            });
+        });
+    }
+
+    fn once_global<F>(handle: AppHandle<impl Runtime>, handler: F)
+    where
+        F: FnOnce(EventObj<Self>) + Send + 'static,
+    {
+        #[cfg(debug_assertions)]
+        check_event_in_registry_state(Self::NAME, &handle);
+
+        handle.once_global(Self::NAME, move |event| {
             let value: serde_json::Value = event
                 .payload()
                 .and_then(|p| serde_json::from_str(p).ok())

@@ -297,7 +297,7 @@ where
 }
 
 impl<TLang, TCommands> Exporter<TLang, TCommands, NoEvents> {
-    pub fn with_events(mut self, events: CollectEventsTuple) -> Exporter<TLang, TCommands, Events> {
+    pub fn with_events(self, events: CollectEventsTuple) -> Exporter<TLang, TCommands, Events> {
         Exporter {
             export_path: self.export_path,
             lang: self.lang,
