@@ -51,24 +51,19 @@ pub struct DemoEvent(String);
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
 pub struct EmptyEvent;
 
-macro_rules! make_exporter {
-    ($variant:ident, $path:literal) => {
-        $variant::Exporter::new($path)
-            .with_commands(tauri_specta::collect_commands![
-                hello_world,
-                goodbye_world,
-                has_error,
-                nested::some_struct
-            ])
-            .with_events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
-    };
-}
-
 fn main() {
-    make_exporter!(js, "../src/bindings.js").export().ok();
-
     tauri::Builder::default()
-        .plugin(make_exporter!(ts, "../src/bindings.ts").build_plugin())
+        .plugin(
+            ts::Exporter::new("../src/bindings.ts")
+                .with_commands(tauri_specta::collect_commands![
+                    hello_world,
+                    goodbye_world,
+                    has_error,
+                    nested::some_struct
+                ])
+                .with_events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
+                .build_plugin(),
+        )
         .setup(|app| {
             let handle = app.handle();
 

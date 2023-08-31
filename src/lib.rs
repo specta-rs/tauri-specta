@@ -104,7 +104,7 @@ use std::{
 use crate::ts::ExportConfig;
 use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeMap};
 
-use tauri::Manager;
+use tauri::{Invoke, Runtime};
 pub use tauri_specta_macros::Event;
 
 /// The exporter for [Javascript](https://www.javascript.com).
@@ -155,7 +155,7 @@ pub trait ExportLanguage {
     fn globals() -> String;
 
     fn render_events(
-        events: &[EventMeta],
+        events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
     ) -> Result<String, TsExportError>;
@@ -170,7 +170,7 @@ pub trait ExportLanguage {
     /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
     fn render(
         commands: &[FunctionDataType],
-        events: &[EventMeta],
+        events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
     ) -> Result<String, TsExportError>;
@@ -178,15 +178,12 @@ pub trait ExportLanguage {
 
 pub trait CommandsTypeState {
     type Runtime: tauri::Runtime;
-    type InvokeHandler;
+    type InvokeHandler: Fn(tauri::Invoke<Self::Runtime>) + Send + Sync + 'static;
 
     fn split(self) -> CollectCommandsTuple<Self::InvokeHandler>;
-
-    fn apply_invoke_handler_to_builder(
-        _: Self::InvokeHandler,
-        builder: tauri::plugin::Builder<Self::Runtime>,
-    ) -> tauri::plugin::Builder<Self::Runtime>;
 }
+
+fn dummy_invoke_handler(_: Invoke<impl Runtime>) {}
 
 pub struct NoCommands<TRuntime>(PhantomData<TRuntime>);
 
@@ -195,17 +192,10 @@ where
     TRuntime: tauri::Runtime,
 {
     type Runtime = TRuntime;
-    type InvokeHandler = ();
+    type InvokeHandler = fn(Invoke<TRuntime>);
 
     fn split(self) -> CollectCommandsTuple<Self::InvokeHandler> {
-        (Ok(Default::default()), ())
-    }
-
-    fn apply_invoke_handler_to_builder(
-        _: Self::InvokeHandler,
-        builder: tauri::plugin::Builder<Self::Runtime>,
-    ) -> tauri::plugin::Builder<Self::Runtime> {
-        builder
+        (Ok(Default::default()), dummy_invoke_handler)
     }
 }
 
@@ -224,13 +214,6 @@ where
 
     fn split(self) -> CollectCommandsTuple<TInvokeHandler> {
         self.0
-    }
-
-    fn apply_invoke_handler_to_builder(
-        invoke_handler: Self::InvokeHandler,
-        builder: tauri::plugin::Builder<TRuntime>,
-    ) -> tauri::plugin::Builder<TRuntime> {
-        builder.invoke_handler(invoke_handler)
     }
 }
 
@@ -323,31 +306,73 @@ impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents> {
     }
 }
 
+// pub struct AugmentPlugin<TInvokeHandler> {
+//     invoke_handler: TInvokeHandler,
+// }
+
 impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents>
 where
     TLang: ExportLanguage,
     TCommands: CommandsTypeState,
     TEvents: EventsTypeState,
 {
+    #[must_use]
     pub fn build_plugin(mut self) -> tauri::plugin::TauriPlugin<TCommands::Runtime> {
-        self.cfg.get_or_insert_with(Default::default).plugin_prefix = true;
+        const PLUGIN_NAME: &str = "tauri-specta";
 
-        let (invoke_handler, registry) = self.export_inner().unwrap();
+        let plugin_name = PluginName::new(PLUGIN_NAME);
 
-        let builder = tauri::plugin::Builder::new("tauri-specta");
+        self.cfg.get_or_insert_with(Default::default).plugin_name = plugin_name;
 
-        let builder = TCommands::apply_invoke_handler_to_builder(invoke_handler, builder);
+        let (invoke_handler, event_collection) = self.export_inner().unwrap();
+
+        let builder = tauri::plugin::Builder::new(PLUGIN_NAME);
 
         builder
+            .invoke_handler(invoke_handler)
             .setup(move |app| {
-                app.manage(registry);
+                let registry = EventRegistry::get_or_manage(app);
+                registry.register_collection(event_collection, plugin_name);
 
                 Ok(())
             })
             .build()
     }
 
-    fn render(self) -> Result<(String, (TCommands::InvokeHandler, EventRegistry)), TsExportError> {
+    // pub fn augment_plugin(mut self) -> AugmentPlugin<TCommands::InvokeHandler> {
+    //     let (invoke_handler, registry) = self.export_inner().unwrap();
+
+    //     // builder.setup(move |app| {
+    //     //     app.manage(registry);
+
+    //     //     Ok(())
+    //     // });
+
+    //     AugmentPlugin { invoke_handler }
+    // }
+
+    fn export_inner(self) -> Result<(TCommands::InvokeHandler, EventCollection), TsExportError> {
+        let path = self.export_path.clone();
+
+        let (rendered, ret) = self.render()?;
+
+        if let Some(export_dir) = path.parent() {
+            fs::create_dir_all(export_dir)?;
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            let mut file = File::create(path)?;
+
+            write!(file, "{}", rendered)?;
+        }
+
+        Ok(ret)
+    }
+
+    fn render(
+        self,
+    ) -> Result<(String, (TCommands::InvokeHandler, EventCollection)), TsExportError> {
         let Self {
             commands,
             cfg,
@@ -376,34 +401,47 @@ where
             (invoke_handler, events_registry),
         ))
     }
-
-    fn export_inner(self) -> Result<(TCommands::InvokeHandler, EventRegistry), TsExportError> {
-        let path = self.export_path.clone();
-
-        let (rendered, ret) = self.render()?;
-
-        if let Some(export_dir) = path.parent() {
-            fs::create_dir_all(export_dir)?;
-        }
-
-        let mut file = File::create(path)?;
-
-        write!(file, "{}", rendered)?;
-
-        Ok(ret)
-    }
 }
 
 type HardcodedRuntime = tauri::Wry;
 
-impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents>
+impl<TLang, TCommands> Exporter<TLang, TCommands, NoEvents>
 where
     TLang: ExportLanguage,
     TCommands: CommandsTypeState<Runtime = HardcodedRuntime>,
-    TEvents: EventsTypeState,
 {
     /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
     pub fn export(self) -> Result<(), TsExportError> {
         self.export_inner().map(|_| ())
+    }
+}
+
+#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct PluginName(pub Option<&'static str>);
+
+pub(crate) enum ItemType {
+    Event,
+    Command,
+}
+
+impl PluginName {
+    pub fn new(plugin_name: &'static str) -> Self {
+        Self(Some(plugin_name))
+    }
+
+    pub fn apply_as_prefix(&self, s: &str, item_type: ItemType) -> String {
+        match &self.0 {
+            Some(plugin_name) => {
+                format!(
+                    "plugin:{plugin_name}{}{}",
+                    match item_type {
+                        ItemType::Event => ":",
+                        ItemType::Command => "|",
+                    },
+                    s,
+                )
+            }
+            None => s.to_string(),
+        }
     }
 }

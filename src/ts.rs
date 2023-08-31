@@ -1,4 +1,4 @@
-use crate::{EventMeta, ExportLanguage, NoCommands, NoEvents, DO_NOT_EDIT};
+use crate::{EventDataType, ExportLanguage, ItemType, PluginName, DO_NOT_EDIT};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
@@ -6,13 +6,12 @@ use specta::{
     ts::{self, TsExportError},
     DataType, TypeMap,
 };
-use std::borrow::Cow;
 
 /// Implements [`ExportLanguage`] for TypeScript exporting
 pub struct Language;
 
 /// [`Exporter`](crate::Exporter) for TypeScript
-pub type Exporter<TRuntime> = crate::Exporter<Language, NoCommands<TRuntime>, NoEvents>;
+pub type Exporter<TCommands, TEvents> = crate::Exporter<Language, TCommands, TEvents>;
 
 impl ExportLanguage for Language {
     fn globals() -> String {
@@ -64,16 +63,9 @@ impl ExportLanguage for Language {
                 };
 
                 let body = {
-                    let name = match (&cfg.plugin_name, cfg.plugin_prefix) {
-                        (Some(plugin_name), true) => {
-                            format!("plugin:tauri-specta-{plugin_name}|{}", function.name)
-                        }
-                        (None, true) => format!("plugin:tauri-specta|{}", function.name),
-                        (Some(plugin_name), false) => {
-                            format!("plugin:{plugin_name}|{}", function.name)
-                        }
-                        (None, false) => function.name.to_string(),
-                    };
+                    let name = cfg
+                        .plugin_name
+                        .apply_as_prefix(&function.name, ItemType::Command);
 
                     let arg_usages = function
                         .args
@@ -121,7 +113,7 @@ impl ExportLanguage for Language {
     }
 
     fn render_events(
-        events: &[EventMeta],
+        events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
@@ -132,10 +124,10 @@ impl ExportLanguage for Language {
         let events_map = events
             .iter()
             .map(|event| {
-                let name = event.name;
-                let name_camel = name.to_lower_camel_case();
+                let name_str = cfg.plugin_name.apply_as_prefix(event.name, ItemType::Event);
+                let name_camel = event.name.to_lower_camel_case();
 
-                format!(r#"	{name_camel}: "{name}""#)
+                format!(r#"{name_camel}: "{name_str}""#)
             })
             .collect::<Vec<_>>()
             .join(",\n");
@@ -164,7 +156,7 @@ impl ExportLanguage for Language {
 
     fn render(
         commands: &[FunctionDataType],
-        events: &[EventMeta],
+        events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
@@ -202,10 +194,9 @@ pub struct ExportConfig {
     /// The name of the plugin to invoke.
     ///
     /// If there is no plugin name (i.e. this is an app), this should be `None`.
-    pub(crate) plugin_name: Option<Cow<'static, str>>,
+    pub(crate) plugin_name: PluginName,
     /// The specta export configuration
     pub(crate) inner: specta::ts::ExportConfig,
-    pub(crate) plugin_prefix: bool,
 }
 
 impl ExportConfig {
@@ -218,8 +209,8 @@ impl ExportConfig {
     }
 
     /// Sets the plugin name for this [`ExportConfiguration`].
-    pub fn plugin_name(mut self, plugin_name: impl Into<Cow<'static, str>>) -> Self {
-        self.plugin_name = Some(plugin_name.into());
+    pub fn plugin_name(mut self, plugin_name: &'static str) -> Self {
+        self.plugin_name = PluginName::new(plugin_name);
         self
     }
 }

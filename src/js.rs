@@ -1,9 +1,11 @@
-use crate::{ts::ExportConfig, EventMeta, ExportLanguage, NoCommands, NoEvents, DO_NOT_EDIT};
+use crate::{
+    ts::ExportConfig, EventDataType, ExportLanguage, ItemType, NoCommands, NoEvents, DO_NOT_EDIT,
+};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
     functions::FunctionDataType,
-    ts::{self, TsExportError},
+    ts::{self, js_doc, TsExportError},
     DataType, TypeMap,
 };
 
@@ -27,16 +29,6 @@ impl ExportLanguage for Language {
         let commands = commands
             .into_iter()
             .map(|function| {
-                let name_camel = function.name.to_lower_camel_case();
-
-                let arg_list = function
-                    .args
-                    .iter()
-                    .map(|(name, _)| name.to_lower_camel_case())
-                    .collect::<Vec<_>>();
-
-                let arg_defs = arg_list.join(", ");
-
                 let jsdoc = {
                     let ret_type = match &function.result {
                         DataType::Result(t) => {
@@ -62,22 +54,26 @@ impl ExportLanguage for Language {
                             })
                         }))
                         .chain([format!("@returns {{ Promise<{ret_type}> }}")])
+                        .map(Into::into)
                         .collect::<Vec<_>>();
 
-                    specta::ts::js_doc(&vec.into_iter().map(|s| s.into()).collect::<Vec<_>>())
+                    js_doc(&vec)
                 };
 
+                let name_camel = function.name.to_lower_camel_case();
+
+                let arg_list = function
+                    .args
+                    .iter()
+                    .map(|(name, _)| name.to_lower_camel_case())
+                    .collect::<Vec<_>>();
+
+                let arg_defs = arg_list.join(", ");
+
                 let body = {
-                    let name = match (&cfg.plugin_name, cfg.plugin_prefix) {
-                        (Some(plugin_name), true) => {
-                            format!("plugin:tauri-specta-{plugin_name}|{}", function.name)
-                        }
-                        (None, true) => format!("plugin:tauri-specta|{}", function.name),
-                        (Some(plugin_name), false) => {
-                            format!("plugin:{plugin_name}|{}", function.name)
-                        }
-                        (None, false) => function.name.to_string(),
-                    };
+                    let name = cfg
+                        .plugin_name
+                        .apply_as_prefix(&function.name, ItemType::Command);
 
                     let arg_usages = arg_list
                         .is_empty()
@@ -119,7 +115,7 @@ impl ExportLanguage for Language {
     }
 
     fn render_events(
-        events: &[EventMeta],
+        events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
@@ -130,10 +126,12 @@ impl ExportLanguage for Language {
         let events_map = events
             .iter()
             .map(|event| {
-                let name = event.name;
-                let name_camel = name.to_lower_camel_case();
+                let name_str = cfg
+                    .plugin_name
+                    .apply_as_prefix(&event.name, ItemType::Event);
+                let name_camel = event.name.to_lower_camel_case();
 
-                format!(r#"	{name_camel}: "{name}""#)
+                format!(r#"	{name_camel}: "{name_str}""#)
             })
             .collect::<Vec<_>>()
             .join(",\n");
@@ -145,18 +143,22 @@ impl ExportLanguage for Language {
 
                 let name_camel = event.name.to_lower_camel_case();
 
-                Ok(format!(r#" *   {name_camel}: {typ}"#))
+                Ok(format!(r#"{name_camel}: {typ},"#))
             })
-            .collect::<Result<Vec<_>, TsExportError>>()?
-            .join(",\n");
+            .collect::<Result<Vec<_>, TsExportError>>()?;
+
+        let events = js_doc(
+            &[].into_iter()
+                .chain(["@type {typeof __makeEvents__<{".to_string()])
+                .chain(events)
+                .chain(["}>}".to_string()])
+                .map(Into::into)
+                .collect::<Vec<_>>(),
+        );
 
         Ok(formatdoc! {
             r#"
-            /**
-             * @type {{typeof __makeEvents__<{{
             {events}
-             * }}>}}
-             */
             const __typedMakeEvents__ = __makeEvents__;
 
 	        export const events = __typedMakeEvents__({{
@@ -167,7 +169,7 @@ impl ExportLanguage for Language {
 
     fn render(
         commands: &[FunctionDataType],
-        events: &[EventMeta],
+        events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
@@ -183,12 +185,7 @@ impl ExportLanguage for Language {
                 ts::named_datatype(&cfg.inner, v, &type_map).map(|typ| {
                     let name = &v.name;
 
-                    formatdoc! {
-                        r#"
-                        /**
-                         * @typedef {{ {typ} }} {name}
-                         */"#
-                    }
+                    js_doc(&[format!("@typedef {{ {typ} }} {name}").into()])
                 })
             })
             .collect::<Result<Vec<_>, _>>()

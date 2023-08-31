@@ -30,8 +30,8 @@ export const events = __makeEvents__<{
 	demoEvent: DemoEvent,
 	emptyEvent: EmptyEvent
 }>({
-	demoEvent: "demo-event",
-	emptyEvent: "empty-event"
+demoEvent: "plugin:tauri-specta:demo-event",
+emptyEvent: "plugin:tauri-specta:empty-event"
 })
 
          export type MyStruct = { some_field: string }

@@ -1,15 +1,58 @@
-use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::RwLock,
+};
 
 use serde::{de::DeserializeOwned, Serialize};
-use specta::DataType;
+use specta::{DataType, NamedType, Type, TypeSid};
 use tauri::{EventHandler, Manager, Runtime, Window};
 
+use crate::PluginName;
+
+#[derive(Clone, Copy)]
+pub struct EventRegistryMeta {
+    plugin_name: PluginName,
+}
+
+impl EventRegistryMeta {
+    fn wrap_with_plugin(&self, input: &str) -> String {
+        self.plugin_name
+            .apply_as_prefix(input, crate::ItemType::Event)
+    }
+}
+
 #[derive(Default)]
-pub struct EventRegistry(pub(crate) BTreeSet<&'static str>);
+pub struct EventCollection(pub(crate) BTreeSet<TypeSid>);
+
+impl EventCollection {
+    pub fn register<E: Event>(&mut self) {
+        self.0.insert(E::SID);
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct EventRegistry(pub(crate) RwLock<BTreeMap<TypeSid, EventRegistryMeta>>);
 
 impl EventRegistry {
-    pub fn register<E: Event>(&mut self) {
-        self.0.insert(E::NAME);
+    pub fn register_collection(&self, collection: EventCollection, plugin_name: PluginName) {
+        let mut registry = self.0.write().expect("Failed to write EventRegistry");
+
+        registry.extend(collection.0.into_iter().map(|sid| {
+            (
+                sid,
+                EventRegistryMeta {
+                    plugin_name: PluginName::from(plugin_name),
+                },
+            )
+        }));
+    }
+
+    pub fn get_or_manage<'a, R: Runtime>(handle: &'a impl Manager<R>) -> tauri::State<'a, Self> {
+        if handle.try_state::<Self>().is_none() {
+            handle.manage(Self::default());
+        }
+
+        handle.state::<Self>()
     }
 }
 
@@ -18,16 +61,20 @@ pub struct TypedEvent<T: Event> {
     pub payload: T,
 }
 
-#[cfg(debug_assertions)]
-fn check_event_in_registry_state<R: Runtime>(name: &str, handle: &impl Manager<R>) {
-    let Some(registry) = handle.try_state::<EventRegistry>() else {
-		println!("EventRegistry not found in Tauri state - Did you forget to call Exporter::with_events?");
-		return;
-	};
-
-    if !registry.0.contains(name) {
-        println!("Event {name} not registered!");
-    }
+fn get_meta_from_registry<R: Runtime>(
+    sid: TypeSid,
+    name: &str,
+    handle: &impl Manager<R>,
+) -> EventRegistryMeta {
+    handle.try_state::<EventRegistry>().expect(
+        "EventRegistry not found in Tauri state - Did you forget to call Exporter::with_events?",
+    )
+    .0
+        .read()
+        .expect("Failed to read EventRegistry")
+        .get(&sid)
+        .copied()
+        .unwrap_or_else(|| panic!("Event {name} not found in registry!"))
 }
 
 macro_rules! make_handler {
@@ -47,124 +94,126 @@ macro_rules! make_handler {
     };
 }
 
-pub trait Event: Serialize + DeserializeOwned + Clone {
+macro_rules! get_meta {
+    ($handle:ident) => {
+        get_meta_from_registry(Self::SID, Self::NAME, $handle)
+    };
+}
+
+pub trait Event: Serialize + DeserializeOwned + Clone + Type + NamedType {
     const NAME: &'static str;
 
     // Manager functions
 
     fn emit_all<R: Runtime>(self, handle: &impl Manager<R>) -> tauri::Result<()> {
-        #[cfg(debug_assertions)]
-        check_event_in_registry_state(Self::NAME, handle);
+        let meta = get_meta!(handle);
 
-        handle.emit_all(Self::NAME, self)
+        handle.emit_all(&meta.wrap_with_plugin(Self::NAME), self)
     }
 
     fn emit_to<R: Runtime>(self, handle: &impl Manager<R>, label: &str) -> tauri::Result<()> {
-        #[cfg(debug_assertions)]
-        check_event_in_registry_state(Self::NAME, handle);
+        let meta = get_meta!(handle);
 
-        handle.emit_to(Self::NAME, label, self)
+        handle.emit_to(&meta.wrap_with_plugin(Self::NAME), label, self)
     }
 
     fn trigger_global<R: Runtime>(self, handle: &impl Manager<R>) {
-        #[cfg(debug_assertions)]
-        check_event_in_registry_state(Self::NAME, handle);
+        let meta = get_meta!(handle);
 
-        handle.trigger_global(Self::NAME, serde_json::to_string(&self).ok());
+        handle.trigger_global(
+            &meta.wrap_with_plugin(Self::NAME),
+            serde_json::to_string(&self).ok(),
+        );
     }
 
     fn listen_global<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventHandler
     where
         F: Fn(TypedEvent<Self>) + Send + 'static,
     {
-        #[cfg(debug_assertions)]
-        check_event_in_registry_state(Self::NAME, handle);
+        let meta = get_meta!(handle);
 
-        handle.listen_global(Self::NAME, make_handler!(handler))
+        handle.listen_global(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     fn once_global<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventHandler
     where
         F: FnOnce(TypedEvent<Self>) + Send + 'static,
     {
-        #[cfg(debug_assertions)]
-        check_event_in_registry_state(Self::NAME, handle);
+        let meta = get_meta!(handle);
 
-        handle.once_global(Self::NAME, make_handler!(handler))
+        handle.once_global(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     // Window functions
 
     fn emit(self, window: &Window<impl Runtime>) -> tauri::Result<()> {
-        #[cfg(debug_assertions)]
-        check_event_in_registry_state(Self::NAME, window);
+        let meta = get_meta!(window);
 
-        window.emit(Self::NAME, self)
+        window.emit(&meta.wrap_with_plugin(Self::NAME), self)
     }
 
     fn trigger(self, window: &Window<impl Runtime>) {
-        #[cfg(debug_assertions)]
-        check_event_in_registry_state(Self::NAME, window);
+        let meta = get_meta!(window);
 
-        window.trigger(Self::NAME, serde_json::to_string(&self).ok());
+        window.trigger(
+            &meta.wrap_with_plugin(Self::NAME),
+            serde_json::to_string(&self).ok(),
+        );
     }
 
     fn emit_and_trigger(self, window: &Window<impl Runtime>) -> tauri::Result<()> {
-        #[cfg(debug_assertions)]
-        check_event_in_registry_state(Self::NAME, window);
+        let meta = get_meta!(window);
 
-        window.emit_and_trigger(Self::NAME, self)
+        window.emit_and_trigger(&meta.wrap_with_plugin(Self::NAME), self)
     }
 
     fn listen<F>(window: &Window<impl Runtime>, handler: F) -> EventHandler
     where
         F: Fn(TypedEvent<Self>) + Send + 'static,
     {
-        #[cfg(debug_assertions)]
-        check_event_in_registry_state(Self::NAME, window);
+        let meta = get_meta!(window);
 
-        window.listen(Self::NAME, make_handler!(handler))
+        window.listen(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     fn once<F>(window: &Window<impl Runtime>, handler: F) -> EventHandler
     where
         F: FnOnce(TypedEvent<Self>) + Send + 'static,
     {
-        #[cfg(debug_assertions)]
-        check_event_in_registry_state(Self::NAME, window);
+        let meta = get_meta!(window);
 
-        window.once(Self::NAME, make_handler!(handler))
+        window.once(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 }
 
-pub struct EventMeta {
+pub struct EventDataType {
     pub name: &'static str,
     pub typ: DataType,
 }
 
 pub(crate) type CollectEventsTuple = (
-    EventRegistry,
-    Result<Vec<EventMeta>, specta::ExportError>,
+    EventCollection,
+    Result<Vec<EventDataType>, specta::ExportError>,
     specta::TypeMap,
 );
 
 #[macro_export]
 macro_rules! collect_events {
     ($($event:ident),+) => {{
-    	let mut registry: $crate::EventRegistry = ::core::default::Default::default();
+    	let mut collection: $crate::EventCollection = ::core::default::Default::default();
 
-     	$(registry.register::<$event>();)+
+     	$(collection.register::<$event>();)+
 
       	let mut type_map = Default::default();
 
-      	let event_metas = [$(
+      	let event_data_types = [$(
        		<$event as ::specta::Type>::reference(
        			::specta::DefOpts {
        				type_map: &mut type_map,
        				parent_inline: false
           		},
             	&[]
-       		).map(|typ| $crate::EventMeta {
+       		).map(|typ| $crate::EventDataType {
          		name: <$event as $crate::Event>::NAME,
          		typ
          	})
@@ -172,6 +221,6 @@ macro_rules! collect_events {
         .into_iter()
         .collect::<Result<Vec<_>, _>>();
 
-      	(registry, event_metas, type_map)
+      	(collection, event_data_types, type_map)
     }};
 }
