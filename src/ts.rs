@@ -1,4 +1,9 @@
-use crate::{EventDataType, ExportLanguage, ItemType, PluginName, DO_NOT_EDIT};
+use std::{borrow::Cow, path::PathBuf};
+
+use crate::{
+    EventDataType, ExportLanguage, ItemType, NoCommands, NoEvents, PluginName,
+    CRINGE_ESLINT_DISABLE, DO_NOT_EDIT,
+};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
@@ -6,12 +11,17 @@ use specta::{
     ts::{self, TsExportError},
     DataType, TypeMap,
 };
+use tauri::Runtime;
 
 /// Implements [`ExportLanguage`] for TypeScript exporting
 pub struct Language;
 
 /// [`Exporter`](crate::Exporter) for TypeScript
-pub type Exporter<TCommands, TEvents> = crate::Exporter<Language, TCommands, TEvents>;
+pub type PluginBuilder<TCommands, TEvents> = crate::PluginBuilder<Language, TCommands, TEvents>;
+
+pub fn builder<TRuntime: Runtime>() -> PluginBuilder<NoCommands<TRuntime>, NoEvents> {
+    PluginBuilder::default()
+}
 
 impl ExportLanguage for Language {
     fn globals() -> String {
@@ -25,7 +35,7 @@ impl ExportLanguage for Language {
         cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
         let commands = commands
-            .into_iter()
+            .iter()
             .map(|function| {
                 let docs = specta::ts::js_doc(&function.docs);
 
@@ -35,7 +45,7 @@ impl ExportLanguage for Language {
                     .args
                     .iter()
                     .map(|(name, typ)| {
-                        ts::datatype(&cfg.inner, typ, &type_map)
+                        ts::datatype(&cfg.inner, typ, type_map)
                             .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
                     })
                     .collect::<Result<Vec<_>, _>>()?
@@ -45,9 +55,9 @@ impl ExportLanguage for Language {
                     DataType::Result(t) => {
                         let (t, _) = t.as_ref();
 
-                        ts::datatype(&cfg.inner, t, &type_map)?
+                        ts::datatype(&cfg.inner, t, type_map)?
                     }
-                    t => ts::datatype(&cfg.inner, t, &type_map)?,
+                    t => ts::datatype(&cfg.inner, t, type_map)?,
                 };
 
                 let ret_type = match &function.result {
@@ -56,7 +66,7 @@ impl ExportLanguage for Language {
 
                         format!(
                             "__Result__<{ok_type}, {}>",
-                            ts::datatype(&cfg.inner, e, &type_map)?
+                            ts::datatype(&cfg.inner, e, type_map)?
                         )
                     }
                     _ => ok_type.clone(),
@@ -162,13 +172,13 @@ impl ExportLanguage for Language {
     ) -> Result<String, TsExportError> {
         let globals = Self::globals();
 
-        let commands = Self::render_commands(commands, &type_map, cfg)?;
-        let events = Self::render_events(events, &type_map, cfg)?;
+        let commands = Self::render_commands(commands, type_map, cfg)?;
+        let events = Self::render_events(events, type_map, cfg)?;
 
         let dependant_types = type_map
             .values()
             .filter_map(|v| v.as_ref())
-            .map(|v| ts::export_named_datatype(&cfg.inner, v, &type_map))
+            .map(|v| ts::export_named_datatype(&cfg.inner, v, type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
@@ -197,6 +207,8 @@ pub struct ExportConfig {
     pub(crate) plugin_name: PluginName,
     /// The specta export configuration
     pub(crate) inner: specta::ts::ExportConfig,
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) header: Cow<'static, str>,
 }
 
 impl ExportConfig {
@@ -204,6 +216,7 @@ impl ExportConfig {
     pub fn new(config: specta::ts::ExportConfig) -> Self {
         Self {
             inner: config,
+            header: CRINGE_ESLINT_DISABLE.into(),
             ..Default::default()
         }
     }
@@ -211,9 +224,6 @@ impl ExportConfig {
 
 impl From<specta::ts::ExportConfig> for ExportConfig {
     fn from(config: specta::ts::ExportConfig) -> Self {
-        Self {
-            inner: config,
-            ..Default::default()
-        }
+        Self::new(config)
     }
 }

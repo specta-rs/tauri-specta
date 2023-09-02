@@ -98,7 +98,7 @@ use std::{
     fs::{self, File},
     io::Write,
     marker::PhantomData,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use crate::ts::ExportConfig;
@@ -121,10 +121,9 @@ mod event;
 
 pub use event::*;
 
-pub type CollectCommandsTuple<TInvokeHandler> = (
-    Result<(Vec<FunctionDataType>, TypeMap), ExportError>,
-    TInvokeHandler,
-);
+pub type CollectFunctionsResult = Result<(Vec<FunctionDataType>, TypeMap), ExportError>;
+
+pub type CollectCommandsTuple<TInvokeHandler> = (CollectFunctionsResult, TInvokeHandler);
 
 #[macro_export]
 macro_rules! collect_commands {
@@ -181,11 +180,13 @@ pub trait CommandsTypeState: 'static {
     type InvokeHandler: Fn(tauri::Invoke<Self::Runtime>) + Send + Sync + 'static;
 
     fn split(self) -> CollectCommandsTuple<Self::InvokeHandler>;
+
+    fn macro_data(&self) -> &CollectFunctionsResult;
 }
 
 fn dummy_invoke_handler(_: Invoke<impl Runtime>) {}
 
-pub struct NoCommands<TRuntime>(PhantomData<TRuntime>);
+pub struct NoCommands<TRuntime>(CollectFunctionsResult, PhantomData<TRuntime>);
 
 impl<TRuntime> CommandsTypeState for NoCommands<TRuntime>
 where
@@ -196,6 +197,10 @@ where
 
     fn split(self) -> CollectCommandsTuple<Self::InvokeHandler> {
         (Ok(Default::default()), dummy_invoke_handler)
+    }
+
+    fn macro_data(&self) -> &CollectFunctionsResult {
+        &self.0
     }
 }
 
@@ -214,6 +219,10 @@ where
 
     fn split(self) -> CollectCommandsTuple<TInvokeHandler> {
         self.0
+    }
+
+    fn macro_data(&self) -> &CollectFunctionsResult {
+        &self.0 .0
     }
 }
 
@@ -238,70 +247,67 @@ impl EventsTypeState for Events {
 }
 
 /// General exporter, takes a generic for the specific language that is being exported to.
-pub struct Exporter<TLang, TCommands, TEvents> {
-    export_path: PathBuf,
+pub struct PluginBuilder<TLang, TCommands, TEvents> {
     lang: PhantomData<TLang>,
     commands: TCommands,
     events: TEvents,
-    cfg: ExportConfig,
-    header: Cow<'static, str>,
+    config: ExportConfig,
 }
 
-impl<TLang, TRuntime> Exporter<TLang, NoCommands<TRuntime>, NoEvents> {
-    pub fn new(export_path: impl AsRef<Path>) -> Self {
+impl<TLang, TRuntime> Default for PluginBuilder<TLang, NoCommands<TRuntime>, NoEvents> {
+    fn default() -> Self {
         Self {
-            export_path: export_path.as_ref().into(),
             lang: PhantomData,
-            commands: NoCommands(Default::default()),
+            commands: NoCommands(Ok((vec![], Default::default())), Default::default()),
             events: NoEvents,
-            cfg: ExportConfig::default(),
-            header: CRINGE_ESLINT_DISABLE.into(),
+            config: ExportConfig::default(),
         }
     }
 }
 
-impl<TLang, TEvents, TRuntime> Exporter<TLang, NoCommands<TRuntime>, TEvents>
+impl<TLang, TEvents, TRuntime> PluginBuilder<TLang, NoCommands<TRuntime>, TEvents>
 where
     TRuntime: tauri::Runtime,
 {
     pub fn commands<TInvokeHandler: Fn(tauri::Invoke<TRuntime>) + Send + Sync + 'static>(
         self,
         commands: CollectCommandsTuple<TInvokeHandler>,
-    ) -> Exporter<TLang, Commands<TRuntime, TInvokeHandler>, TEvents> {
-        Exporter {
-            export_path: self.export_path,
+    ) -> PluginBuilder<TLang, Commands<TRuntime, TInvokeHandler>, TEvents> {
+        PluginBuilder {
             lang: self.lang,
             commands: Commands(commands, Default::default()),
             events: self.events,
-            cfg: self.cfg,
-            header: self.header,
+            config: self.config,
         }
     }
 }
 
-impl<TLang, TCommands> Exporter<TLang, TCommands, NoEvents> {
-    pub fn events(self, events: CollectEventsTuple) -> Exporter<TLang, TCommands, Events> {
-        Exporter {
-            export_path: self.export_path,
+impl<TLang, TCommands> PluginBuilder<TLang, TCommands, NoEvents> {
+    pub fn events(self, events: CollectEventsTuple) -> PluginBuilder<TLang, TCommands, Events> {
+        PluginBuilder {
             lang: self.lang,
             events: Events(events),
             commands: self.commands,
-            cfg: self.cfg,
-            header: self.header,
+            config: self.config,
         }
     }
 }
 
-impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents> {
+impl<TLang, TCommands, TEvents> PluginBuilder<TLang, TCommands, TEvents> {
     /// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
-    pub fn cfg(mut self, cfg: specta::ts::ExportConfig) -> Self {
-        self.cfg = ExportConfig::new(cfg);
+    pub fn config(mut self, config: specta::ts::ExportConfig) -> Self {
+        self.config.inner = config;
         self
     }
 
     /// Allows for specifying a custom header to
-    pub fn with_header(mut self, header: &'static str) -> Self {
-        self.header = header.into();
+    pub fn header(mut self, header: &'static str) -> Self {
+        self.config.header = header.into();
+        self
+    }
+
+    pub fn path(mut self, path: impl AsRef<Path>) -> Self {
+        self.config.path = Some(path.as_ref().to_path_buf());
         self
     }
 }
@@ -319,17 +325,17 @@ where
 
 const PLUGIN_NAME: &str = "tauri-specta";
 
-impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents>
+impl<TLang, TCommands, TEvents> PluginBuilder<TLang, TCommands, TEvents>
 where
     TLang: ExportLanguage,
     TCommands: CommandsTypeState,
     TEvents: EventsTypeState,
 {
     #[must_use]
-    pub fn to_plugin(self) -> tauri::plugin::TauriPlugin<TCommands::Runtime> {
+    pub fn into_plugin(self) -> tauri::plugin::TauriPlugin<TCommands::Runtime> {
         let builder = tauri::plugin::Builder::new(PLUGIN_NAME);
 
-        let plugin_utils = self.to_utils_for_plugin(PLUGIN_NAME);
+        let plugin_utils = self.into_plugin_utils(PLUGIN_NAME);
 
         builder
             .invoke_handler(plugin_utils.invoke_handler)
@@ -342,7 +348,7 @@ where
     }
 
     #[must_use]
-    pub fn to_utils_for_plugin<TManager>(
+    pub fn into_plugin_utils<TManager>(
         mut self,
         plugin_name: &'static str,
     ) -> PluginUtils<TCommands, TManager, impl FnOnce(&TManager)>
@@ -351,7 +357,7 @@ where
     {
         let plugin_name = PluginName::new(plugin_name);
 
-        self.cfg.plugin_name = plugin_name;
+        self.config.plugin_name = plugin_name;
 
         let (invoke_handler, event_collection) = self.export_inner().unwrap();
 
@@ -366,17 +372,15 @@ where
     }
 
     fn export_inner(self) -> Result<(TCommands::InvokeHandler, EventCollection), TsExportError> {
-        let path = self.export_path.clone();
-        let cfg = self.cfg.clone();
+        let cfg = self.config.clone();
 
         let (rendered, ret) = self.render()?;
 
-        if let Some(export_dir) = path.parent() {
-            fs::create_dir_all(export_dir)?;
-        }
+        if let Some(path) = cfg.path {
+            if let Some(export_dir) = path.parent() {
+                fs::create_dir_all(export_dir)?;
+            }
 
-        #[cfg(debug_assertions)]
-        {
             let mut file = File::create(&path)?;
 
             write!(file, "{}", rendered)?;
@@ -392,8 +396,7 @@ where
     ) -> Result<(String, (TCommands::InvokeHandler, EventCollection)), TsExportError> {
         let Self {
             commands,
-            cfg,
-            header,
+            config,
             events,
             ..
         } = self;
@@ -410,11 +413,11 @@ where
                 .into_iter()
                 .chain(events_type_map)
                 .collect(),
-            &cfg,
+            &config,
         )?;
 
         Ok((
-            format!("{header}{rendered}"),
+            format!("{}{rendered}", &config.header),
             (invoke_handler, events_registry),
         ))
     }
@@ -422,7 +425,7 @@ where
 
 type HardcodedRuntime = tauri::Wry;
 
-impl<TLang, TCommands, TEvents> Exporter<TLang, TCommands, TEvents>
+impl<TLang, TCommands, TEvents> PluginBuilder<TLang, TCommands, TEvents>
 where
     TLang: ExportLanguage,
     TCommands: CommandsTypeState<Runtime = HardcodedRuntime>,
@@ -434,7 +437,7 @@ where
     }
 
     pub fn export_for_plugin(mut self, plugin_name: &'static str) -> Result<(), TsExportError> {
-        self.cfg.plugin_name = PluginName::new(plugin_name);
+        self.config.plugin_name = PluginName::new(plugin_name);
 
         self.export_inner().map(|_| ())
     }

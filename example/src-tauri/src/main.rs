@@ -51,19 +51,25 @@ pub struct DemoEvent(String);
 pub struct EmptyEvent;
 
 fn main() {
+    let specta_builder = {
+        let specta_builder = ts::builder()
+            .commands(tauri_specta::collect_commands![
+                hello_world,
+                goodbye_world,
+                has_error,
+                nested::some_struct
+            ])
+            .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
+            .config(specta::ts::ExportConfig::default().formatter(specta::ts::prettier));
+
+        #[cfg(debug_assertions)]
+        let specta_builder = specta_builder.path("../src/bindings.ts");
+
+        specta_builder.into_plugin()
+    };
+
     tauri::Builder::default()
-        .plugin(
-            ts::Exporter::new("../src/bindings.ts")
-                .commands(tauri_specta::collect_commands![
-                    hello_world,
-                    goodbye_world,
-                    has_error,
-                    nested::some_struct
-                ])
-                .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
-                .cfg(specta::ts::ExportConfig::default().formatter(specta::ts::prettier))
-                .to_plugin(),
-        )
+        .plugin(specta_builder)
         .setup(|app| {
             let handle = app.handle();
 

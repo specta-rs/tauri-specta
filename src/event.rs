@@ -43,14 +43,12 @@ impl EventRegistry {
     pub fn register_collection(&self, collection: EventCollection, plugin_name: PluginName) {
         let mut registry = self.0.write().expect("Failed to write EventRegistry");
 
-        registry.extend(collection.0.into_iter().map(|sid| {
-            (
-                sid,
-                EventRegistryMeta {
-                    plugin_name: PluginName::from(plugin_name),
-                },
-            )
-        }));
+        registry.extend(
+            collection
+                .0
+                .into_iter()
+                .map(|sid| (sid, EventRegistryMeta { plugin_name })),
+        );
     }
 
     pub fn get_or_manage<'a, R: Runtime>(handle: &'a impl Manager<R>) -> tauri::State<'a, Self> {

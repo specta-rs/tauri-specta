@@ -8,12 +8,17 @@ use specta::{
     ts::{self, js_doc, TsExportError},
     DataType, TypeMap,
 };
+use tauri::Runtime;
 
 /// Implements [`ExportLanguage`] for JS exporting
 pub struct Language;
 
 /// [`Exporter`](crate::Exporter) for JavaScript
-pub type Exporter<TRuntime> = crate::Exporter<Language, NoCommands<TRuntime>, NoEvents>;
+pub type PluginBuilder<TCommands, TEvents> = crate::PluginBuilder<Language, TCommands, TEvents>;
+
+pub fn builder<TRuntime: Runtime>() -> PluginBuilder<NoCommands<TRuntime>, NoEvents> {
+    PluginBuilder::default()
+}
 
 impl ExportLanguage for Language {
     fn globals() -> String {
