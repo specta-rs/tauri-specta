@@ -104,24 +104,33 @@ macro_rules! get_meta {
     };
 }
 
-pub trait Event: Serialize + DeserializeOwned + Clone + Type + NamedType {
+pub trait Event: Type + NamedType {
     const NAME: &'static str;
 
     // Manager functions
 
-    fn emit_all<R: Runtime>(self, handle: &impl Manager<R>) -> tauri::Result<()> {
+    fn emit_all<R: Runtime>(self, handle: &impl Manager<R>) -> tauri::Result<()>
+    where
+        Self: Serialize + Clone,
+    {
         let meta = get_meta!(handle);
 
         handle.emit_all(&meta.wrap_with_plugin(Self::NAME), self)
     }
 
-    fn emit_to<R: Runtime>(self, handle: &impl Manager<R>, label: &str) -> tauri::Result<()> {
+    fn emit_to<R: Runtime>(self, handle: &impl Manager<R>, label: &str) -> tauri::Result<()>
+    where
+        Self: Serialize + Clone,
+    {
         let meta = get_meta!(handle);
 
         handle.emit_to(&meta.wrap_with_plugin(Self::NAME), label, self)
     }
 
-    fn trigger_global<R: Runtime>(self, handle: &impl Manager<R>) {
+    fn trigger_global<R: Runtime>(self, handle: &impl Manager<R>)
+    where
+        Self: Serialize + Sized,
+    {
         let meta = get_meta!(handle);
 
         handle.trigger_global(
@@ -133,6 +142,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone + Type + NamedType {
     fn listen_global<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventHandler
     where
         F: Fn(TypedEvent<Self>) + Send + 'static,
+        Self: DeserializeOwned,
     {
         let meta = get_meta!(handle);
 
@@ -142,6 +152,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone + Type + NamedType {
     fn once_global<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventHandler
     where
         F: FnOnce(TypedEvent<Self>) + Send + 'static,
+        Self: DeserializeOwned,
     {
         let meta = get_meta!(handle);
 
@@ -150,13 +161,19 @@ pub trait Event: Serialize + DeserializeOwned + Clone + Type + NamedType {
 
     // Window functions
 
-    fn emit(self, window: &Window<impl Runtime>) -> tauri::Result<()> {
+    fn emit(self, window: &Window<impl Runtime>) -> tauri::Result<()>
+    where
+        Self: Serialize + Clone,
+    {
         let meta = get_meta!(window);
 
         window.emit(&meta.wrap_with_plugin(Self::NAME), self)
     }
 
-    fn trigger(self, window: &Window<impl Runtime>) {
+    fn trigger(self, window: &Window<impl Runtime>)
+    where
+        Self: Serialize + Sized,
+    {
         let meta = get_meta!(window);
 
         window.trigger(
@@ -165,7 +182,10 @@ pub trait Event: Serialize + DeserializeOwned + Clone + Type + NamedType {
         );
     }
 
-    fn emit_and_trigger(self, window: &Window<impl Runtime>) -> tauri::Result<()> {
+    fn emit_and_trigger(self, window: &Window<impl Runtime>) -> tauri::Result<()>
+    where
+        Self: Serialize + Clone,
+    {
         let meta = get_meta!(window);
 
         window.emit_and_trigger(&meta.wrap_with_plugin(Self::NAME), self)
@@ -174,6 +194,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone + Type + NamedType {
     fn listen<F>(window: &Window<impl Runtime>, handler: F) -> EventHandler
     where
         F: Fn(TypedEvent<Self>) + Send + 'static,
+        Self: DeserializeOwned,
     {
         let meta = get_meta!(window);
 
@@ -183,6 +204,7 @@ pub trait Event: Serialize + DeserializeOwned + Clone + Type + NamedType {
     fn once<F>(window: &Window<impl Runtime>, handler: F) -> EventHandler
     where
         F: FnOnce(TypedEvent<Self>) + Send + 'static,
+        Self: DeserializeOwned,
     {
         let meta = get_meta!(window);
 
