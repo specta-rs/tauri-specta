@@ -14,7 +14,9 @@ type __EventObj__<T> = {
     : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
-type __Result__<T, E> = [T, undefined] | [undefined, E];
+type __Result__<T, E> =
+  | { status: "ok"; data: T }
+  | { status: "error"; error: E };
 
 function __makeEvents__<T extends Record<string, any>>(
   mappings: Record<keyof T, string>
