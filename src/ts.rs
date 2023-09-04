@@ -1,33 +1,28 @@
 use std::{borrow::Cow, path::PathBuf};
 
 use crate::{
-    EventDataType, ExportLanguage, ItemType, NoCommands, NoEvents, PluginName,
-    CRINGE_ESLINT_DISABLE, DO_NOT_EDIT,
+    js_ts, EventDataType, ExportLanguage, NoCommands, NoEvents, PluginBuilder, PluginName,
+    CRINGE_ESLINT_DISABLE,
 };
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
     functions::FunctionDataType,
     ts::{self, TsExportError},
-    DataType, TypeMap,
+    TypeMap,
 };
 use tauri::Runtime;
 
 /// Implements [`ExportLanguage`] for TypeScript exporting
 pub struct Language;
 
-/// [`Exporter`](crate::Exporter) for TypeScript
-pub type PluginBuilder<TCommands, TEvents> = crate::PluginBuilder<Language, TCommands, TEvents>;
-
-pub fn builder<TRuntime: Runtime>() -> PluginBuilder<NoCommands<TRuntime>, NoEvents> {
+pub fn builder<TRuntime: Runtime>() -> PluginBuilder<Language, NoCommands<TRuntime>, NoEvents> {
     PluginBuilder::default()
 }
 
-impl ExportLanguage for Language {
-    fn globals() -> String {
-        include_str!("./globals.ts").to_string()
-    }
+pub const GLOBALS: &str = include_str!("./globals.ts");
 
+impl ExportLanguage for Language {
     /// Renders a collection of [`FunctionDataType`] into a TypeScript string.
     fn render_commands(
         commands: &[FunctionDataType],
@@ -37,10 +32,6 @@ impl ExportLanguage for Language {
         let commands = commands
             .iter()
             .map(|function| {
-                let docs = specta::ts::js_doc(&function.docs);
-
-                let name_camel = function.name.to_lower_camel_case();
-
                 let arg_defs = function
                     .args
                     .iter()
@@ -48,67 +39,16 @@ impl ExportLanguage for Language {
                         ts::datatype(&cfg.inner, typ, type_map)
                             .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
                     })
-                    .collect::<Result<Vec<_>, _>>()?
-                    .join(", ");
+                    .collect::<Result<Vec<_>, _>>()?;
 
-                let ok_type = match &function.result {
-                    DataType::Result(t) => {
-                        let (t, _) = t.as_ref();
+                let ret_type = js_ts::handle_result(function, type_map, cfg)?;
 
-                        ts::datatype(&cfg.inner, t, type_map)?
-                    }
-                    t => ts::datatype(&cfg.inner, t, type_map)?,
-                };
-
-                let ret_type = match &function.result {
-                    DataType::Result(t) => {
-                        let (_, e) = t.as_ref();
-
-                        format!(
-                            "__Result__<{ok_type}, {}>",
-                            ts::datatype(&cfg.inner, e, type_map)?
-                        )
-                    }
-                    _ => ok_type.clone(),
-                };
-
-                let body = {
-                    let name = cfg
-                        .plugin_name
-                        .apply_as_prefix(&function.name, ItemType::Command);
-
-                    let arg_usages = function
-                        .args
-                        .iter()
-                        .map(|(name, _)| name.to_lower_camel_case())
-                        .collect::<Vec<_>>();
-
-                    let arg_usages = arg_usages
-                        .is_empty()
-                        .then(Default::default)
-                        .unwrap_or_else(|| format!(", {{ {} }}", arg_usages.join(",")));
-
-                    let invoke = format!("await TAURI_INVOKE<{ok_type}>(\"{name}\"{arg_usages})");
-
-                    match &function.result {
-                        DataType::Result(_) => formatdoc!(
-                            r#"
-	                        try {{
-	                            return [{invoke}, undefined];
-	                        }} catch (e: any) {{
-	                            if(e instanceof Error) throw e;
-	                            else return [undefined, e];
-	                        }}"#
-                        ),
-                        _ => format!("return {invoke};"),
-                    }
-                };
-
-                Ok(formatdoc!(
-                    r#"
-	                {docs}async {name_camel}({arg_defs}): Promise<{ret_type}> {{
-	                {body}
-	                }}"#
+                Ok(js_ts::function(
+                    &specta::ts::js_doc(&function.docs),
+                    &function.name.to_lower_camel_case(),
+                    &arg_defs,
+                    Some(&ret_type),
+                    &js_ts::command_body(cfg, function, true),
                 ))
             })
             .collect::<Result<Vec<_>, TsExportError>>()?
@@ -131,33 +71,14 @@ impl ExportLanguage for Language {
             return Ok(Default::default());
         }
 
-        let events_map = events
-            .iter()
-            .map(|event| {
-                let name_str = cfg.plugin_name.apply_as_prefix(event.name, ItemType::Event);
-                let name_camel = event.name.to_lower_camel_case();
+        let (events_types, events_map) = js_ts::events_data(events, cfg, type_map)?;
 
-                format!(r#"{name_camel}: "{name_str}""#)
-            })
-            .collect::<Vec<_>>()
-            .join(",\n");
-
-        let events = events
-            .iter()
-            .map(|event| {
-                let name_camel = event.name.to_lower_camel_case();
-
-                let typ = ts::datatype(&cfg.inner, &event.typ, type_map)?;
-
-                Ok(format!(r#"	{name_camel}: {typ}"#))
-            })
-            .collect::<Result<Vec<_>, TsExportError>>()?
-            .join(",\n");
+        let events_types = events_types.join(",\n");
 
         Ok(formatdoc! {
             r#"
             export const events = __makeEvents__<{{
-            {events}
+            {events_types}
             }}>({{
             {events_map}
             }})"#
@@ -170,11 +91,6 @@ impl ExportLanguage for Language {
         type_map: &TypeMap,
         cfg: &ExportConfig,
     ) -> Result<String, TsExportError> {
-        let globals = Self::globals();
-
-        let commands = Self::render_commands(commands, type_map, cfg)?;
-        let events = Self::render_events(events, type_map, cfg)?;
-
         let dependant_types = type_map
             .values()
             .filter_map(|v| v.as_ref())
@@ -182,19 +98,7 @@ impl ExportLanguage for Language {
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
-        Ok(formatdoc! {
-            r#"
-	            {DO_NOT_EDIT}
-
-				{commands}
-
-				{events}
-
-	            {dependant_types}
-
-				{globals}
-	        "#
-        })
+        js_ts::render_all_parts::<Self>(commands, events, type_map, cfg, &dependant_types, GLOBALS)
     }
 }
 

@@ -19,8 +19,8 @@ import * as TAURI_API_EVENT from "@tauri-apps/api/event";
  */
 
 /**
- * #template T,E
- * @typedef {[T, undefined] | [undefined, E]} __Result__
+ * @template T,E
+ * @typedef { { status: "ok", data: T } | { status: "error", error: E } } __Result__
  */
 
 /**
