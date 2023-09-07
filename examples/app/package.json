@@ -1,5 +1,5 @@
 {
-  "name": "example",
+  "name": "tauri-specta-app",
   "private": true,
   "version": "0.0.0",
   "type": "module",

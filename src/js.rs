@@ -1,5 +1,5 @@
 use crate::{
-    js_ts, ts::ExportConfig, EventDataType, ExportLanguage, NoCommands, NoEvents, PluginBuilder,
+    js_ts::{self, ExportConfig}, EventDataType, ExportLanguage, NoCommands, NoEvents, PluginBuilder,
 };
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;

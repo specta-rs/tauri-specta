@@ -100,8 +100,8 @@ use std::{
     path::Path,
 };
 
-use crate::ts::ExportConfig;
 use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeMap};
+use js_ts::ExportConfig;
 
 use tauri::{Invoke, Manager, Runtime};
 pub use tauri_specta_macros::Event;
@@ -138,9 +138,6 @@ macro_rules! collect_commands {
         $crate::collect_commands![type_map: type_map, $($command),*]
     }};
 }
-
-pub(crate) const CRINGE_ESLINT_DISABLE: &str = "/* eslint-disable */
-";
 
 // TODO
 // #[cfg(doctest)]
