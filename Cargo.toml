@@ -24,12 +24,12 @@ typescript = ["specta/typescript"]
 [dependencies]
 specta = { workspace = true, features = ["functions", "tauri"] }
 tauri-specta-macros = { path = "./macros" }
-serde = "1.0.152"
-serde_json = "1.0.93"
-tauri = "1.2.4"
-thiserror = "1.0.38"
+serde = "1.0.188"
+serde_json = "1.0.106"
+tauri = "1.4.1"
+thiserror = "1.0.48"
 heck = "0.4.1"
-indoc = "2.0.0"
+indoc = "2.0.3"
 
 [dev-dependencies]
 doc-comment = "0.3.3"
