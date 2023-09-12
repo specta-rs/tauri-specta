@@ -18,15 +18,15 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
-javascript = []
+javascript = ["specta/typescript"]
 typescript = ["specta/typescript"]
 
 [dependencies]
 specta = { workspace = true, features = ["functions", "tauri"] }
 tauri-specta-macros = { path = "./macros" }
-serde = "1.0.188"
+serde = { workspace = true }
 serde_json = "1.0.106"
-tauri = "1.4.1"
+tauri = { workspace = true }
 thiserror = "1.0.48"
 heck = "0.4.1"
 indoc = "2.0.3"
@@ -36,11 +36,13 @@ doc-comment = "0.3.3"
 
 [workspace]
 members = [
-    "example/src-tauri",
-    "macros"
+    "examples/app/src-tauri",
+    "examples/custom-plugin/app/src-tauri",
+    "examples/custom-plugin/plugin",
+    "macros",
 ]
 
-
 [workspace.dependencies]
-# specta = { version = "=2.0.0-rc.1" }
-specta = { git = "https://github.com/oscartbeaumont/specta", rev = "5948d80f2551780eda2c7bf38450fc796c74cfbf" }
+specta = { version = "=2.0.0-rc.2" }
+serde = "1.0.188"
+tauri = "1.4.1"

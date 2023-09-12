@@ -1,8 +1,6 @@
-use std::{borrow::Cow, path::PathBuf};
-
 use crate::{
-    js_ts, EventDataType, ExportLanguage, NoCommands, NoEvents, PluginBuilder, PluginName,
-    CRINGE_ESLINT_DISABLE,
+    js_ts::{self, ExportConfig},
+    EventDataType, ExportLanguage, NoCommands, NoEvents, PluginBuilder,
 };
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
@@ -99,35 +97,5 @@ impl ExportLanguage for Language {
             .map(|v| v.join("\n"))?;
 
         js_ts::render_all_parts::<Self>(commands, events, type_map, cfg, &dependant_types, GLOBALS)
-    }
-}
-
-/// The configuration for the generator
-#[derive(Default, Clone)]
-pub struct ExportConfig {
-    /// The name of the plugin to invoke.
-    ///
-    /// If there is no plugin name (i.e. this is an app), this should be `None`.
-    pub(crate) plugin_name: PluginName,
-    /// The specta export configuration
-    pub(crate) inner: specta::ts::ExportConfig,
-    pub(crate) path: Option<PathBuf>,
-    pub(crate) header: Cow<'static, str>,
-}
-
-impl ExportConfig {
-    /// Creates a new [`ExportConfiguration`] from a [`specta::ts::ExportConfiguration`]
-    pub fn new(config: specta::ts::ExportConfig) -> Self {
-        Self {
-            inner: config,
-            header: CRINGE_ESLINT_DISABLE.into(),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<specta::ts::ExportConfig> for ExportConfig {
-    fn from(config: specta::ts::ExportConfig) -> Self {
-        Self::new(config)
     }
 }

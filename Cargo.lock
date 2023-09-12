@@ -867,18 +867,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
-name = "example"
-version = "0.0.0"
-dependencies = [
- "serde",
- "serde_json",
- "specta",
- "tauri",
- "tauri-build",
- "tauri-specta",
-]
-
-[[package]]
 name = "fastrand"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3177,8 +3165,9 @@ dependencies = [
 
 [[package]]
 name = "specta"
-version = "2.0.0-rc.1"
-source = "git+https://github.com/oscartbeaumont/specta?rev=5948d80f2551780eda2c7bf38450fc796c74cfbf#5948d80f2551780eda2c7bf38450fc796c74cfbf"
+version = "2.0.0-rc.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "065150caa210db01913bb6f3c6d2540030937f3b0a0d9fad3dc453011f350c52"
 dependencies = [
  "document-features",
  "indoc",
@@ -3192,8 +3181,9 @@ dependencies = [
 
 [[package]]
 name = "specta-macros"
-version = "2.0.0-rc.1"
-source = "git+https://github.com/oscartbeaumont/specta?rev=5948d80f2551780eda2c7bf38450fc796c74cfbf#5948d80f2551780eda2c7bf38450fc796c74cfbf"
+version = "2.0.0-rc.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99a53b00ba374af8b6bd7c9061019df8b5ee0d7ab0d10d1c7c98c527d2fdb0fd"
 dependencies = [
  "Inflector",
  "itertools",
@@ -3557,6 +3547,40 @@ dependencies = [
  "tauri",
  "tauri-specta-macros",
  "thiserror",
+]
+
+[[package]]
+name = "tauri-specta-example-app"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "specta",
+ "tauri",
+ "tauri-build",
+ "tauri-specta",
+]
+
+[[package]]
+name = "tauri-specta-example-custom-plugin"
+version = "0.1.0"
+dependencies = [
+ "rand 0.8.5",
+ "serde",
+ "specta",
+ "tauri",
+ "tauri-specta",
+]
+
+[[package]]
+name = "tauri-specta-example-custom-plugin-app"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-specta-example-custom-plugin",
 ]
 
 [[package]]

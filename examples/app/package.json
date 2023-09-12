@@ -1,7 +1,6 @@
 {
-  "name": "example",
+  "name": "tauri-specta-example-app",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "pnpm tauri dev",
