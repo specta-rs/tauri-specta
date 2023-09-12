@@ -5,6 +5,6 @@
     "example": "pnpm --filter example -- "
   },
   "dependencies": {
-    "@tauri-apps/api": "^1.2.0"
+    "@tauri-apps/api": "^1.4.0"
   }
 }
