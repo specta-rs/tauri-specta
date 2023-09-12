@@ -3165,8 +3165,9 @@ dependencies = [
 
 [[package]]
 name = "specta"
-version = "2.0.0-rc.1"
-source = "git+https://github.com/oscartbeaumont/specta?rev=5948d80f2551780eda2c7bf38450fc796c74cfbf#5948d80f2551780eda2c7bf38450fc796c74cfbf"
+version = "2.0.0-rc.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "065150caa210db01913bb6f3c6d2540030937f3b0a0d9fad3dc453011f350c52"
 dependencies = [
  "document-features",
  "indoc",
@@ -3180,8 +3181,9 @@ dependencies = [
 
 [[package]]
 name = "specta-macros"
-version = "2.0.0-rc.1"
-source = "git+https://github.com/oscartbeaumont/specta?rev=5948d80f2551780eda2c7bf38450fc796c74cfbf#5948d80f2551780eda2c7bf38450fc796c74cfbf"
+version = "2.0.0-rc.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99a53b00ba374af8b6bd7c9061019df8b5ee0d7ab0d10d1c7c98c527d2fdb0fd"
 dependencies = [
  "Inflector",
  "itertools",
