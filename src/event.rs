@@ -51,7 +51,7 @@ impl EventRegistry {
         );
     }
 
-    pub fn get_or_manage<'a, R: Runtime>(handle: &'a impl Manager<R>) -> tauri::State<'a, Self> {
+    pub fn get_or_manage<R: Runtime>(handle: &impl Manager<R>) -> tauri::State<'_, Self> {
         if handle.try_state::<Self>().is_none() {
             handle.manage(Self::default());
         }
@@ -146,7 +146,7 @@ pub trait Event: Type + NamedType {
     {
         let meta = get_meta!(handle);
 
-        handle.listen_global(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        handle.listen_global(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     fn once_global<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventHandler
@@ -156,7 +156,7 @@ pub trait Event: Type + NamedType {
     {
         let meta = get_meta!(handle);
 
-        handle.once_global(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        handle.once_global(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     // Window functions
@@ -198,7 +198,7 @@ pub trait Event: Type + NamedType {
     {
         let meta = get_meta!(window);
 
-        window.listen(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        window.listen(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     fn once<F>(window: &Window<impl Runtime>, handler: F) -> EventHandler
@@ -208,7 +208,7 @@ pub trait Event: Type + NamedType {
     {
         let meta = get_meta!(window);
 
-        window.once(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        window.once(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 }
 

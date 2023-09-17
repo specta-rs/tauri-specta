@@ -31,7 +31,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(plugin_utils.invoke_handler)
         .setup(move |app| {
             let app = app.clone();
-            (plugin_utils.setup)(&app.clone());
+            (plugin_utils.setup)(&app);
 
             std::thread::spawn(move || loop {
                 RandomNumber(rand::random()).emit_all(&app).unwrap();

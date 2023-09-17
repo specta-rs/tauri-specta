@@ -3186,7 +3186,7 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "2.0.0-rc.2"
-source = "git+https://github.com/oscartbeaumont/specta?rev=93dc916d51fe40be7b75e87a03100e7648168f5e#93dc916d51fe40be7b75e87a03100e7648168f5e"
+source = "git+https://github.com/oscartbeaumont/specta?rev=efdd024fd1ab2a569ffe9d7fc484c419eb6ef9c5#efdd024fd1ab2a569ffe9d7fc484c419eb6ef9c5"
 dependencies = [
  "const_format",
  "document-features",
@@ -3202,7 +3202,7 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.2"
-source = "git+https://github.com/oscartbeaumont/specta?rev=93dc916d51fe40be7b75e87a03100e7648168f5e#93dc916d51fe40be7b75e87a03100e7648168f5e"
+source = "git+https://github.com/oscartbeaumont/specta?rev=efdd024fd1ab2a569ffe9d7fc484c419eb6ef9c5#efdd024fd1ab2a569ffe9d7fc484c419eb6ef9c5"
 dependencies = [
  "Inflector",
  "itertools",
