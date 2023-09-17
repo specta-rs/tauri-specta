@@ -53,36 +53,56 @@
 //! ## Export your bindings
 //!
 //! ```rust
-//! # #[specta::specta]
-//! # fn greet() {}
-//! # #[specta::specta]
-//! # fn greet2() {}
-//! # #[specta::specta]
-//! # fn greet3() {}
-//! use specta::collect_types;
-//! use tauri_specta::{ts, js};
+//! #[tauri::command]
+//! #[specta::specta]
+//! fn greet() {}
+//! #[tauri::command]
+//! #[specta::specta]
+//! fn greet2() {}
+//! #[tauri::command]
+//! #[specta::specta]
+//! fn greet3() {}
+
+//! use tauri_specta::*;
 //!
 //! // this example exports your types on startup when in debug mode or in a unit test. You can do whatever.
 //! fn main() {
 //!     #[cfg(debug_assertions)]
-//!     ts::export(collect_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
+//!		ts::builder()
+//!			.commands(collect_commands![greet, greet2, greet3])
+//!			.path("../src/bindings.ts")
+//!			.export()
+//!			.unwrap();
 //!
 //!     // or export to JS with JSDoc
 //!     #[cfg(debug_assertions)]
-//!     js::export(collect_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
+//!		js::builder()
+//!			.commands(collect_commands![greet, greet2, greet3])
+//!			.path("../src/bindings.js")
+//!			.export()
+//!			.unwrap();
 //! }
 //!
 //! #[test]
 //! fn export_bindings() {
-//!     ts::export(collect_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
-//!     js::export(collect_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
+//!		ts::builder()
+//!			.commands(collect_commands![greet, greet2, greet3])
+//!			.path("../src/bindings.ts")
+//!			.export()
+//!			.unwrap();
+//!
+//!		js::builder()
+//!			.commands(collect_commands![greet, greet2, greet3])
+//!			.path("../src/bindings.js")
+//!			.export()
+//!			.unwrap();
 //! }
 //! ```
 //!
 //! ## Usage on frontend
 //!
 //! ```ts
-//! import * as commands from "./bindings"; // This should point to the file we export from Rust
+//! import { commands } from "./bindings"; // This should point to the file we export from Rust
 //!
 //! await commands.greet("Brendan");
 //! ```
