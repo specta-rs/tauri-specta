@@ -217,11 +217,7 @@ pub struct EventDataType {
     pub typ: DataType,
 }
 
-pub(crate) type CollectEventsTuple = (
-    EventCollection,
-    Result<Vec<EventDataType>, specta::ExportError>,
-    specta::TypeMap,
-);
+pub(crate) type CollectEventsTuple = (EventCollection, Vec<EventDataType>, specta::TypeMap);
 
 #[macro_export]
 macro_rules! collect_events {
@@ -233,19 +229,19 @@ macro_rules! collect_events {
       	let mut type_map = Default::default();
 
       	let event_data_types = [$(
-       		<$event as ::specta::Type>::reference(
-       			::specta::DefOpts {
-       				type_map: &mut type_map,
-       				parent_inline: false
-          		},
-            	&[]
-       		).map(|typ| $crate::EventDataType {
-         		name: <$event as $crate::Event>::NAME,
-         		typ
-         	})
+	       $crate::EventDataType {
+	       		name: <$event as $crate::Event>::NAME,
+	       		typ: <$event as ::specta::Type>::reference(
+	       			::specta::DefOpts {
+	       				type_map: &mut type_map,
+	       				parent_inline: false
+	          		},
+	            	&[]
+	       		).inner
+	       }
        	),+]
         .into_iter()
-        .collect::<Result<Vec<_>, _>>();
+        .collect::<Vec<_>>();
 
       	(collection, event_data_types, type_map)
     }};

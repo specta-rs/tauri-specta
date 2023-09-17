@@ -1,12 +1,9 @@
-use crate::{
-    js_ts::{self, ExportConfig},
-    EventDataType, ExportLanguage, NoCommands, NoEvents, PluginBuilder,
-};
+use crate::{js_ts, *};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
     functions::FunctionDataType,
-    ts::{self, TsExportError},
+    ts::{self, ExportError},
     TypeMap,
 };
 use tauri::Runtime;
@@ -20,13 +17,21 @@ pub fn builder<TRuntime: Runtime>() -> PluginBuilder<Language, NoCommands<TRunti
 
 pub const GLOBALS: &str = include_str!("./globals.ts");
 
+pub type ExportConfig = crate::ExportConfig<specta::js_ts::ExportConfig>;
+
 impl ExportLanguage for Language {
+    type Config = specta::js_ts::ExportConfig;
+
+    fn run_format(path: PathBuf, cfg: &ExportConfig) {
+        cfg.inner.run_format(path).ok();
+    }
+
     /// Renders a collection of [`FunctionDataType`] into a TypeScript string.
     fn render_commands(
         commands: &[FunctionDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
-    ) -> Result<String, TsExportError> {
+    ) -> Result<String, ExportError> {
         let commands = commands
             .iter()
             .map(|function| {
@@ -49,7 +54,7 @@ impl ExportLanguage for Language {
                     &js_ts::command_body(cfg, function, true),
                 ))
             })
-            .collect::<Result<Vec<_>, TsExportError>>()?
+            .collect::<Result<Vec<_>, ExportError>>()?
             .join(",\n");
 
         Ok(formatdoc! {
@@ -64,7 +69,7 @@ impl ExportLanguage for Language {
         events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
-    ) -> Result<String, TsExportError> {
+    ) -> Result<String, ExportError> {
         if events.is_empty() {
             return Ok(Default::default());
         }
@@ -88,7 +93,7 @@ impl ExportLanguage for Language {
         events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
-    ) -> Result<String, TsExportError> {
+    ) -> Result<String, ExportError> {
         let dependant_types = type_map
             .values()
             .filter_map(|v| v.as_ref())

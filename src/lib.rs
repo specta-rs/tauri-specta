@@ -94,14 +94,18 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 use std::{
+    borrow::Cow,
     fs::{self, File},
     io::Write,
     marker::PhantomData,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
-use specta::{functions::FunctionDataType, ts::TsExportError, ExportError, TypeMap};
-use js_ts::ExportConfig;
+use specta::{
+    functions::{CollectFunctionsResult, FunctionDataType},
+    ts::ExportError,
+    TypeMap,
+};
 
 use tauri::{Invoke, Manager, Runtime};
 pub use tauri_specta_macros::Event;
@@ -116,14 +120,15 @@ pub mod js;
 #[cfg_attr(docsrs, doc(cfg(feature = "typescript")))]
 pub mod ts;
 
-mod event;
+#[cfg(any(feature = "javascript", feature = "typescript"))]
 mod js_ts;
+
+mod event;
 
 pub use event::*;
 
-pub type CollectFunctionsResult = Result<(Vec<FunctionDataType>, TypeMap), ExportError>;
-
-pub type CollectCommandsTuple<TInvokeHandler> = (CollectFunctionsResult, TInvokeHandler);
+pub type CollectCommandsTuple<TInvokeHandler> =
+    (specta::functions::CollectFunctionsResult, TInvokeHandler);
 
 #[macro_export]
 macro_rules! collect_commands {
@@ -145,26 +150,30 @@ macro_rules! collect_commands {
 
 /// A set of functions that produce language-specific code
 pub trait ExportLanguage: 'static {
+    type Config: Default + Clone;
+
+    fn run_format(path: PathBuf, cfg: &ExportConfig<Self::Config>);
+
     fn render_events(
         events: &[EventDataType],
         type_map: &TypeMap,
-        cfg: &ExportConfig,
-    ) -> Result<String, TsExportError>;
+        cfg: &ExportConfig<Self::Config>,
+    ) -> Result<String, ExportError>;
 
     /// Renders a collection of [`FunctionDataType`] into a string.
     fn render_commands(
         commands: &[FunctionDataType],
         type_map: &TypeMap,
-        cfg: &ExportConfig,
-    ) -> Result<String, TsExportError>;
+        cfg: &ExportConfig<Self::Config>,
+    ) -> Result<String, ExportError>;
 
     /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
     fn render(
         commands: &[FunctionDataType],
         events: &[EventDataType],
         type_map: &TypeMap,
-        cfg: &ExportConfig,
-    ) -> Result<String, TsExportError>;
+        cfg: &ExportConfig<Self::Config>,
+    ) -> Result<String, ExportError>;
 }
 
 pub trait CommandsTypeState: 'static {
@@ -188,7 +197,7 @@ where
     type InvokeHandler = fn(Invoke<TRuntime>);
 
     fn split(self) -> CollectCommandsTuple<Self::InvokeHandler> {
-        (Ok(Default::default()), dummy_invoke_handler)
+        (Default::default(), dummy_invoke_handler)
     }
 
     fn macro_data(&self) -> &CollectFunctionsResult {
@@ -226,7 +235,7 @@ pub struct NoEvents;
 
 impl EventsTypeState for NoEvents {
     fn get(self) -> CollectEventsTuple {
-        (Default::default(), Ok(vec![]), Default::default())
+        Default::default()
     }
 }
 
@@ -239,26 +248,30 @@ impl EventsTypeState for Events {
 }
 
 /// General exporter, takes a generic for the specific language that is being exported to.
-pub struct PluginBuilder<TLang, TCommands, TEvents> {
+pub struct PluginBuilder<TLang: ExportLanguage, TCommands, TEvents> {
     lang: PhantomData<TLang>,
     commands: TCommands,
     events: TEvents,
-    config: ExportConfig,
+    config: ExportConfig<TLang::Config>,
 }
 
-impl<TLang, TRuntime> Default for PluginBuilder<TLang, NoCommands<TRuntime>, NoEvents> {
+impl<TLang, TRuntime> Default for PluginBuilder<TLang, NoCommands<TRuntime>, NoEvents>
+where
+    TLang: ExportLanguage,
+{
     fn default() -> Self {
         Self {
             lang: PhantomData,
-            commands: NoCommands(Ok((vec![], Default::default())), Default::default()),
+            commands: NoCommands(Default::default(), Default::default()),
             events: NoEvents,
-            config: ExportConfig::default(),
+            config: Default::default(),
         }
     }
 }
 
 impl<TLang, TEvents, TRuntime> PluginBuilder<TLang, NoCommands<TRuntime>, TEvents>
 where
+    TLang: ExportLanguage,
     TRuntime: tauri::Runtime,
 {
     pub fn commands<TInvokeHandler: Fn(tauri::Invoke<TRuntime>) + Send + Sync + 'static>(
@@ -274,7 +287,10 @@ where
     }
 }
 
-impl<TLang, TCommands> PluginBuilder<TLang, TCommands, NoEvents> {
+impl<TLang, TCommands> PluginBuilder<TLang, TCommands, NoEvents>
+where
+    TLang: ExportLanguage,
+{
     pub fn events(self, events: CollectEventsTuple) -> PluginBuilder<TLang, TCommands, Events> {
         PluginBuilder {
             lang: self.lang,
@@ -285,9 +301,12 @@ impl<TLang, TCommands> PluginBuilder<TLang, TCommands, NoEvents> {
     }
 }
 
-impl<TLang, TCommands, TEvents> PluginBuilder<TLang, TCommands, TEvents> {
+impl<TLang, TCommands, TEvents> PluginBuilder<TLang, TCommands, TEvents>
+where
+    TLang: ExportLanguage,
+{
     /// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
-    pub fn config(mut self, config: specta::ts::ExportConfig) -> Self {
+    pub fn config(mut self, config: TLang::Config) -> Self {
         self.config.inner = config;
         self
     }
@@ -363,12 +382,12 @@ where
         }
     }
 
-    fn export_inner(self) -> Result<(TCommands::InvokeHandler, EventCollection), TsExportError> {
+    fn export_inner(self) -> Result<(TCommands::InvokeHandler, EventCollection), ExportError> {
         let cfg = self.config.clone();
 
         let (rendered, ret) = self.render()?;
 
-        if let Some(path) = cfg.path {
+        if let Some(path) = cfg.path.clone() {
             if let Some(export_dir) = path.parent() {
                 fs::create_dir_all(export_dir)?;
             }
@@ -377,15 +396,13 @@ where
 
             write!(file, "{}", rendered)?;
 
-            cfg.inner.run_format(path)?;
+            TLang::run_format(path, &cfg);
         }
 
         Ok(ret)
     }
 
-    fn render(
-        self,
-    ) -> Result<(String, (TCommands::InvokeHandler, EventCollection)), TsExportError> {
+    fn render(self) -> Result<(String, (TCommands::InvokeHandler, EventCollection)), ExportError> {
         let Self {
             commands,
             config,
@@ -393,14 +410,13 @@ where
             ..
         } = self;
 
-        let (macro_data, invoke_handler) = commands.split();
-        let (commands, commands_type_map) = macro_data?;
+        let ((commands, commands_type_map), invoke_handler) = commands.split();
 
         let (events_registry, events, events_type_map) = events.get();
 
         let rendered = TLang::render(
             &commands,
-            &events?,
+            &events,
             &commands_type_map
                 .into_iter()
                 .chain(events_type_map)
@@ -424,11 +440,14 @@ where
     TEvents: EventsTypeState,
 {
     /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
-    pub fn export(self) -> Result<(), TsExportError> {
+    pub fn export(self) -> Result<(), specta::js_ts::ExportError> {
         self.export_for_plugin(PLUGIN_NAME)
     }
 
-    pub fn export_for_plugin(mut self, plugin_name: &'static str) -> Result<(), TsExportError> {
+    pub fn export_for_plugin(
+        mut self,
+        plugin_name: &'static str,
+    ) -> Result<(), specta::js_ts::ExportError> {
         self.config.plugin_name = PluginName::new(plugin_name);
 
         self.export_inner().map(|_| ())
@@ -464,5 +483,28 @@ impl PluginName {
             },
             s,
         )
+    }
+}
+
+/// The configuration for the generator
+#[derive(Default, Clone)]
+pub struct ExportConfig<TConfig> {
+    /// The name of the plugin to invoke.
+    ///
+    /// If there is no plugin name (i.e. this is an app), this should be `None`.
+    pub(crate) plugin_name: PluginName,
+    /// The specta export configuration
+    pub(crate) inner: TConfig,
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) header: Cow<'static, str>,
+}
+
+impl<TConfig: Default> ExportConfig<TConfig> {
+    /// Creates a new [`ExportConfiguration`] from a [`specta::ts::ExportConfiguration`]
+    pub fn new(config: TConfig) -> Self {
+        Self {
+            inner: config,
+            ..Default::default()
+        }
     }
 }
