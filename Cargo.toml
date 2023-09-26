@@ -18,7 +18,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
-javascript = ["specta/typescript"]
+javascript = ["specta/javascript"]
 typescript = ["specta/typescript"]
 
 [dependencies]
@@ -46,3 +46,6 @@ members = [
 specta = { version = "=2.0.0-rc.2" }
 serde = "1.0.188"
 tauri = "1.4.1"
+
+[patch.crates-io]
+specta = { git = "https://github.com/oscartbeaumont/specta", rev = "efdd024fd1ab2a569ffe9d7fc484c419eb6ef9c5" }

@@ -51,7 +51,7 @@ impl EventRegistry {
         );
     }
 
-    pub fn get_or_manage<'a, R: Runtime>(handle: &'a impl Manager<R>) -> tauri::State<'a, Self> {
+    pub fn get_or_manage<R: Runtime>(handle: &impl Manager<R>) -> tauri::State<'_, Self> {
         if handle.try_state::<Self>().is_none() {
             handle.manage(Self::default());
         }
@@ -146,7 +146,7 @@ pub trait Event: Type + NamedType {
     {
         let meta = get_meta!(handle);
 
-        handle.listen_global(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        handle.listen_global(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     fn once_global<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventHandler
@@ -156,7 +156,7 @@ pub trait Event: Type + NamedType {
     {
         let meta = get_meta!(handle);
 
-        handle.once_global(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        handle.once_global(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     // Window functions
@@ -198,7 +198,7 @@ pub trait Event: Type + NamedType {
     {
         let meta = get_meta!(window);
 
-        window.listen(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        window.listen(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     fn once<F>(window: &Window<impl Runtime>, handler: F) -> EventHandler
@@ -208,7 +208,7 @@ pub trait Event: Type + NamedType {
     {
         let meta = get_meta!(window);
 
-        window.once(&meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        window.once(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 }
 
@@ -217,11 +217,7 @@ pub struct EventDataType {
     pub typ: DataType,
 }
 
-pub(crate) type CollectEventsTuple = (
-    EventCollection,
-    Result<Vec<EventDataType>, specta::ExportError>,
-    specta::TypeMap,
-);
+pub(crate) type CollectEventsTuple = (EventCollection, Vec<EventDataType>, specta::TypeMap);
 
 #[macro_export]
 macro_rules! collect_events {
@@ -233,19 +229,19 @@ macro_rules! collect_events {
       	let mut type_map = Default::default();
 
       	let event_data_types = [$(
-       		<$event as ::specta::Type>::reference(
-       			::specta::DefOpts {
-       				type_map: &mut type_map,
-       				parent_inline: false
-          		},
-            	&[]
-       		).map(|typ| $crate::EventDataType {
-         		name: <$event as $crate::Event>::NAME,
-         		typ
-         	})
+	       $crate::EventDataType {
+	       		name: <$event as $crate::Event>::NAME,
+	       		typ: <$event as ::specta::Type>::reference(
+	       			::specta::DefOpts {
+	       				type_map: &mut type_map,
+	       				parent_inline: false
+	          		},
+	            	&[]
+	       		).inner
+	       }
        	),+]
         .into_iter()
-        .collect::<Result<Vec<_>, _>>();
+        .collect::<Vec<_>>();
 
       	(collection, event_data_types, type_map)
     }};
