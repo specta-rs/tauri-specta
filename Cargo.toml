@@ -18,7 +18,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
-javascript = ["specta/javascript"]
+js_doc = ["specta/js_doc"]
 typescript = ["specta/typescript"]
 
 [dependencies]
@@ -43,7 +43,7 @@ members = [
 ]
 
 [workspace.dependencies]
-specta = { version = "=2.0.0-rc.2" }
+specta = { version = "^2.0.0-rc.3" }
 serde = "1.0.188"
 tauri = "1.4.1"
 

@@ -17,7 +17,7 @@ serde_json = "1.0"
 specta.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "1.4.1", features = ["api-all"] }
-tauri-specta = { path = "../../../", features = ["typescript", "javascript"] }
+tauri-specta = { path = "../../../", features = ["typescript", "js_doc"] }
 
 [features]
 default = ["custom-protocol"]
