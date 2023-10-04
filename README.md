@@ -12,11 +12,26 @@
 
 <br>
 
+> This branch contains the code for tauri-specta v2. You can check the [v1.0.2 git tag](https://github.com/oscartbeaumont/tauri-specta/tree/v1.0.2) for the v1 code.
+
 ## Install
+
+## Specta v1
 
 ```bash
 cargo add specta
 cargo add tauri-specta --features javascript,typescript
+```
+
+## Specta v2
+
+Specta v2 hasn't officially launched yet but it can be used through the release candidate (`rc`) versions.
+
+You must **ensure** you lock your Specta version to avoid breaking changes.
+
+```bash
+cargo add specta@=2.0.0-rc.4
+cargo add tauri-specta@=2.0.0-rc.1 --features javascript,typescript
 ```
 
 ## Adding Specta to custom types
@@ -64,21 +79,25 @@ fn greet(name: String) -> String {
 use specta::collect_types;
 use tauri_specta::{ts, js};
 
-// this example exports your types on startup when in debug mode or in a unit test. You can do whatever.
+// this example exports your types on startup when in debug mode. You can do whatever.
 
 fn main() {
-    #[cfg(debug_assertions)]
-    ts::export(collect_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
+    let specta_builder = {
+        // You can use `tauri_specta::js::builder` for exporting JS Doc instead of Typescript!`
+        let specta_builder = tauri_specta::ts::builder()
+            .commands(tauri_specta::collect_commands![greet, greet2, greet3 ]); // <- Each of your comments
 
-    // or export to JS with JSDoc
-    #[cfg(debug_assertions)]
-    js::export(collect_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
-}
+        
+        #[cfg(debug_assertions)] // <- Only export on non-release builds
+        let specta_builder = specta_builder.path("../src/bindings.ts");
 
-#[test]
-fn export_bindings() {
-    ts::export(collect_types![greet, greet2, greet3], "../src/bindings.ts").unwrap();
-    js::export(collect_types![greet, greet2, greet3], "../src/bindings.js").unwrap();
+        specta_builder.into_plugin()
+    };
+
+    tauri::Builder::default()
+        .plugin(specta_builder)
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }
 ```
 
@@ -89,6 +108,53 @@ import * as commands from "./bindings"; // This should point to the file we expo
 
 await commands.greet("Brendan");
 ```
+
+## Events
+
+> To use Events you must be using [Specta v2 and Tauri Specta v2](#specta-v2).
+
+Firstly you have to define your event types. You can add as many of these as you want.
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, tauri_specta::Event)]
+pub struct DemoEvent(String);
+```
+
+Next you must add it to the builder like the following:
+
+```rust
+let specta_builder = ts::builder()
+        .events(tauri_specta::collect_events![DemoEvent]); // This should contain all your events.
+```
+
+Then it can be used in Rust like the following:
+
+```rust
+tauri::Builder::default()
+    .setup(|app| {
+        let handle = app.handle();
+
+        DemoEvent::listen_global(&handle, |event| {
+            dbg!(event.payload);
+        });
+
+        DemoEvent("Test".to_string()).emit_all(&handle).unwrap();
+    });
+```
+
+and it can be used in TS like the following:
+
+```ts
+import { commands, events } from "./bindings";
+import { appWindow } from "@tauri-apps/api/window";
+
+// For all windows
+events.demoEvent.listen((e) => console.log(e));
+
+// For a single window
+events.demoEvent(appWindow).listen((e) => console.log(e));
+```
+
 
 ## Known limitations
 
@@ -101,8 +167,8 @@ Run the example:
 
 ```bash
 pnpm i
-cd example/
-pnpm tauri dev
+cd examples/app/
+pnpm dev
 ```
 
 ## Credit

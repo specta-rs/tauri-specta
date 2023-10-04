@@ -115,6 +115,7 @@
 
 use std::{
     borrow::Cow,
+    error, fmt,
     fs::{self, File},
     io::Write,
     marker::PhantomData,
@@ -123,7 +124,6 @@ use std::{
 
 use specta::{
     functions::{CollectFunctionsResult, FunctionDataType},
-    ts::ExportError,
     TypeMap,
 };
 
@@ -171,6 +171,7 @@ macro_rules! collect_commands {
 /// A set of functions that produce language-specific code
 pub trait ExportLanguage: 'static {
     type Config: Default + Clone;
+    type Error: fmt::Debug + error::Error + From<std::io::Error>; // TODO: Review if this `From<std::io::Error>` should be removed before stabilisation
 
     fn run_format(path: PathBuf, cfg: &ExportConfig<Self::Config>);
 
@@ -178,14 +179,14 @@ pub trait ExportLanguage: 'static {
         events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig<Self::Config>,
-    ) -> Result<String, ExportError>;
+    ) -> Result<String, Self::Error>;
 
     /// Renders a collection of [`FunctionDataType`] into a string.
     fn render_commands(
         commands: &[FunctionDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig<Self::Config>,
-    ) -> Result<String, ExportError>;
+    ) -> Result<String, Self::Error>;
 
     /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
     fn render(
@@ -193,7 +194,7 @@ pub trait ExportLanguage: 'static {
         events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig<Self::Config>,
-    ) -> Result<String, ExportError>;
+    ) -> Result<String, Self::Error>;
 }
 
 pub trait CommandsTypeState: 'static {
@@ -402,7 +403,7 @@ where
         }
     }
 
-    fn export_inner(self) -> Result<(TCommands::InvokeHandler, EventCollection), ExportError> {
+    fn export_inner(self) -> Result<(TCommands::InvokeHandler, EventCollection), TLang::Error> {
         let cfg = self.config.clone();
 
         let (rendered, ret) = self.render()?;
@@ -422,7 +423,7 @@ where
         Ok(ret)
     }
 
-    fn render(self) -> Result<(String, (TCommands::InvokeHandler, EventCollection)), ExportError> {
+    fn render(self) -> Result<(String, (TCommands::InvokeHandler, EventCollection)), TLang::Error> {
         let Self {
             commands,
             config,
@@ -460,14 +461,11 @@ where
     TEvents: EventsTypeState,
 {
     /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
-    pub fn export(self) -> Result<(), specta::ts::ExportError> {
+    pub fn export(self) -> Result<(), TLang::Error> {
         self.export_for_plugin(PLUGIN_NAME)
     }
 
-    pub fn export_for_plugin(
-        mut self,
-        plugin_name: &'static str,
-    ) -> Result<(), specta::ts::ExportError> {
+    pub fn export_for_plugin(mut self, plugin_name: &'static str) -> Result<(), TLang::Error> {
         self.config.plugin_name = PluginName::new(plugin_name);
 
         self.export_inner().map(|_| ())

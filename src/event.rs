@@ -4,7 +4,7 @@ use std::{
 };
 
 use serde::{de::DeserializeOwned, Serialize};
-use specta::{DataType, NamedType, SpectaID, Type};
+use specta::{DataType, NamedType, SpectaID};
 use tauri::{EventHandler, Manager, Runtime, Window};
 
 use crate::PluginName;
@@ -104,7 +104,7 @@ macro_rules! get_meta {
     };
 }
 
-pub trait Event: Type + NamedType {
+pub trait Event: NamedType {
     const NAME: &'static str;
 
     // Manager functions

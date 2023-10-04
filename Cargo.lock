@@ -3135,8 +3135,9 @@ dependencies = [
 
 [[package]]
 name = "specta"
-version = "2.0.0-rc.3"
-source = "git+https://github.com/oscartbeaumont/specta?rev=928b7ffc3cd5abf8c597da2dd846d7bfe16dfe62#928b7ffc3cd5abf8c597da2dd846d7bfe16dfe62"
+version = "2.0.0-rc.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27e5c76626408a758df3761c68154c7a6103b682cd03aa3f99fafbbaadf4f2e5"
 dependencies = [
  "once_cell",
  "paste",
@@ -3148,8 +3149,9 @@ dependencies = [
 
 [[package]]
 name = "specta-macros"
-version = "2.0.0-rc.3"
-source = "git+https://github.com/oscartbeaumont/specta?rev=928b7ffc3cd5abf8c597da2dd846d7bfe16dfe62#928b7ffc3cd5abf8c597da2dd846d7bfe16dfe62"
+version = "2.0.0-rc.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6fcd4433e38297e437a999bccaa63950f9c4477c3556b087ce6a7f40b29caf8"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -3501,7 +3503,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta"
-version = "1.0.2"
+version = "2.0.0-rc.1"
 dependencies = [
  "doc-comment",
  "heck 0.4.1",
@@ -3550,7 +3552,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta-macros"
-version = "0.1.0"
+version = "2.0.0-rc.1"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2",
