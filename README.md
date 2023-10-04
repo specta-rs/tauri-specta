@@ -87,7 +87,7 @@ fn main() {
         let specta_builder = tauri_specta::ts::builder()
             .commands(tauri_specta::collect_commands![greet, greet2, greet3 ]); // <- Each of your comments
 
-        
+
         #[cfg(debug_assertions)] // <- Only export on non-release builds
         let specta_builder = specta_builder.path("../src/bindings.ts");
 
@@ -153,6 +153,12 @@ events.demoEvent.listen((e) => console.log(e));
 
 // For a single window
 events.demoEvent(appWindow).listen((e) => console.log(e));
+
+// Emit to the backend and all windows
+await events.demoEvent.emit("Test")
+
+// Emit to a window
+await events.demoEvent(appWindow).emit("Test")
 ```
 
 
