@@ -1,10 +1,7 @@
 use crate::*;
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use specta::{
-    functions::FunctionDataType,
-    js::{self, ExportError},
-};
+use specta::{functions::FunctionDataType, js_doc, ts};
 use tauri::Runtime;
 
 /// Implements [`ExportLanguage`] for JS exporting
@@ -16,10 +13,12 @@ pub fn builder<TRuntime: Runtime>() -> PluginBuilder<Language, NoCommands<TRunti
 
 pub const GLOBALS: &str = include_str!("./globals.js");
 
-pub type ExportConfig = crate::ExportConfig<specta::js_ts::ExportConfig>;
+type Config = specta::ts::ExportConfig;
+
+pub type ExportConfig = crate::ExportConfig<Config>;
 
 impl ExportLanguage for Language {
-    type Config = specta::js_ts::ExportConfig;
+    type Config = Config;
 
     fn run_format(path: PathBuf, cfg: &ExportConfig) {
         cfg.inner.run_format(path).ok();
@@ -37,21 +36,22 @@ impl ExportLanguage for Language {
                 let jsdoc = {
                     let ret_type = js_ts::handle_result(function, type_map, cfg)?;
 
-                    let vec = []
-                        .into_iter()
-                        .chain(function.docs.iter().map(|s| s.to_string()))
-                        .chain(function.args.iter().flat_map(|(name, typ)| {
-                            js::datatype(&cfg.inner, typ, type_map).map(|typ| {
-                                let name = name.to_lower_camel_case();
+                    let mut builder = js_doc::Builder::default();
 
-                                format!("@param {{ {typ} }} {name}")
-                            })
-                        }))
-                        .chain([format!("@returns {{ Promise<{ret_type}> }}")])
-                        .map(Into::into)
-                        .collect::<Vec<_>>();
+                    if !function.docs.is_empty() {
+                        builder.extend(function.docs.split("\n"));
+                    }
 
-                    js::js_doc(&vec)
+                    builder.extend(function.args.iter().flat_map(|(name, typ)| {
+                        ts::datatype(&cfg.inner, typ, type_map).map(|typ| {
+                            let name = name.to_lower_camel_case();
+
+                            format!("@param {{ {typ} }} {name}")
+                        })
+                    }));
+                    builder.push(&format!("@returns {{ Promise<{ret_type}> }}"));
+
+                    builder.build()
                 };
 
                 Ok(js_ts::function(
@@ -84,14 +84,15 @@ impl ExportLanguage for Language {
 
         let (events_types, events_map) = js_ts::events_data(events, cfg, type_map)?;
 
-        let events = js::js_doc(
-            &[].into_iter()
-                .chain(["@type {typeof __makeEvents__<{".to_string()])
-                .chain(events_types)
-                .chain(["}>}".to_string()])
-                .map(Into::into)
-                .collect::<Vec<_>>(),
-        );
+        let events = {
+            let mut builder = js_doc::Builder::default();
+
+            builder.push("@type {typeof __makeEvents__<{");
+            builder.extend(events_types);
+            builder.push("}>}");
+
+            builder.build()
+        };
 
         Ok(formatdoc! {
             r#"
@@ -113,7 +114,7 @@ impl ExportLanguage for Language {
         let dependant_types = type_map
             .values()
             .filter_map(|v| v.as_ref())
-            .map(|v| js::typedef_named_datatype(&cfg.inner, v, type_map))
+            .map(|v| js_doc::typedef_named_datatype(&cfg.inner, v, type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 

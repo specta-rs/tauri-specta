@@ -508,26 +508,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "const_format"
-version = "0.2.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c990efc7a285731f9a4378d81aff2f0e85a2c8781a05ef0f8baa8dac54d0ff48"
-dependencies = [
- "const_format_proc_macros",
-]
-
-[[package]]
-name = "const_format_proc_macros"
-version = "0.2.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e026b6ce194a874cb9cf32cd5772d1ef9767cc8fcb5765948d74f37a9d8b2bf6"
-dependencies = [
- "proc-macro2",
- "quote",
- "unicode-xid",
-]
-
-[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -769,15 +749,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
-name = "document-features"
-version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e493c573fce17f00dcab13b6ac057994f3ce17d1af4dc39bfd482b83c6eb6157"
-dependencies = [
- "litrs",
-]
-
-[[package]]
 name = "dtoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -797,12 +768,6 @@ name = "dunce"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56ce8c6da7551ec6c462cbaf3bfbc75131ebbfa1c944aeaa9dab51ca1c5f0c3b"
-
-[[package]]
-name = "either"
-version = "1.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
 name = "embed-resource"
@@ -1667,15 +1632,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28b29a3cd74f0f4598934efe3aeba42bae0eb4680554128851ebbecb02af14e6"
 
 [[package]]
-name = "itertools"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1795,12 +1751,6 @@ name = "linux-raw-sys"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a9bad9f94746442c783ca431b22403b519cd7fbeed0533fdd6328b2f2212128"
-
-[[package]]
-name = "litrs"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9275e0933cf8bb20f008924c0cb07a0692fe54d8064996520bf998de9eb79aa"
 
 [[package]]
 name = "lock_api"
@@ -3185,12 +3135,9 @@ dependencies = [
 
 [[package]]
 name = "specta"
-version = "2.0.0-rc.2"
-source = "git+https://github.com/oscartbeaumont/specta?rev=efdd024fd1ab2a569ffe9d7fc484c419eb6ef9c5#efdd024fd1ab2a569ffe9d7fc484c419eb6ef9c5"
+version = "2.0.0-rc.3"
+source = "git+https://github.com/oscartbeaumont/specta?rev=928b7ffc3cd5abf8c597da2dd846d7bfe16dfe62#928b7ffc3cd5abf8c597da2dd846d7bfe16dfe62"
 dependencies = [
- "const_format",
- "document-features",
- "indoc",
  "once_cell",
  "paste",
  "serde",
@@ -3201,11 +3148,10 @@ dependencies = [
 
 [[package]]
 name = "specta-macros"
-version = "2.0.0-rc.2"
-source = "git+https://github.com/oscartbeaumont/specta?rev=efdd024fd1ab2a569ffe9d7fc484c419eb6ef9c5#efdd024fd1ab2a569ffe9d7fc484c419eb6ef9c5"
+version = "2.0.0-rc.3"
+source = "git+https://github.com/oscartbeaumont/specta?rev=928b7ffc3cd5abf8c597da2dd846d7bfe16dfe62#928b7ffc3cd5abf8c597da2dd846d7bfe16dfe62"
 dependencies = [
  "Inflector",
- "itertools",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -3972,12 +3918,6 @@ name = "unicode-segmentation"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1dd624098567895118886609431a7c3b8f516e41d30e0643f03d94592a147e36"
-
-[[package]]
-name = "unicode-xid"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 
 [[package]]
 name = "url"

@@ -38,9 +38,9 @@ export const events = __makeEvents__<{
 
 /** user-defined types **/
 
+export type DemoEvent = string;
 export type EmptyEvent = null;
 export type MyStruct = { some_field: string };
-export type DemoEvent = string;
 
 /** tauri-specta globals **/
 
