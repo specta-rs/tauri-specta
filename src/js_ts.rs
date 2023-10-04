@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use specta::{functions::FunctionDataType, ts::ExportError, ts, DataType, TypeMap};
+use specta::{functions::FunctionDataType, ts, ts::ExportError, DataType, TypeMap};
 
 use crate::{EventDataType, ExportLanguage, ItemType};
 
@@ -19,7 +19,7 @@ pub fn render_all_parts<T: ExportLanguage<Config = specta::ts::ExportConfig>>(
     cfg: &ExportConfig,
     dependant_types: &str,
     globals: &str,
-) -> Result<String, ExportError> {
+) -> Result<String, T::Error> {
     let commands = T::render_commands(commands, type_map, cfg)?;
     let events = T::render_events(events, type_map, cfg)?;
 

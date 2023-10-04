@@ -19,6 +19,7 @@ pub type ExportConfig = crate::ExportConfig<Config>;
 
 impl ExportLanguage for Language {
     type Config = Config;
+    type Error = ts::ExportError;
 
     fn run_format(path: PathBuf, cfg: &ExportConfig) {
         cfg.inner.run_format(path).ok();
