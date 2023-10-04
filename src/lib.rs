@@ -460,14 +460,14 @@ where
     TEvents: EventsTypeState,
 {
     /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
-    pub fn export(self) -> Result<(), specta::js_ts::ExportError> {
+    pub fn export(self) -> Result<(), specta::ts::ExportError> {
         self.export_for_plugin(PLUGIN_NAME)
     }
 
     pub fn export_for_plugin(
         mut self,
         plugin_name: &'static str,
-    ) -> Result<(), specta::js_ts::ExportError> {
+    ) -> Result<(), specta::ts::ExportError> {
         self.config.plugin_name = PluginName::new(plugin_name);
 
         self.export_inner().map(|_| ())

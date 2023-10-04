@@ -3,6 +3,7 @@ use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
     functions::FunctionDataType,
+    js_doc,
     ts::{self, ExportError},
     TypeMap,
 };
@@ -17,10 +18,11 @@ pub fn builder<TRuntime: Runtime>() -> PluginBuilder<Language, NoCommands<TRunti
 
 pub const GLOBALS: &str = include_str!("./globals.ts");
 
-pub type ExportConfig = crate::ExportConfig<specta::js_ts::ExportConfig>;
+type Config = specta::ts::ExportConfig;
+pub type ExportConfig = crate::ExportConfig<Config>;
 
 impl ExportLanguage for Language {
-    type Config = specta::js_ts::ExportConfig;
+    type Config = Config;
 
     fn run_format(path: PathBuf, cfg: &ExportConfig) {
         cfg.inner.run_format(path).ok();
@@ -46,8 +48,17 @@ impl ExportLanguage for Language {
 
                 let ret_type = js_ts::handle_result(function, type_map, cfg)?;
 
+                let docs = {
+                    let mut builder = js_doc::Builder::default();
+
+                    if !function.docs.is_empty() {
+                        builder.extend(function.docs.split("\n"));
+                    }
+
+                    builder.build()
+                };
                 Ok(js_ts::function(
-                    &specta::ts::js_doc(&function.docs),
+                    &docs,
                     &function.name.to_lower_camel_case(),
                     &arg_defs,
                     Some(&ret_type),
