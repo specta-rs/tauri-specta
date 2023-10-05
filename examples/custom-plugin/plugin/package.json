@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "post-install": "build",
+    "postinstall": "pnpm build",
     "build": "pnpm tsc",
     "codegen": "cargo test && pnpm build"
   },

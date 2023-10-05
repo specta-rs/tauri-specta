@@ -22,6 +22,9 @@ try {
 },
 async someStruct() : Promise<MyStruct> {
 return await TAURI_INVOKE("plugin:tauri-specta|some_struct");
+},
+async generic() : Promise<null> {
+return await TAURI_INVOKE("plugin:tauri-specta|generic");
 }
 }
 

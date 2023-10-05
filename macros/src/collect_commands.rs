@@ -1,11 +1,10 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::Ident;
 use quote::quote;
 use syn::{
-    bracketed,
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
-    ItemStruct, Path, Token,
+    Path, Token,
 };
 
 pub struct Input {

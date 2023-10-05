@@ -19,7 +19,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 default = []
 javascript = ["specta/typescript", "specta/js_doc"]
-typescript = ["specta/typescript"]
+typescript = ["specta/typescript", "specta/js_doc"]
 
 [dependencies]
 specta = { workspace = true, features = ["functions", "tauri"] }

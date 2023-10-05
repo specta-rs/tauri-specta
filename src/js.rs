@@ -30,7 +30,7 @@ impl ExportLanguage for Language {
         commands: &[FunctionDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
-    ) -> Result<String, ExportError> {
+    ) -> Result<String, Self::Error> {
         let commands = commands
             .iter()
             .map(|function| {
@@ -63,7 +63,7 @@ impl ExportLanguage for Language {
                     &js_ts::command_body(cfg, function, false),
                 ))
             })
-            .collect::<Result<Vec<_>, ExportError>>()?
+            .collect::<Result<Vec<_>, Self::Error>>()?
             .join(",\n");
 
         Ok(formatdoc! {
@@ -78,7 +78,7 @@ impl ExportLanguage for Language {
         events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
-    ) -> Result<String, ExportError> {
+    ) -> Result<String, Self::Error> {
         if events.is_empty() {
             return Ok(Default::default());
         }
@@ -111,7 +111,7 @@ impl ExportLanguage for Language {
         events: &[EventDataType],
         type_map: &TypeMap,
         cfg: &ExportConfig,
-    ) -> Result<String, ExportError> {
+    ) -> Result<String, Self::Error> {
         let dependant_types = type_map
             .values()
             .filter_map(|v| v.as_ref())
