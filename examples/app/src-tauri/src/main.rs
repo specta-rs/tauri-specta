@@ -27,6 +27,10 @@ fn has_error() -> Result<&'static str, i32> {
     Err(32)
 }
 
+#[tauri::command]
+#[specta::specta]
+fn generic<T: tauri::Runtime>(app: tauri::AppHandle<T>) {}
+
 mod nested {
     use super::*;
 
@@ -57,7 +61,8 @@ fn main() {
                 hello_world,
                 goodbye_world,
                 has_error,
-                nested::some_struct
+                nested::some_struct,
+                generic::<tauri::Wry>
             ])
             .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
             .config(specta::ts::ExportConfig::default().formatter(specta::ts::prettier));
