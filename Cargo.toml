@@ -25,11 +25,11 @@ typescript = ["specta/typescript"]
 specta = { workspace = true, features = ["functions", "tauri"] }
 tauri-specta-macros = { version = "=2.0.0-rc.1", path = "./macros" }
 serde = { workspace = true }
-serde_json = "1.0.106"
+serde_json = "1.0.107"
 tauri = { workspace = true }
-thiserror = "1.0.48"
+thiserror = "1.0.49"
 heck = "0.4.1"
-indoc = "2.0.3"
+indoc = "2.0.4"
 
 [dev-dependencies]
 doc-comment = "0.3.3"
@@ -43,6 +43,6 @@ members = [
 ]
 
 [workspace.dependencies]
-specta = { version = "=2.0.0-rc.4" }
+specta = { version = "=2.0.0-rc.5" }
 serde = "1.0.188"
-tauri = "1.4.1"
+tauri = "1.5.1"
