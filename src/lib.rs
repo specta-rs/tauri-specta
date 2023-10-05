@@ -150,19 +150,7 @@ pub use event::*;
 pub type CollectCommandsTuple<TInvokeHandler> =
     (specta::functions::CollectFunctionsResult, TInvokeHandler);
 
-#[macro_export]
-macro_rules! collect_commands {
- 	(type_map: $type_map:ident, $($command:path),*) => {
-        (
-        	specta::collect_functions![$type_map; $($command),*],
-       		::tauri::generate_handler![$($command),*],
-        )
-    };
-    ($($command:path),*) => {{
-        let mut type_map = specta::TypeMap::default();
-        $crate::collect_commands![type_map: type_map, $($command),*]
-    }};
-}
+pub use tauri_specta_macros::collect_commands;
 
 // TODO
 // #[cfg(doctest)]
