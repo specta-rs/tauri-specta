@@ -29,7 +29,7 @@ fn has_error() -> Result<&'static str, i32> {
 
 #[tauri::command]
 #[specta::specta]
-fn generic<T: tauri::Runtime>(app: tauri::AppHandle<T>) {}
+fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
 
 mod nested {
     use super::*;
