@@ -109,7 +109,7 @@ pub trait Event: NamedType {
 
     // Manager functions
 
-    fn emit_all<R: Runtime>(self, handle: &impl Manager<R>) -> tauri::Result<()>
+    fn emit_all<R: Runtime>(&self, handle: &impl Manager<R>) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
     {
@@ -118,7 +118,7 @@ pub trait Event: NamedType {
         handle.emit_all(&meta.wrap_with_plugin(Self::NAME), self)
     }
 
-    fn emit_to<R: Runtime>(self, handle: &impl Manager<R>, label: &str) -> tauri::Result<()>
+    fn emit_to<R: Runtime>(&self, handle: &impl Manager<R>, label: &str) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
     {
@@ -127,7 +127,7 @@ pub trait Event: NamedType {
         handle.emit_to(&meta.wrap_with_plugin(Self::NAME), label, self)
     }
 
-    fn trigger_global<R: Runtime>(self, handle: &impl Manager<R>)
+    fn trigger_global<R: Runtime>(&self, handle: &impl Manager<R>)
     where
         Self: Serialize + Sized,
     {
@@ -161,7 +161,7 @@ pub trait Event: NamedType {
 
     // Window functions
 
-    fn emit(self, window: &Window<impl Runtime>) -> tauri::Result<()>
+    fn emit(&self, window: &Window<impl Runtime>) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
     {
@@ -170,7 +170,7 @@ pub trait Event: NamedType {
         window.emit(&meta.wrap_with_plugin(Self::NAME), self)
     }
 
-    fn trigger(self, window: &Window<impl Runtime>)
+    fn trigger(&self, window: &Window<impl Runtime>)
     where
         Self: Serialize + Sized,
     {
@@ -182,7 +182,7 @@ pub trait Event: NamedType {
         );
     }
 
-    fn emit_and_trigger(self, window: &Window<impl Runtime>) -> tauri::Result<()>
+    fn emit_and_trigger(&self, window: &Window<impl Runtime>) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
     {
