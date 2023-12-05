@@ -3567,7 +3567,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta"
-version = "2.0.0-rc.3"
+version = "2.0.0-rc.4"
 dependencies = [
  "doc-comment",
  "heck 0.4.1",
@@ -3616,7 +3616,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta-macros"
-version = "2.0.0-rc.3"
+version = "2.0.0-rc.4"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2",
