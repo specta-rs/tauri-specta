@@ -124,7 +124,7 @@ use std::{
 
 use specta::{
     functions::{CollectFunctionsResult, FunctionDataType},
-    TypeMap,
+    NamedDataType, SpectaID, TypeMap,
 };
 
 use tauri::{Invoke, Manager, Runtime};
@@ -426,10 +426,7 @@ where
         let rendered = TLang::render(
             &commands,
             &events,
-            &commands_type_map
-                .into_iter()
-                .chain(events_type_map)
-                .collect(),
+            &collect_typemap(commands_type_map.iter().chain(events_type_map.iter())),
             &config,
         )?;
 
@@ -438,6 +435,17 @@ where
             (invoke_handler, events_registry),
         ))
     }
+}
+
+// TODO: Add a proper solution to this into Specta
+fn collect_typemap<'a>(iter: impl Iterator<Item = (SpectaID, &'a NamedDataType)> + 'a) -> TypeMap {
+    let mut type_map = TypeMap::default();
+
+    for (sid, ndt) in iter {
+        type_map.insert(sid, ndt.clone());
+    }
+
+    type_map
 }
 
 type HardcodedRuntime = tauri::Wry;

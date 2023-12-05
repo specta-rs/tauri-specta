@@ -107,9 +107,8 @@ impl ExportLanguage for Language {
         cfg: &ExportConfig,
     ) -> Result<String, ExportError> {
         let dependant_types = type_map
-            .values()
-            .filter_map(|v| v.as_ref())
-            .map(|v| ts::export_named_datatype(&cfg.inner, v, type_map))
+            .iter()
+            .map(|(_sid, ndt)| ts::export_named_datatype(&cfg.inner, ndt, type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 

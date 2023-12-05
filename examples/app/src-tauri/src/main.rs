@@ -65,7 +65,7 @@ fn main() {
                 generic::<tauri::Wry>
             ])
             .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
-            .config(specta::ts::ExportConfig::default().formatter(specta::ts::prettier));
+            .config(specta::ts::ExportConfig::default().formatter(specta::ts::formatter::prettier));
 
         #[cfg(debug_assertions)]
         let specta_builder = specta_builder.path("../src/bindings.ts");

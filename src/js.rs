@@ -113,9 +113,8 @@ impl ExportLanguage for Language {
         cfg: &ExportConfig,
     ) -> Result<String, Self::Error> {
         let dependant_types = type_map
-            .values()
-            .filter_map(|v| v.as_ref())
-            .map(|v| js_doc::typedef_named_datatype(&cfg.inner, v, type_map))
+            .iter()
+            .map(|(_sid, ndt)| js_doc::typedef_named_datatype(&cfg.inner, ndt, type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 

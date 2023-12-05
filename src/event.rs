@@ -231,13 +231,7 @@ macro_rules! collect_events {
       	let event_data_types = [$(
 	       $crate::EventDataType {
 	       		name: <$event as $crate::Event>::NAME,
-	       		typ: <$event as ::specta::Type>::reference(
-	       			::specta::DefOpts {
-	       				type_map: &mut type_map,
-	       				parent_inline: false
-	          		},
-	            	&[]
-	       		).inner
+	       		typ: <$event as ::specta::Type>::reference(&mut type_map, &[]).inner
 	       }
        	),+]
         .into_iter()
