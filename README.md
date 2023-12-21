@@ -30,8 +30,8 @@ Specta v2 hasn't officially launched yet but it can be used through the release 
 You must **ensure** you lock your Specta version to avoid breaking changes.
 
 ```bash
-cargo add specta@=2.0.0-rc.5
-cargo add tauri-specta@=2.0.0-rc.2 --features javascript,typescript
+cargo add specta@=2.0.0-rc.7
+cargo add tauri-specta@=2.0.0-rc.4 --features javascript,typescript
 ```
 
 ## Adding Specta to custom types
