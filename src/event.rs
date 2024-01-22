@@ -124,7 +124,7 @@ pub trait Event: NamedType {
     {
         let meta = get_meta!(handle);
 
-        handle.emit_to(&meta.wrap_with_plugin(Self::NAME), label, self)
+        handle.emit_to(label, &meta.wrap_with_plugin(Self::NAME), self)
     }
 
     fn trigger_global<R: Runtime>(self, handle: &impl Manager<R>)
