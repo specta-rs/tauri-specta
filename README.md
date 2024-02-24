@@ -10,7 +10,9 @@
 
 <br>
 
-This branch contains the code for tauri-specta v2. You can check the [v1.0.2 git tag](https://github.com/oscartbeaumont/tauri-specta/tree/v1.0.2) for the v1 code.
+This branch contains code + examples for tauri-specta v2.
+You can check the [v1.0.2 git tag](https://github.com/oscartbeaumont/tauri-specta/tree/v1.0.2)
+for the v1 code + examples.
 
 ## Getting Started
 
