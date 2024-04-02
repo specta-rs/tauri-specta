@@ -11,13 +11,14 @@ use crate::PluginName;
 
 #[derive(Clone, Copy)]
 pub struct EventRegistryMeta {
-    plugin_name: PluginName,
+    plugin_name: Option<PluginName>,
 }
 
 impl EventRegistryMeta {
     fn wrap_with_plugin(&self, input: &str) -> String {
         self.plugin_name
-            .apply_as_prefix(input, crate::ItemType::Event)
+            .map(|n| n.apply_as_prefix(input, crate::ItemType::Event))
+            .unwrap_or_else(|| input.to_string())
     }
 }
 
@@ -40,7 +41,11 @@ impl EventCollection {
 pub(crate) struct EventRegistry(pub(crate) RwLock<BTreeMap<SpectaID, EventRegistryMeta>>);
 
 impl EventRegistry {
-    pub fn register_collection(&self, collection: EventCollection, plugin_name: PluginName) {
+    pub fn register_collection(
+        &self,
+        collection: EventCollection,
+        plugin_name: Option<PluginName>,
+    ) {
         let mut registry = self.0.write().expect("Failed to write EventRegistry");
 
         registry.extend(

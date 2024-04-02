@@ -1,14 +1,7 @@
 {
   "name": "tauri-specta-custom-plugin",
   "private": true,
-  "exports": {
-    "./package.json": "./package.json",
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    }
-  },
+  "main": "index.ts",
   "scripts": {
     "postinstall": "pnpm build",
     "build": "pnpm tsc",
