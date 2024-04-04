@@ -1,4 +1,4 @@
-import { invoke as TAURI_INVOKE } from "@tauri-apps/api";
+import { invoke as TAURI_INVOKE } from "@tauri-apps/api/tauri";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";
 import { type WebviewWindowHandle as __WebviewWindowHandle__ } from "@tauri-apps/api/window";
 
@@ -14,7 +14,7 @@ type __EventObj__<T> = {
     : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
-type __Result__<T, E> =
+export type __Result__<T, E> =
   | { status: "ok"; data: T }
   | { status: "error"; error: E };
 

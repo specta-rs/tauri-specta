@@ -12,8 +12,8 @@ use tauri::Runtime;
 /// Implements [`ExportLanguage`] for TypeScript exporting
 pub struct Language;
 
-pub fn builder<TRuntime: Runtime>() -> PluginBuilder<Language, NoCommands<TRuntime>, NoEvents> {
-    PluginBuilder::default()
+pub fn builder<TRuntime: Runtime>() -> Builder<Language, NoCommands<TRuntime>, NoEvents> {
+    Builder::default()
 }
 
 pub const GLOBALS: &str = include_str!("./globals.ts");

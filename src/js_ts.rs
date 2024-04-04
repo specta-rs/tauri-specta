@@ -121,7 +121,8 @@ pub fn handle_result(
 pub fn command_body(cfg: &ExportConfig, function: &FunctionDataType, as_any: bool) -> String {
     let name = cfg
         .plugin_name
-        .apply_as_prefix(&function.name, ItemType::Command);
+        .map(|n| n.apply_as_prefix(&function.name, ItemType::Command))
+        .unwrap_or_else(|| function.name.to_string());
 
     maybe_return_as_result_tuple(
         &tauri_invoke(&name, arg_usages(&arg_names(&function.args))),
@@ -134,7 +135,10 @@ pub fn events_map(events: &[EventDataType], cfg: &ExportConfig) -> String {
     events
         .iter()
         .map(|event| {
-            let name_str = cfg.plugin_name.apply_as_prefix(event.name, ItemType::Event);
+            let name_str = cfg
+                .plugin_name
+                .map(|n| n.apply_as_prefix(event.name, ItemType::Event))
+                .unwrap_or_else(|| event.name.to_string());
             let name_camel = event.name.to_lower_camel_case();
 
             format!(r#"{name_camel}: "{name_str}""#)
