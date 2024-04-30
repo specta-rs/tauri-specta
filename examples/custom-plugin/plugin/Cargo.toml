@@ -1,13 +1,14 @@
 [package]
 name = "tauri-specta-example-custom-plugin"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[build-dependencies]
+tauri-plugin = { version = "=2.0.0-beta.13", features = ["build"] }
 
 [dependencies]
 rand = "0.8.5"
-serde = { workspace = true }
-specta = { workspace = true }
-tauri = { workspace = true }
+serde = "1"
+specta = "=2.0.0-rc.10"
+tauri = "=2.0.0-beta.16"
 tauri-specta = { path = "../../../", features = ["typescript"] }

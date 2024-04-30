@@ -123,11 +123,11 @@ use std::{
 };
 
 use specta::{
-    functions::{CollectFunctionsResult, FunctionDataType},
+    function::{CollectFunctionsResult, FunctionDataType},
     NamedDataType, SpectaID, TypeMap,
 };
 
-use tauri::{Invoke, Manager, Runtime};
+use tauri::{ipc::Invoke, Manager, Runtime};
 pub use tauri_specta_macros::Event;
 
 /// The exporter for [Javascript](https://www.javascript.com).
@@ -144,11 +144,13 @@ pub mod ts;
 mod js_ts;
 
 mod event;
+mod listen;
 
 pub use event::*;
+pub use listen::*;
 
 pub type CollectCommandsTuple<TInvokeHandler> =
-    (specta::functions::CollectFunctionsResult, TInvokeHandler);
+    (specta::function::CollectFunctionsResult, TInvokeHandler);
 
 pub use tauri_specta_macros::collect_commands;
 
@@ -187,14 +189,16 @@ pub trait ExportLanguage: 'static {
 
 pub trait CommandsTypeState: 'static {
     type Runtime: tauri::Runtime;
-    type InvokeHandler: Fn(tauri::Invoke<Self::Runtime>) + Send + Sync + 'static;
+    type InvokeHandler: Fn(Invoke<Self::Runtime>) -> bool + Send + Sync + 'static;
 
     fn split(self) -> CollectCommandsTuple<Self::InvokeHandler>;
 
     fn macro_data(&self) -> &CollectFunctionsResult;
 }
 
-fn dummy_invoke_handler(_: Invoke<impl Runtime>) {}
+fn dummy_invoke_handler(_: Invoke<impl Runtime>) -> bool {
+    false
+}
 
 pub struct NoCommands<TRuntime>(CollectFunctionsResult, PhantomData<TRuntime>);
 
@@ -203,7 +207,7 @@ where
     TRuntime: tauri::Runtime,
 {
     type Runtime = TRuntime;
-    type InvokeHandler = fn(Invoke<TRuntime>);
+    type InvokeHandler = fn(Invoke<TRuntime>) -> bool;
 
     fn split(self) -> CollectCommandsTuple<Self::InvokeHandler> {
         (Default::default(), dummy_invoke_handler)
@@ -222,7 +226,7 @@ pub struct Commands<TRuntime, TInvokeHandler>(
 impl<TRuntime, TInvokeHandler> CommandsTypeState for Commands<TRuntime, TInvokeHandler>
 where
     TRuntime: tauri::Runtime,
-    TInvokeHandler: Fn(tauri::Invoke<TRuntime>) + Send + Sync + 'static,
+    TInvokeHandler: Fn(Invoke<TRuntime>) -> bool + Send + Sync + 'static,
 {
     type Runtime = TRuntime;
     type InvokeHandler = TInvokeHandler;
@@ -283,7 +287,7 @@ where
     TLang: ExportLanguage,
     TRuntime: tauri::Runtime,
 {
-    pub fn commands<TInvokeHandler: Fn(tauri::Invoke<TRuntime>) + Send + Sync + 'static>(
+    pub fn commands<TInvokeHandler: Fn(Invoke<TRuntime>) -> bool + Send + Sync + 'static>(
         self,
         commands: CollectCommandsTuple<TInvokeHandler>,
     ) -> Builder<TLang, Commands<TRuntime, TInvokeHandler>, TEvents> {

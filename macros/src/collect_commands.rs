@@ -52,7 +52,7 @@ pub fn proc_macro(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .unwrap_or_else(|| quote!(::specta::r#type::TypeMap::default()));
 
     let body = quote! {(
-        ::specta::collect_functions![type_map; #paths],
+        ::specta::function::collect_functions![type_map; #paths],
         ::tauri::generate_handler![#(#tauri_paths),*],
     )};
 

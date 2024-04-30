@@ -80,17 +80,14 @@ fn main() {
 
             let handle = app.handle();
 
-            DemoEvent::listen_global(&handle, |event| {
+            DemoEvent::listen(handle, |event| {
                 dbg!(event.payload);
             });
 
-            DemoEvent("Test".to_string()).emit_all(&handle).ok();
+            DemoEvent("Test".to_string()).emit(handle).ok();
 
-            EmptyEvent::listen_global(&handle, {
-                let handle = handle.clone();
-                move |_| {
-                    EmptyEvent.emit_all(&handle).ok();
-                }
+            EmptyEvent::listen(handle, |_| {
+                println!("Got event from frontend!!");
             });
 
             Ok(())

@@ -30,12 +30,12 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 
     Builder::new(PLUGIN_NAME)
         .invoke_handler(invoke_handler)
-        .setup(move |app| {
+        .setup(move |app, _| {
             register_events(app);
 
             let app = app.clone();
             std::thread::spawn(move || loop {
-                RandomNumber(rand::random()).emit_all(&app).unwrap();
+                RandomNumber(rand::random()).emit(&app).unwrap();
                 std::thread::sleep(std::time::Duration::from_secs(1));
             });
 

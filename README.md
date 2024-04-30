@@ -10,21 +10,21 @@
 
 <br>
 
-This branch contains code + examples for tauri-specta v2.
-You can check the [v1.0.2 git tag](https://github.com/oscartbeaumont/tauri-specta/tree/v1.0.2)
-for the v1 code + examples.
+> [!NOTE]  
+> This branch contains tauri-specta v2, you can checkout the git tag [v1.0.2](https://github.com/oscartbeaumont/tauri-specta/tree/v1.0.2) for the previous version.
 
 ## Getting Started
 
-For most use cases, you'll probably want to use [v1](./docs/v1.md), which is stable.
+First you will need to choose a version:
 
-You can also use [v2](./docs/v2.md) which supports generating types for events and utilises Specta v2,
-but both it and Specta v2 are still in development.
+|           | Tauri v1                             | Tauri v2                             |
+| --------- | ------------------------------------ | ------------------------------------ |
+| Specta v1 | Tauri Specta v1 [docs](./docs/v1.md) | Unsupported                          |
+| Specta v2 | Unsupported                          | Tauri Specta v2 [docs](./docs/v2.md) |
 
-## Known limitations
+Tauri Specta v2 also comes with support for generating types for events.
 
- - Your command can only take up to 10 arguments. Any more and you'll get a compile error. If you need more just use a struct.
- - Exporting your schema within a directory tracked by Tauri's hot reload will cause an infinite reload loop.
+Follow the documentation links above for help getting started.
 
 ## Development
 
@@ -33,7 +33,7 @@ Run the example:
 ```bash
 pnpm i
 cd examples/app/
-pnpm dev
+pnpm tauri dev
 ```
 
 ## Credit

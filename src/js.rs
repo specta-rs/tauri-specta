@@ -1,7 +1,7 @@
 use crate::*;
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use specta::{functions::FunctionDataType, js_doc, ts};
+use specta::{function::FunctionDataType, js_doc, ts};
 use tauri::Runtime;
 
 /// Implements [`ExportLanguage`] for JS exporting

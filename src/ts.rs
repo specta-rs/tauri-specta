@@ -2,7 +2,7 @@ use crate::{js_ts, *};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
-    functions::FunctionDataType,
+    function::FunctionDataType,
     js_doc,
     ts::{self, ExportError},
     TypeMap,
