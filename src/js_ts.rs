@@ -110,7 +110,7 @@ pub fn handle_result(
             let (t, e) = t.as_ref();
 
             format!(
-                "__Result__<{}, {}>",
+                "Result<{}, {}>",
                 ts::datatype(&cfg.inner, t, type_map)?,
                 ts::datatype(&cfg.inner, e, type_map)?
             )

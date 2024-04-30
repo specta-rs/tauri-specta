@@ -14,7 +14,7 @@ type __EventObj__<T> = {
     : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
-export type __Result__<T, E> =
+export type Result<T, E> =
   | { status: "ok"; data: T }
   | { status: "error"; error: E };
 

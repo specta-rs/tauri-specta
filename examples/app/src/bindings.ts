@@ -12,7 +12,7 @@ return await TAURI_INVOKE("hello_world", { myName });
 async goodbyeWorld() : Promise<string> {
 return await TAURI_INVOKE("goodbye_world");
 },
-async hasError() : Promise<__Result__<string, number>> {
+async hasError() : Promise<Result<string, number>> {
 try {
     return { status: "ok", data: await TAURI_INVOKE("has_error") };
 } catch (e) {
@@ -60,7 +60,7 @@ type __EventObj__<T> = {
     : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
-export type __Result__<T, E> =
+export type Result<T, E> =
   | { status: "ok"; data: T }
   | { status: "error"; error: E };
 
