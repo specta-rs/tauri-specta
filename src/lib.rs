@@ -154,10 +154,6 @@ pub type CollectCommandsTuple<TInvokeHandler> =
 
 pub use tauri_specta_macros::collect_commands;
 
-// TODO
-// #[cfg(doctest)]
-// doc_comment::doctest!("../README.md");
-
 /// A set of functions that produce language-specific code
 pub trait ExportLanguage: 'static {
     type Config: Default + Clone;

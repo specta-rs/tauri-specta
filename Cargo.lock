@@ -627,12 +627,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "doc-comment"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
-
-[[package]]
 name = "dpi"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2759,8 +2753,6 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "2.0.0-rc.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2e19dee72682ee21ae3963e3b1e19080d2cfbac30927e58dc0f0e6f596ad70f"
 dependencies = [
  "once_cell",
  "paste",
@@ -2772,8 +2764,6 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef33e9678ae36993fcbfc46aa29568ef10d32fd54428808759c6a450998c43ec"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -3156,7 +3146,6 @@ dependencies = [
 name = "tauri-specta"
 version = "2.0.0-rc.4"
 dependencies = [
- "doc-comment",
  "heck 0.5.0",
  "indoc",
  "serde",

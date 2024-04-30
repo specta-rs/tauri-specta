@@ -33,9 +33,6 @@ tauri = { version = "=2.0.0-beta.16", features = ["specta"] }
 heck = "0.5.0"
 indoc = "2.0.5"
 
-[dev-dependencies]
-doc-comment = "0.3.3"
-
 [workspace]
 members = [
     "examples/app/src-tauri",
@@ -46,3 +43,5 @@ members = [
 
 [patch.crates-io]
 tauri = { git = "https://github.com/tauri-apps/tauri", rev = "3f0805488506e013e15cfb3cc1cfc8c2c5f84bd2" }
+
+specta = { path = "../specta" }
