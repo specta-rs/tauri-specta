@@ -49,10 +49,10 @@ pub fn proc_macro(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let type_map = type_map
         .map(|i| quote!(#i))
-        .unwrap_or_else(|| quote!(::specta::TypeMap::new()));
+        .unwrap_or_else(|| quote!(::specta::r#type::TypeMap::default()));
 
     let body = quote! {(
-        ::specta::collect_functions![type_map; #paths],
+        ::specta::function::collect_functions![type_map; #paths],
         ::tauri::generate_handler![#(#tauri_paths),*],
     )};
 

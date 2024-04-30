@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use specta::{functions::FunctionDataType, ts, ts::ExportError, DataType, TypeMap};
+use specta::{function::FunctionDataType, ts, ts::ExportError, DataType, TypeMap};
 
 use crate::{EventDataType, ExportLanguage, ItemType};
 
@@ -66,10 +66,11 @@ fn return_as_result_tuple(expr: &str, as_any: bool) -> String {
     )
 }
 
-pub fn maybe_return_as_result_tuple(expr: &str, typ: &DataType, as_any: bool) -> String {
+pub fn maybe_return_as_result_tuple(expr: &str, typ: &Option<DataType>, as_any: bool) -> String {
     match typ {
-        DataType::Result(_) => return_as_result_tuple(expr, as_any),
-        _ => format!("return {expr};"),
+        Some(DataType::Result(_)) => return_as_result_tuple(expr, as_any),
+        Some(_) => format!("return {expr};"),
+        None => format!(""),
     }
 }
 
@@ -105,7 +106,7 @@ pub fn handle_result(
     cfg: &ExportConfig,
 ) -> Result<String, ExportError> {
     Ok(match &function.result {
-        DataType::Result(t) => {
+        Some(DataType::Result(t)) => {
             let (t, e) = t.as_ref();
 
             format!(
@@ -114,14 +115,16 @@ pub fn handle_result(
                 ts::datatype(&cfg.inner, e, type_map)?
             )
         }
-        t => ts::datatype(&cfg.inner, t, type_map)?,
+        Some(t) => ts::datatype(&cfg.inner, t, type_map)?,
+        None => "void".to_string(),
     })
 }
 
 pub fn command_body(cfg: &ExportConfig, function: &FunctionDataType, as_any: bool) -> String {
     let name = cfg
         .plugin_name
-        .apply_as_prefix(&function.name, ItemType::Command);
+        .map(|n| n.apply_as_prefix(&function.name, ItemType::Command))
+        .unwrap_or_else(|| function.name.to_string());
 
     maybe_return_as_result_tuple(
         &tauri_invoke(&name, arg_usages(&arg_names(&function.args))),
@@ -134,7 +137,10 @@ pub fn events_map(events: &[EventDataType], cfg: &ExportConfig) -> String {
     events
         .iter()
         .map(|event| {
-            let name_str = cfg.plugin_name.apply_as_prefix(event.name, ItemType::Event);
+            let name_str = cfg
+                .plugin_name
+                .map(|n| n.apply_as_prefix(event.name, ItemType::Event))
+                .unwrap_or_else(|| event.name.to_string());
             let name_camel = event.name.to_lower_camel_case();
 
             format!(r#"{name_camel}: "{name_str}""#)

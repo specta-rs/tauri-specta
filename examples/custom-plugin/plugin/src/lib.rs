@@ -25,16 +25,17 @@ macro_rules! specta_builder {
 const PLUGIN_NAME: &str = "custom-plugin";
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    let plugin_utils = specta_builder!().into_plugin_utils(PLUGIN_NAME);
+    let (invoke_handler, register_events) =
+        specta_builder!().build_plugin_utils(PLUGIN_NAME).unwrap();
 
     Builder::new(PLUGIN_NAME)
-        .invoke_handler(plugin_utils.invoke_handler)
-        .setup(move |app| {
-            let app = app.clone();
-            (plugin_utils.setup)(&app);
+        .invoke_handler(invoke_handler)
+        .setup(move |app, _| {
+            register_events(app);
 
+            let app = app.clone();
             std::thread::spawn(move || loop {
-                RandomNumber(rand::random()).emit_all(&app).unwrap();
+                RandomNumber(rand::random()).emit(&app).unwrap();
                 std::thread::sleep(std::time::Duration::from_secs(1));
             });
 
@@ -51,7 +52,7 @@ mod test {
     fn export_types() {
         specta_builder!()
             .path("./bindings.ts")
-            .config(specta::ts::ExportConfig::default().formatter(specta::ts::prettier))
+            .config(specta::ts::ExportConfig::default().formatter(specta::ts::formatter::prettier))
             .export_for_plugin(PLUGIN_NAME)
             .ok();
     }

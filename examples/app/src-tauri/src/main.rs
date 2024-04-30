@@ -55,8 +55,8 @@ pub struct DemoEvent(String);
 pub struct EmptyEvent;
 
 fn main() {
-    let specta_builder = {
-        let specta_builder = ts::builder()
+    let (invoke_handler, register_events) = {
+        let builder = ts::builder()
             .commands(tauri_specta::collect_commands![
                 hello_world,
                 goodbye_world,
@@ -65,30 +65,29 @@ fn main() {
                 generic::<tauri::Wry>
             ])
             .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
-            .config(specta::ts::ExportConfig::default().formatter(specta::ts::prettier));
+            .config(specta::ts::ExportConfig::default().formatter(specta::ts::formatter::prettier));
 
         #[cfg(debug_assertions)]
-        let specta_builder = specta_builder.path("../src/bindings.ts");
+        let builder = builder.path("../src/bindings.ts");
 
-        specta_builder.into_plugin()
+        builder.build().unwrap()
     };
 
     tauri::Builder::default()
-        .plugin(specta_builder)
+        .invoke_handler(invoke_handler)
         .setup(|app| {
+            register_events(app);
+
             let handle = app.handle();
 
-            DemoEvent::listen_global(&handle, |event| {
+            DemoEvent::listen(handle, |event| {
                 dbg!(event.payload);
             });
 
-            DemoEvent("Test".to_string()).emit_all(&handle).ok();
+            DemoEvent("Test".to_string()).emit(handle).ok();
 
-            EmptyEvent::listen_global(&handle, {
-                let handle = handle.clone();
-                move |_| {
-                    EmptyEvent.emit_all(&handle).ok();
-                }
+            EmptyEvent::listen(handle, |_| {
+                println!("Got event from frontend!!");
             });
 
             Ok(())

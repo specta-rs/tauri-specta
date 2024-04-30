@@ -2,7 +2,7 @@ use crate::{js_ts, *};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
-    functions::FunctionDataType,
+    function::FunctionDataType,
     js_doc,
     ts::{self, ExportError},
     TypeMap,
@@ -12,8 +12,8 @@ use tauri::Runtime;
 /// Implements [`ExportLanguage`] for TypeScript exporting
 pub struct Language;
 
-pub fn builder<TRuntime: Runtime>() -> PluginBuilder<Language, NoCommands<TRuntime>, NoEvents> {
-    PluginBuilder::default()
+pub fn builder<TRuntime: Runtime>() -> Builder<Language, NoCommands<TRuntime>, NoEvents> {
+    Builder::default()
 }
 
 pub const GLOBALS: &str = include_str!("./globals.ts");
@@ -107,9 +107,8 @@ impl ExportLanguage for Language {
         cfg: &ExportConfig,
     ) -> Result<String, ExportError> {
         let dependant_types = type_map
-            .values()
-            .filter_map(|v| v.as_ref())
-            .map(|v| ts::export_named_datatype(&cfg.inner, v, type_map))
+            .iter()
+            .map(|(_sid, ndt)| ts::export_named_datatype(&cfg.inner, ndt, type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 

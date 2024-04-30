@@ -7,24 +7,24 @@
  * !!!!
  */
 async helloWorld(myName: string) : Promise<string> {
-return await TAURI_INVOKE("plugin:tauri-specta|hello_world", { myName });
+return await TAURI_INVOKE("hello_world", { myName });
 },
 async goodbyeWorld() : Promise<string> {
-return await TAURI_INVOKE("plugin:tauri-specta|goodbye_world");
+return await TAURI_INVOKE("goodbye_world");
 },
 async hasError() : Promise<__Result__<string, number>> {
 try {
-    return { status: "ok", data: await TAURI_INVOKE("plugin:tauri-specta|has_error") };
+    return { status: "ok", data: await TAURI_INVOKE("has_error") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
 async someStruct() : Promise<MyStruct> {
-return await TAURI_INVOKE("plugin:tauri-specta|some_struct");
+return await TAURI_INVOKE("some_struct");
 },
-async generic() : Promise<null> {
-return await TAURI_INVOKE("plugin:tauri-specta|generic");
+async generic() : Promise<void> {
+
 }
 }
 
@@ -32,8 +32,8 @@ export const events = __makeEvents__<{
 demoEvent: DemoEvent,
 emptyEvent: EmptyEvent
 }>({
-demoEvent: "plugin:tauri-specta:demo-event",
-emptyEvent: "plugin:tauri-specta:empty-event"
+demoEvent: "demo-event",
+emptyEvent: "empty-event"
 })
 
 /** user-defined types **/
@@ -44,9 +44,9 @@ export type MyStruct = { some_field: string }
 
 /** tauri-specta globals **/
 
-         import { invoke as TAURI_INVOKE } from "@tauri-apps/api";
+         import { invoke as TAURI_INVOKE } from "@tauri-apps/api/core";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";
-import { type WebviewWindowHandle as __WebviewWindowHandle__ } from "@tauri-apps/api/window";
+import { type WebviewWindow as __WebviewWindow__ } from "@tauri-apps/api/webviewWindow";
 
 type __EventObj__<T> = {
   listen: (
@@ -60,7 +60,7 @@ type __EventObj__<T> = {
     : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
-type __Result__<T, E> =
+export type __Result__<T, E> =
   | { status: "ok"; data: T }
   | { status: "error"; error: E };
 
@@ -70,7 +70,7 @@ function __makeEvents__<T extends Record<string, any>>(
   return new Proxy(
     {} as unknown as {
       [K in keyof T]: __EventObj__<T[K]> & {
-        (handle: __WebviewWindowHandle__): __EventObj__<T[K]>;
+        (handle: __WebviewWindow__): __EventObj__<T[K]>;
       };
     },
     {
@@ -78,7 +78,7 @@ function __makeEvents__<T extends Record<string, any>>(
         const name = mappings[event as keyof T];
 
         return new Proxy((() => {}) as any, {
-          apply: (_, __, [window]: [__WebviewWindowHandle__]) => ({
+          apply: (_, __, [window]: [__WebviewWindow__]) => ({
             listen: (arg: any) => window.listen(name, arg),
             once: (arg: any) => window.once(name, arg),
             emit: (arg: any) => window.emit(name, arg),
