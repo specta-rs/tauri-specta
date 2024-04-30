@@ -3102,6 +3102,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-specta-example"
+version = "0.0.0"
+dependencies = [
+ "rand 0.8.5",
+ "serde",
+ "specta",
+ "tauri",
+ "tauri-plugin",
+ "tauri-specta",
+]
+
+[[package]]
 name = "tauri-runtime"
 version = "2.0.0-beta.13"
 source = "git+https://github.com/tauri-apps/tauri?rev=3f0805488506e013e15cfb3cc1cfc8c2c5f84bd2#3f0805488506e013e15cfb3cc1cfc8c2c5f84bd2"
@@ -3170,18 +3182,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-specta-example-custom-plugin"
-version = "0.0.0"
-dependencies = [
- "rand 0.8.5",
- "serde",
- "specta",
- "tauri",
- "tauri-plugin",
- "tauri-specta",
-]
-
-[[package]]
 name = "tauri-specta-example-custom-plugin-app"
 version = "0.0.0"
 dependencies = [
@@ -3189,7 +3189,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build 2.0.0-beta.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "tauri-specta-example-custom-plugin",
+ "tauri-plugin-specta-example",
 ]
 
 [[package]]

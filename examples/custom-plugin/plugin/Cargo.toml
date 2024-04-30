@@ -1,7 +1,8 @@
 [package]
-name = "tauri-specta-example-custom-plugin"
+name = "tauri-plugin-specta-example"
 version = "0.0.0"
 edition = "2021"
+links = "tauri-plugin-specta-example"
 
 [build-dependencies]
 tauri-plugin = { version = "=2.0.0-beta.13", features = ["build"] }

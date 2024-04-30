@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-add-numbers"
+description = "Enables the add_numbers command without any pre-configured scope."
+commands.allow = ["add_numbers"]
+
+[[permission]]
+identifier = "deny-add-numbers"
+description = "Denies the add_numbers command without any pre-configured scope."
+commands.deny = ["add_numbers"]

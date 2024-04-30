@@ -3,7 +3,7 @@
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_specta_example_custom_plugin::init())
+        .plugin(tauri_plugin_specta_example::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
