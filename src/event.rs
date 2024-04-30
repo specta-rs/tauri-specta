@@ -147,7 +147,7 @@ pub trait Event: NamedType {
         handle.once_any(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
-    fn emit<R: Runtime>(self, handle: &impl Manager<R>) -> tauri::Result<()>
+    fn emit<R: Runtime>(&self, handle: &impl Manager<R>) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
     {
@@ -156,7 +156,7 @@ pub trait Event: NamedType {
         handle.emit(&meta.wrap_with_plugin(Self::NAME), self)
     }
 
-    fn emit_to<R: Runtime>(self, handle: &impl Manager<R>, label: &str) -> tauri::Result<()>
+    fn emit_to<R: Runtime>(&self, handle: &impl Manager<R>, label: &str) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
     {
@@ -165,7 +165,7 @@ pub trait Event: NamedType {
         handle.emit_to(label, &meta.wrap_with_plugin(Self::NAME), self)
     }
 
-    fn emit_filter<F, R: Runtime>(self, handle: &impl Manager<R>, filter: F) -> tauri::Result<()>
+    fn emit_filter<F, R: Runtime>(&self, handle: &impl Manager<R>, filter: F) -> tauri::Result<()>
     where
         F: Fn(&EventTarget) -> bool,
         Self: Serialize + Clone,
