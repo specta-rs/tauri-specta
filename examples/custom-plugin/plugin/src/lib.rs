@@ -22,7 +22,7 @@ macro_rules! specta_builder {
     };
 }
 
-const PLUGIN_NAME: &str = "custom-plugin";
+const PLUGIN_NAME: &str = "specta-example";
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     let (invoke_handler, register_events) =
