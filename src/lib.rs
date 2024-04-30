@@ -144,10 +144,10 @@ pub mod ts;
 mod js_ts;
 
 mod event;
-mod listen;
+mod manager_ext;
 
 pub use event::*;
-pub use listen::*;
+pub use manager_ext::*;
 
 pub type CollectCommandsTuple<TInvokeHandler> =
     (specta::function::CollectFunctionsResult, TInvokeHandler);
