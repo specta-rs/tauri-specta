@@ -9,6 +9,6 @@ tauri-plugin = { version = "=2.0.0-beta.13", features = ["build"] }
 [dependencies]
 rand = "0.8.5"
 serde = "1"
-specta = "=2.0.0-rc.10"
+specta = "=2.0.0-rc.11"
 tauri = "=2.0.0-beta.16"
 tauri-specta = { path = "../../../", features = ["typescript"] }

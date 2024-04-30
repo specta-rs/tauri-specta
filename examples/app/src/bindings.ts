@@ -38,6 +38,7 @@ emptyEvent: "empty-event"
 
 /** user-defined types **/
 
+export type Custom = string
 export type DemoEvent = string
 export type EmptyEvent = null
 export type MyStruct = { some_field: string }

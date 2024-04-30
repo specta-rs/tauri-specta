@@ -4,6 +4,7 @@
 )]
 
 use serde::{Deserialize, Serialize};
+use specta::{Type, TypeCollection};
 use tauri_specta::*;
 
 /// HELLO
@@ -54,6 +55,9 @@ pub struct DemoEvent(String);
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
 pub struct EmptyEvent;
 
+#[derive(Type)]
+pub struct Custom(String);
+
 fn main() {
     let (invoke_handler, register_events) = {
         let builder = ts::builder()
@@ -65,6 +69,7 @@ fn main() {
                 generic::<tauri::Wry>
             ])
             .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
+            .types(TypeCollection::default().register::<Custom>())
             .config(specta::ts::ExportConfig::default().formatter(specta::ts::formatter::prettier));
 
         #[cfg(debug_assertions)]

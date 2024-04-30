@@ -114,7 +114,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 use std::{
-    borrow::Cow,
+    borrow::{Borrow, Cow},
     error, fmt,
     fs::{self, File},
     io::Write,
@@ -124,7 +124,7 @@ use std::{
 
 use specta::{
     function::{CollectFunctionsResult, FunctionDataType},
-    NamedDataType, SpectaID, TypeMap,
+    NamedDataType, SpectaID, TypeCollection, TypeMap,
 };
 
 use tauri::{ipc::Invoke, Manager, Runtime};
@@ -262,6 +262,7 @@ pub struct Builder<TLang: ExportLanguage, TCommands, TEvents> {
     commands: TCommands,
     events: TEvents,
     config: ExportConfig<TLang::Config>,
+    types: TypeCollection,
 }
 
 impl<TLang, TRuntime> Default for Builder<TLang, NoCommands<TRuntime>, NoEvents>
@@ -274,6 +275,7 @@ where
             commands: NoCommands(Default::default(), Default::default()),
             events: NoEvents,
             config: Default::default(),
+            types: TypeCollection::default(),
         }
     }
 }
@@ -292,6 +294,7 @@ where
             commands: Commands(commands, Default::default()),
             events: self.events,
             config: self.config,
+            types: self.types,
         }
     }
 }
@@ -306,6 +309,7 @@ where
             events: Events(events),
             commands: self.commands,
             config: self.config,
+            types: self.types,
         }
     }
 }
@@ -314,6 +318,27 @@ impl<TLang, TCommands, TEvents> Builder<TLang, TCommands, TEvents>
 where
     TLang: ExportLanguage,
 {
+    /// Allows for exporting types that are not part of any of the commands or events.
+    ///
+    /// ```rs
+    /// use tauri_specta::ts;
+    /// use specta::{Type, TypeCollection};
+    ///
+    /// #[derive(Type)]
+    /// pub struct Custom(String);
+    ///
+    /// ts::build()
+    ///    .types({
+    ///         let mut collection = TypeCollection::default();
+    ///         collection.register::<Custom>();
+    ///         collection
+    ///    });
+    /// ```
+    pub fn types(mut self, types: impl Borrow<TypeCollection>) -> Self {
+        self.types.extend(types);
+        self
+    }
+
     /// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
     pub fn config(mut self, config: TLang::Config) -> Self {
         self.config.inner = config;
@@ -374,6 +399,7 @@ where
             commands,
             config,
             events,
+            types,
             ..
         } = self;
 
@@ -381,12 +407,10 @@ where
 
         let (events_registry, events, events_type_map) = events.get();
 
-        let rendered = TLang::render(
-            &commands,
-            &events,
-            &collect_typemap(commands_type_map.iter().chain(events_type_map.iter())),
-            &config,
-        )?;
+        let mut type_map = collect_typemap(commands_type_map.iter().chain(events_type_map.iter()));
+        types.export(&mut type_map);
+
+        let rendered = TLang::render(&commands, &events, &type_map, &config)?;
 
         Ok((
             format!("{}{rendered}", &config.header),

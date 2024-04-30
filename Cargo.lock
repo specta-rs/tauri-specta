@@ -2752,7 +2752,7 @@ dependencies = [
 
 [[package]]
 name = "specta"
-version = "2.0.0-rc.10"
+version = "2.0.0-rc.11"
 dependencies = [
  "once_cell",
  "paste",
