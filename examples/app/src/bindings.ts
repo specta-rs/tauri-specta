@@ -25,6 +25,12 @@ return await TAURI_INVOKE("some_struct");
 },
 async generic() : Promise<void> {
 
+},
+/**
+ * @deprecated This is a deprecated function
+ */
+async deprecated() : Promise<void> {
+
 }
 }
 

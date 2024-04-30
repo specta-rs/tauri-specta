@@ -32,6 +32,11 @@ fn has_error() -> Result<&'static str, i32> {
 #[specta::specta]
 fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
 
+#[deprecated = "This is a deprecated function"]
+#[tauri::command]
+#[specta::specta]
+fn deprecated() {}
+
 mod nested {
     use super::*;
 
@@ -66,7 +71,8 @@ fn main() {
                 goodbye_world,
                 has_error,
                 nested::some_struct,
-                generic::<tauri::Wry>
+                generic::<tauri::Wry>,
+                deprecated
             ])
             .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
             .types(TypeCollection::default().register::<Custom>())

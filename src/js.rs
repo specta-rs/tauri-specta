@@ -39,6 +39,10 @@ impl ExportLanguage for Language {
 
                     let mut builder = js_doc::Builder::default();
 
+                    if let Some(d) = &function.deprecated {
+                        builder.push_deprecated(d);
+                    }
+
                     if !function.docs.is_empty() {
                         builder.extend(function.docs.split("\n"));
                     }
