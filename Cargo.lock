@@ -2753,6 +2753,8 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "2.0.0-rc.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ed13baa3131e5b627ca78dca1097aa84dd83509b18ac9f876a0db5e70413636"
 dependencies = [
  "once_cell",
  "paste",
@@ -2764,6 +2766,8 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef33e9678ae36993fcbfc46aa29568ef10d32fd54428808759c6a450998c43ec"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -4310,8 +4314,3 @@ dependencies = [
  "once_cell",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "tauri"
-version = "2.0.0-beta.16"
-source = "git+https://github.com/tauri-apps/tauri?rev=3f0805488506e013e15cfb3cc1cfc8c2c5f84bd2#3f0805488506e013e15cfb3cc1cfc8c2c5f84bd2"

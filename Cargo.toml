@@ -40,8 +40,3 @@ members = [
     "examples/custom-plugin/plugin",
     "macros",
 ]
-
-[patch.crates-io]
-tauri = { git = "https://github.com/tauri-apps/tauri", rev = "3f0805488506e013e15cfb3cc1cfc8c2c5f84bd2" }
-
-specta = { path = "../specta" }
