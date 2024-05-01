@@ -12,8 +12,6 @@ pub trait ManagerExt<R: Runtime>: tauri::Manager<R> {
     fn once<F>(&self, event: impl Into<String>, handler: F) -> EventId
     where
         F: FnOnce(Event) + Send + 'static;
-
-    fn unlisten(&self, id: EventId);
 }
 
 impl<R: Runtime> ManagerExt<R> for tauri::App<R> {
@@ -29,10 +27,6 @@ impl<R: Runtime> ManagerExt<R> for tauri::App<R> {
         F: FnOnce(Event) + Send + 'static,
     {
         self.once(event, handler)
-    }
-
-    fn unlisten(&self, id: EventId) {
-        self.unlisten(id)
     }
 }
 
@@ -50,10 +44,6 @@ impl<R: Runtime> ManagerExt<R> for tauri::AppHandle<R> {
     {
         self.once(event, handler)
     }
-
-    fn unlisten(&self, id: EventId) {
-        self.unlisten(id)
-    }
 }
 
 impl<R: Runtime> ManagerExt<R> for tauri::Webview<R> {
@@ -69,10 +59,6 @@ impl<R: Runtime> ManagerExt<R> for tauri::Webview<R> {
         F: FnOnce(Event) + Send + 'static,
     {
         self.once(event, handler)
-    }
-
-    fn unlisten(&self, id: EventId) {
-        self.unlisten(id)
     }
 }
 
@@ -90,10 +76,6 @@ impl<R: Runtime> ManagerExt<R> for tauri::WebviewWindow<R> {
     {
         self.once(event, handler)
     }
-
-    fn unlisten(&self, id: EventId) {
-        self.unlisten(id)
-    }
 }
 
 impl<R: Runtime> ManagerExt<R> for tauri::Window<R> {
@@ -109,9 +91,5 @@ impl<R: Runtime> ManagerExt<R> for tauri::Window<R> {
         F: FnOnce(Event) + Send + 'static,
     {
         self.once(event, handler)
-    }
-
-    fn unlisten(&self, id: EventId) {
-        self.unlisten(id)
     }
 }
