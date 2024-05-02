@@ -70,7 +70,7 @@ pub fn maybe_return_as_result_tuple(expr: &str, typ: &Option<DataType>, as_any: 
     match typ {
         Some(DataType::Result(_)) => return_as_result_tuple(expr, as_any),
         Some(_) => format!("return {expr};"),
-        None => format!(""),
+        None => format!("{expr};"),
     }
 }
 
