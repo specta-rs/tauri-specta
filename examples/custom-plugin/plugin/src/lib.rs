@@ -14,6 +14,8 @@ fn add_numbers(a: i32, b: i32) -> i32 {
 #[derive(Clone, serde::Serialize, specta::Type, Event)]
 struct RandomNumber(i32);
 
+// We recommend re-using the builder via a macro rather than function as the builder's
+// generics can be tricky to deal with
 macro_rules! specta_builder {
     () => {
         ts::builder()

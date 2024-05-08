@@ -63,8 +63,10 @@ pub struct EmptyEvent;
 #[derive(Type)]
 pub struct Custom(String);
 
-fn main() {
-    let (invoke_handler, register_events) = {
+// We recommend re-using the builder via a macro rather than function as the builder's
+// generics can be tricky to deal with
+macro_rules! specta_builder {
+    () => {{
         let builder = ts::builder()
             .commands(tauri_specta::collect_commands![
                 hello_world,
@@ -81,8 +83,12 @@ fn main() {
         #[cfg(debug_assertions)]
         let builder = builder.path("../src/bindings.ts");
 
-        builder.build().unwrap()
-    };
+        builder
+    }};
+}
+
+fn main() {
+    let (invoke_handler, register_events) = specta_builder!().build().unwrap();
 
     tauri::Builder::default()
         .invoke_handler(invoke_handler)
