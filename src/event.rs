@@ -181,14 +181,15 @@ pub struct EventDataType {
     pub typ: DataType,
 }
 
-pub(crate) type CollectEventsTuple = (EventCollection, Vec<EventDataType>, specta::TypeMap);
+#[doc(hidden)]
+pub type CollectEventsTuple = (EventCollection, Vec<EventDataType>, specta::TypeMap);
 
 #[macro_export]
 macro_rules! collect_events {
-    ($($event:ident),+) => {{
+    ($($event:ident),* $(,)?) => {{
     	let mut collection: $crate::EventCollection = ::core::default::Default::default();
 
-     	$(collection.register::<$event>();)+
+     	$(collection.register::<$event>();)*
 
       	let mut type_map = Default::default();
 
@@ -197,10 +198,11 @@ macro_rules! collect_events {
 	       		name: <$event as $crate::Event>::NAME,
 	       		typ: <$event as ::specta::Type>::reference(&mut type_map, &[]).inner
 	       }
-       	),+]
+       	),*]
         .into_iter()
         .collect::<Vec<_>>();
 
-      	(collection, event_data_types, type_map)
+      	let result: $crate::CollectEventsTuple = (collection, event_data_types, type_map);
+        result
     }};
 }
