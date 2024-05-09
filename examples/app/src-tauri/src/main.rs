@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 use specta::{Type, TypeCollection};
 use tauri_specta::*;
+use thiserror::Error;
 
 /// HELLO
 /// WORLD
@@ -54,6 +55,29 @@ mod nested {
     }
 }
 
+#[derive(Error, Debug, Serialize, Type)]
+pub enum MyError {
+    // On the frontend this variant will be "IoError" with no data.
+    #[error("io error: {0}")]
+    IoError(
+        #[serde(skip)] // io::Error is not `Serialize` or `Type`
+        #[from]
+        std::io::Error,
+    ),
+    // On the frontend this variant will be "AnotherError" with string data.
+    #[error("some other error: {0}")]
+    AnotherError(String),
+}
+
+#[tauri::command]
+#[specta::specta]
+fn typesafe_errors_using_thiserror() -> Result<(), MyError> {
+    Err(MyError::IoError(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "oh no!",
+    )))
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
 pub struct DemoEvent(String);
 
@@ -63,10 +87,8 @@ pub struct EmptyEvent;
 #[derive(Type)]
 pub struct Custom(String);
 
-// We recommend re-using the builder via a macro rather than function as the builder's
-// generics can be tricky to deal with
-macro_rules! specta_builder {
-    () => {{
+fn main() {
+    let (invoke_handler, register_events) = {
         let builder = ts::builder()
             .commands(tauri_specta::collect_commands![
                 hello_world,
@@ -74,7 +96,8 @@ macro_rules! specta_builder {
                 has_error,
                 nested::some_struct,
                 generic::<tauri::Wry>,
-                deprecated
+                deprecated,
+                typesafe_errors_using_thiserror
             ])
             .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
             .types(TypeCollection::default().register::<Custom>())
@@ -83,12 +106,8 @@ macro_rules! specta_builder {
         #[cfg(debug_assertions)]
         let builder = builder.path("../src/bindings.ts");
 
-        builder
-    }};
-}
-
-fn main() {
-    let (invoke_handler, register_events) = specta_builder!().build().unwrap();
+        builder.build().unwrap()
+    };
 
     tauri::Builder::default()
         .invoke_handler(invoke_handler)

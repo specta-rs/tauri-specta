@@ -24,13 +24,21 @@ async someStruct() : Promise<MyStruct> {
 return await TAURI_INVOKE("some_struct");
 },
 async generic() : Promise<void> {
-
+await TAURI_INVOKE("generic");
 },
 /**
  * @deprecated This is a deprecated function
  */
 async deprecated() : Promise<void> {
-
+await TAURI_INVOKE("deprecated");
+},
+async typesafeErrorsUsingThiserror() : Promise<Result<null, MyError>> {
+try {
+    return { status: "ok", data: await TAURI_INVOKE("typesafe_errors_using_thiserror") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -47,6 +55,7 @@ emptyEvent: "empty-event"
 export type Custom = string
 export type DemoEvent = string
 export type EmptyEvent = null
+export type MyError = "IoError" | { AnotherError: string }
 export type MyStruct = { some_field: string }
 
 /** tauri-specta globals **/
