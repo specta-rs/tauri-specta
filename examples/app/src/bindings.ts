@@ -39,6 +39,14 @@ try {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async typesafeErrorsUsingThiserrorWithValue() : Promise<Result<null, MyError2>> {
+try {
+    return { status: "ok", data: await TAURI_INVOKE("typesafe_errors_using_thiserror_with_value") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -55,7 +63,8 @@ emptyEvent: "empty-event"
 export type Custom = string
 export type DemoEvent = string
 export type EmptyEvent = null
-export type MyError = "IoError" | { AnotherError: string }
+export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string }
+export type MyError2 = { type: "IoError"; data: string }
 export type MyStruct = { some_field: string }
 
 /** tauri-specta globals **/
