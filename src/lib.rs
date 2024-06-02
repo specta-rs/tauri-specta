@@ -413,7 +413,7 @@ where
         let rendered = TLang::render(&commands, &events, &type_map, &config)?;
 
         Ok((
-            format!("{}{rendered}", &config.header),
+            format!("{}\n{rendered}", &config.header),
             (invoke_handler, events_registry),
         ))
     }
