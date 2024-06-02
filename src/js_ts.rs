@@ -39,7 +39,7 @@ pub fn render_all_parts<T: ExportLanguage<Config = specta::ts::ExportConfig>>(
             }
 
             format!(
-                "const {name} = {}{};",
+                "export const {name} = {}{};",
                 serde_json::to_string(&value)
                     .expect("failed to serialize from `serde_json::Value`"),
                 as_const.unwrap_or("")
