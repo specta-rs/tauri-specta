@@ -114,6 +114,7 @@ impl ExportLanguage for Language {
         commands: &[FunctionDataType],
         events: &[EventDataType],
         type_map: &TypeMap,
+        statics: &StaticCollection,
         cfg: &ExportConfig,
     ) -> Result<String, Self::Error> {
         let dependant_types = type_map
@@ -122,6 +123,14 @@ impl ExportLanguage for Language {
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
-        js_ts::render_all_parts::<Self>(commands, events, type_map, cfg, &dependant_types, GLOBALS)
+        js_ts::render_all_parts::<Self>(
+            commands,
+            events,
+            type_map,
+            statics,
+            cfg,
+            &dependant_types,
+            GLOBALS,
+        )
     }
 }

@@ -145,9 +145,11 @@ mod js_ts;
 
 mod event;
 mod manager_ext;
+mod statics;
 
 pub use event::*;
 pub use manager_ext::*;
+pub use statics::StaticCollection;
 
 pub type CollectCommandsTuple<TInvokeHandler> =
     (specta::function::CollectFunctionsResult, TInvokeHandler);
@@ -179,6 +181,7 @@ pub trait ExportLanguage: 'static {
         commands: &[FunctionDataType],
         events: &[EventDataType],
         type_map: &TypeMap,
+        statics: &StaticCollection,
         cfg: &ExportConfig<Self::Config>,
     ) -> Result<String, Self::Error>;
 }
@@ -263,6 +266,7 @@ pub struct Builder<TLang: ExportLanguage, TCommands, TEvents> {
     events: TEvents,
     config: ExportConfig<TLang::Config>,
     types: TypeCollection,
+    statics: StaticCollection,
 }
 
 impl<TLang, TRuntime> Default for Builder<TLang, NoCommands<TRuntime>, NoEvents>
@@ -276,6 +280,7 @@ where
             events: NoEvents,
             config: Default::default(),
             types: TypeCollection::default(),
+            statics: StaticCollection::default(),
         }
     }
 }
@@ -295,6 +300,7 @@ where
             events: self.events,
             config: self.config,
             types: self.types,
+            statics: self.statics,
         }
     }
 }
@@ -310,6 +316,7 @@ where
             commands: self.commands,
             config: self.config,
             types: self.types,
+            statics: self.statics,
         }
     }
 }
@@ -336,6 +343,19 @@ where
     /// ```
     pub fn types(mut self, types: impl Borrow<TypeCollection>) -> Self {
         self.types.extend(types);
+        self
+    }
+
+    /// Allows for exporting static along with your commands and events.
+    ///
+    /// ```rs
+    /// use tauri_specta::{ts, StaticCollection};
+    ///
+    /// ts::build()
+    ///    .statics(StaticCollection::default().register("universalConstant", 42));
+    /// ```
+    pub fn statics(mut self, statics: impl Borrow<StaticCollection>) -> Self {
+        self.statics.extend(statics);
         self
     }
 
@@ -400,6 +420,7 @@ where
             config,
             events,
             types,
+            statics,
             ..
         } = self;
 
@@ -410,7 +431,7 @@ where
         let mut type_map = collect_typemap(commands_type_map.iter().chain(events_type_map.iter()));
         types.export(&mut type_map);
 
-        let rendered = TLang::render(&commands, &events, &type_map, &config)?;
+        let rendered = TLang::render(&commands, &events, &type_map, &statics, &config)?;
 
         Ok((
             format!("{}\n{rendered}", &config.header),
