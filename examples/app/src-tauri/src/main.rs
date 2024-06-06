@@ -127,7 +127,7 @@ fn main() {
                 typesafe_errors_using_thiserror,
                 typesafe_errors_using_thiserror_with_value
             ])
-            .events(tauri_specta::collect_events![DemoEvent, EmptyEvent])
+            .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
             .types(TypeCollection::default().register::<Custom>())
             .config(specta::ts::ExportConfig::default().formatter(specta::ts::formatter::prettier))
             .types(TypeCollection::default().register::<Testing>())
