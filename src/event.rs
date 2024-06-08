@@ -186,7 +186,7 @@ pub type CollectEventsTuple = (EventCollection, Vec<EventDataType>, specta::Type
 
 #[macro_export]
 macro_rules! collect_events {
-    ($($event:ident),* $(,)?) => {{
+    ($($event:path),* $(,)?) => {{
     	let mut collection: $crate::EventCollection = ::core::default::Default::default();
 
      	$(collection.register::<$event>();)*
