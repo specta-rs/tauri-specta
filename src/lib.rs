@@ -430,6 +430,7 @@ where
 
         let mut type_map = collect_typemap(commands_type_map.iter().chain(events_type_map.iter()));
         types.export(&mut type_map);
+        type_map.remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
 
         let rendered = TLang::render(&commands, &events, &type_map, &statics, &config)?;
 
