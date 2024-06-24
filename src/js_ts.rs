@@ -75,9 +75,17 @@ pub fn render_all_parts<T: ExportLanguage<Config = specta::ts::ExportConfig>>(
     })
 }
 
+pub fn unraw(s: &str) -> &str {
+    if s.starts_with("r#") {
+        s.split_at(2).1
+    } else {
+        s.as_ref()
+    }
+}
+
 pub fn arg_names(args: &[(Cow<'static, str>, DataType)]) -> Vec<String> {
     args.iter()
-        .map(|(name, _)| name.to_lower_camel_case())
+        .map(|(name, _)| unraw(name).to_lower_camel_case())
         .collect::<Vec<_>>()
 }
 
