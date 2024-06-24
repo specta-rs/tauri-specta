@@ -1,7 +1,4 @@
-use crate::{
-    js_ts::{self, unraw},
-    *,
-};
+use crate::{js_ts, *};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::{
@@ -46,7 +43,7 @@ impl ExportLanguage for Language {
                     .iter()
                     .map(|(name, typ)| {
                         ts::datatype(&cfg.inner, typ, type_map)
-                            .map(|ty| format!("{}: {}", unraw(name).to_lower_camel_case(), ty))
+                            .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
                     })
                     .collect::<Result<Vec<_>, _>>()?;
 

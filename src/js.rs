@@ -1,7 +1,6 @@
 use crate::*;
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use js_ts::unraw;
 use specta::{function::FunctionDataType, js_doc, ts};
 use tauri::Runtime;
 
@@ -50,7 +49,7 @@ impl ExportLanguage for Language {
 
                     builder.extend(function.args.iter().flat_map(|(name, typ)| {
                         ts::datatype(&cfg.inner, typ, type_map).map(|typ| {
-                            let name = unraw(name).to_lower_camel_case();
+                            let name = name.to_lower_camel_case();
 
                             format!("@param {{ {typ} }} {name}")
                         })

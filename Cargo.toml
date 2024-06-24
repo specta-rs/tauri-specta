@@ -23,14 +23,12 @@ typescript = ["specta/typescript", "specta/js_doc"]
 
 [dependencies]
 # Public
-specta = { version = "=2.0.0-rc.13", features = ["function"] }
+specta = { workspace = true, features = ["function"] }
 tauri-specta-macros = { version = "=2.0.0-rc.5", path = "./macros" }
 serde = "1"
 serde_json = "1"
 thiserror = "1"
-tauri = { version = "=2.0.0-beta.22", no-default-features = true, features = [
-  "specta",
-] }
+tauri = { workspace = true, no-default-features = true, features = ["specta"] }
 
 # Private
 heck = "0.5.0"
@@ -43,3 +41,11 @@ members = [
   "examples/custom-plugin/plugin",
   "macros",
 ]
+
+[workspace.dependencies]
+specta = { version = "=2.0.0-rc.13" }
+# tauri = { git = "https://github.com/brendonovich/tauri", branch = "generic-channel" }
+tauri = { version = "=2.0.0-beta.22" }
+
+[patch.crates-io]
+tauri = { git = "https://github.com/brendonovich/tauri", branch = "generic-channel" }
