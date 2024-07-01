@@ -65,7 +65,7 @@ emptyEvent: "empty-event"
 
          /** user-defined statics **/
 
-         const universalConstant = 42 as const;
+         export const universalConstant = 42 as const;
 
 /** user-defined types **/
 
