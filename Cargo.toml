@@ -23,14 +23,12 @@ typescript = ["specta/typescript", "specta/js_doc"]
 
 [dependencies]
 # Public
-specta = { version = "=2.0.0-rc.12", features = ["function"] }
+specta = { workspace = true, features = ["function"] }
 tauri-specta-macros = { version = "=2.0.0-rc.5", path = "./macros" }
 serde = "1"
 serde_json = "1"
 thiserror = "1"
-tauri = { version = "=2.0.0-beta.22", default-features = false, features = [
-    "specta",
-] }
+tauri = { workspace = true, default-features = false, features = ["specta"] }
 
 # Private
 heck = "0.5.0"
@@ -38,8 +36,12 @@ indoc = "2.0.5"
 
 [workspace]
 members = [
-    "examples/app/src-tauri",
-    "examples/custom-plugin/app/src-tauri",
-    "examples/custom-plugin/plugin",
-    "macros",
+  "examples/app/src-tauri",
+  "examples/custom-plugin/app/src-tauri",
+  "examples/custom-plugin/plugin",
+  "macros",
 ]
+
+[workspace.dependencies]
+tauri = { version = "2.0.0-beta.23" }
+specta = { version = "=2.0.0-rc.12" }
