@@ -36,12 +36,12 @@ indoc = "2.0.5"
 
 [workspace]
 members = [
-  "examples/app/src-tauri",
-  "examples/custom-plugin/app/src-tauri",
-  "examples/custom-plugin/plugin",
-  "macros",
+    "examples/app/src-tauri",
+    "examples/custom-plugin/app/src-tauri",
+    "examples/custom-plugin/plugin",
+    "macros",
 ]
 
 [workspace.dependencies]
-tauri = { version = "2.0.0-beta.23" }
+tauri = { version = "2.0.0-beta.24" }
 specta = { version = "=2.0.0-rc.12" }

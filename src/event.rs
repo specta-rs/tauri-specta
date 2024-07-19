@@ -5,7 +5,7 @@ use std::{
 
 use serde::{de::DeserializeOwned, Serialize};
 use specta::{DataType, NamedType, SpectaID};
-use tauri::{EventId, EventTarget, Manager, Runtime};
+use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
 use crate::{ManagerExt, PluginName};
 
@@ -124,7 +124,9 @@ pub trait Event: NamedType {
     {
         let meta = get_meta!(handle);
 
-        handle.listen_any(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        handle
+            .app_handle()
+            .listen_any(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     fn once<F, R: Runtime>(handle: &impl ManagerExt<R>, handler: F) -> EventId
@@ -144,7 +146,9 @@ pub trait Event: NamedType {
     {
         let meta = get_meta!(handle);
 
-        handle.once_any(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        handle
+            .app_handle()
+            .once_any(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
     }
 
     fn emit<R: Runtime>(&self, handle: &impl Manager<R>) -> tauri::Result<()>
@@ -153,7 +157,9 @@ pub trait Event: NamedType {
     {
         let meta = get_meta!(handle);
 
-        handle.emit(&meta.wrap_with_plugin(Self::NAME), self)
+        handle
+            .app_handle()
+            .emit(&meta.wrap_with_plugin(Self::NAME), self)
     }
 
     fn emit_to<R: Runtime>(&self, handle: &impl Manager<R>, label: &str) -> tauri::Result<()>
@@ -162,7 +168,9 @@ pub trait Event: NamedType {
     {
         let meta = get_meta!(handle);
 
-        handle.emit_to(label, &meta.wrap_with_plugin(Self::NAME), self)
+        handle
+            .app_handle()
+            .emit_to(label, &meta.wrap_with_plugin(Self::NAME), self)
     }
 
     fn emit_filter<F, R: Runtime>(&self, handle: &impl Manager<R>, filter: F) -> tauri::Result<()>
@@ -172,7 +180,9 @@ pub trait Event: NamedType {
     {
         let meta = get_meta!(handle);
 
-        handle.emit_filter(&meta.wrap_with_plugin(Self::NAME), self, filter)
+        handle
+            .app_handle()
+            .emit_filter(&meta.wrap_with_plugin(Self::NAME), self, filter)
     }
 }
 
