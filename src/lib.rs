@@ -144,11 +144,9 @@ pub mod ts;
 mod js_ts;
 
 mod event;
-mod manager_ext;
 mod statics;
 
 pub use event::*;
-pub use manager_ext::*;
 pub use statics::StaticCollection;
 
 pub type CollectCommandsTuple<TInvokeHandler> =
