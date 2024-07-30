@@ -4,12 +4,9 @@ use crate::{
 };
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use specta::{
-    function::FunctionDataType,
-    js_doc,
-    ts::{self, ExportError},
-    TypeMap,
-};
+use specta::datatype;
+use specta_typescript as ts;
+use specta_typescript::{js_doc, ExportError};
 use tauri::Runtime;
 
 /// Implements [`ExportLanguage`] for TypeScript exporting
@@ -21,7 +18,7 @@ pub fn builder<TRuntime: Runtime>() -> Builder<Language, NoCommands<TRuntime>, N
 
 pub const GLOBALS: &str = include_str!("./globals.ts");
 
-type Config = specta::ts::ExportConfig;
+type Config = specta_typescript::ExportConfig;
 pub type ExportConfig = crate::ExportConfig<Config>;
 
 impl ExportLanguage for Language {
@@ -34,7 +31,7 @@ impl ExportLanguage for Language {
 
     /// Renders a collection of [`FunctionDataType`] into a TypeScript string.
     fn render_commands(
-        commands: &[FunctionDataType],
+        commands: &[datatype::Function],
         type_map: &TypeMap,
         cfg: &ExportConfig,
     ) -> Result<String, ExportError> {
@@ -42,8 +39,7 @@ impl ExportLanguage for Language {
             .iter()
             .map(|function| {
                 let arg_defs = function
-                    .args
-                    .iter()
+                    .args()
                     .map(|(name, typ)| {
                         ts::datatype(&cfg.inner, typ, type_map)
                             .map(|ty| format!("{}: {}", unraw(name).to_lower_camel_case(), ty))
@@ -55,19 +51,19 @@ impl ExportLanguage for Language {
                 let docs = {
                     let mut builder = js_doc::Builder::default();
 
-                    if let Some(d) = &function.deprecated {
+                    if let Some(d) = &function.deprecated() {
                         builder.push_deprecated(d);
                     }
 
-                    if !function.docs.is_empty() {
-                        builder.extend(function.docs.split("\n"));
+                    if !function.docs().is_empty() {
+                        builder.extend(function.docs().split("\n"));
                     }
 
                     builder.build()
                 };
                 Ok(js_ts::function(
                     &docs,
-                    &function.name.to_lower_camel_case(),
+                    &function.name().to_lower_camel_case(),
                     &arg_defs,
                     Some(&ret_type),
                     &js_ts::command_body(cfg, function, true),
@@ -108,7 +104,7 @@ impl ExportLanguage for Language {
     }
 
     fn render(
-        commands: &[FunctionDataType],
+        commands: &[datatype::Function],
         events: &[EventDataType],
         type_map: &TypeMap,
         statics: &StaticCollection,

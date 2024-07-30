@@ -122,10 +122,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use specta::{
-    function::{CollectFunctionsResult, FunctionDataType},
-    NamedDataType, SpectaID, TypeCollection, TypeMap,
-};
+use specta::{datatype, NamedDataType, SpectaID, TypeMap};
+use specta_util::TypeCollection;
 
 use tauri::{ipc::Invoke, Manager, Runtime};
 pub use tauri_specta_macros::Event;
@@ -149,8 +147,11 @@ mod statics;
 pub use event::*;
 pub use statics::StaticCollection;
 
-pub type CollectCommandsTuple<TInvokeHandler> =
-    (specta::function::CollectFunctionsResult, TInvokeHandler);
+pub(crate) type CollectFunctionsResult = fn(type_map: &mut TypeMap) -> Vec<datatype::Function>;
+
+const DEFAULT_COLLECT_FN: CollectFunctionsResult = |_| vec![];
+
+pub type CollectCommandsTuple<TInvokeHandler> = (CollectFunctionsResult, TInvokeHandler);
 
 pub use tauri_specta_macros::collect_commands;
 
@@ -169,14 +170,14 @@ pub trait ExportLanguage: 'static {
 
     /// Renders a collection of [`FunctionDataType`] into a string.
     fn render_commands(
-        commands: &[FunctionDataType],
+        commands: &[datatype::Function],
         type_map: &TypeMap,
         cfg: &ExportConfig<Self::Config>,
     ) -> Result<String, Self::Error>;
 
     /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
     fn render(
-        commands: &[FunctionDataType],
+        commands: &[datatype::Function],
         events: &[EventDataType],
         type_map: &TypeMap,
         statics: &StaticCollection,
@@ -190,7 +191,7 @@ pub trait CommandsTypeState: 'static {
 
     fn split(self) -> CollectCommandsTuple<Self::InvokeHandler>;
 
-    fn macro_data(&self) -> &CollectFunctionsResult;
+    fn macro_data(&self) -> CollectFunctionsResult;
 }
 
 fn dummy_invoke_handler(_: Invoke<impl Runtime>) -> bool {
@@ -207,11 +208,11 @@ where
     type InvokeHandler = fn(Invoke<TRuntime>) -> bool;
 
     fn split(self) -> CollectCommandsTuple<Self::InvokeHandler> {
-        (Default::default(), dummy_invoke_handler)
+        (DEFAULT_COLLECT_FN, dummy_invoke_handler)
     }
 
-    fn macro_data(&self) -> &CollectFunctionsResult {
-        &self.0
+    fn macro_data(&self) -> CollectFunctionsResult {
+        self.0
     }
 }
 
@@ -232,8 +233,8 @@ where
         self.0
     }
 
-    fn macro_data(&self) -> &CollectFunctionsResult {
-        &self.0 .0
+    fn macro_data(&self) -> CollectFunctionsResult {
+        self.0 .0
     }
 }
 
@@ -274,7 +275,7 @@ where
     fn default() -> Self {
         Self {
             lang: PhantomData,
-            commands: NoCommands(Default::default(), Default::default()),
+            commands: NoCommands(DEFAULT_COLLECT_FN, Default::default()),
             events: NoEvents,
             config: Default::default(),
             types: TypeCollection::default(),
@@ -422,12 +423,12 @@ where
             ..
         } = self;
 
-        let ((commands, commands_type_map), invoke_handler) = commands.split();
+        let (export_fn, invoke_handler) = commands.split();
 
-        let (events_registry, events, events_type_map) = events.get();
+        let (events_registry, events, mut type_map) = events.get();
+        let commands = export_fn(&mut type_map);
 
-        let mut type_map = collect_typemap(commands_type_map.iter().chain(events_type_map.iter()));
-        types.export(&mut type_map);
+        types.collect(&mut type_map);
 
         let rendered = TLang::render(&commands, &events, &type_map, &statics, &config)?;
 
