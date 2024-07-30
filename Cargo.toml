@@ -43,5 +43,5 @@ members = [
 ]
 
 [workspace.dependencies]
-tauri = { version = "2.0.0-beta.24" }
-specta = { version = "=2.0.0-rc.12" }
+tauri = { version = "=2.0.0-beta.25" }
+specta = { version = "=2.0.0-rc.16" }
