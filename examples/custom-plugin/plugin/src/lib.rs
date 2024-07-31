@@ -54,7 +54,10 @@ mod test {
     fn export_types() {
         specta_builder!()
             .path("./bindings.ts")
-            .config(specta::ts::ExportConfig::default().formatter(specta::ts::formatter::prettier))
+            .config(
+                specta_typescript::ExportConfig::default()
+                    .formatter(specta_typescript::formatter::prettier),
+            )
             .export_for_plugin(PLUGIN_NAME)
             .expect("failed to export specta types");
     }

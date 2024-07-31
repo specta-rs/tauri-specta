@@ -5,9 +5,9 @@ use std::{
 
 use serde::{de::DeserializeOwned, Serialize};
 use specta::{DataType, NamedType, SpectaID};
-use tauri::{EventId, EventTarget, Manager, Runtime};
+use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
-use crate::{ManagerExt, PluginName};
+use crate::PluginName;
 
 #[derive(Clone, Copy)]
 pub struct EventRegistryMeta {
@@ -107,72 +107,82 @@ macro_rules! get_meta {
 pub trait Event: NamedType {
     const NAME: &'static str;
 
-    fn listen<F, R: Runtime>(handle: &impl ManagerExt<R>, handler: F) -> EventId
+    fn listen<F, R: Runtime, H: Listener<R> + Manager<R>>(handle: &H, handler: F) -> EventId
     where
         F: Fn(TypedEvent<Self>) + Send + 'static,
         Self: DeserializeOwned,
     {
-        let meta = get_meta!(handle);
-
-        handle.listen(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        handle.listen(
+            get_meta!(handle).wrap_with_plugin(Self::NAME),
+            make_handler!(handler),
+        )
     }
 
-    fn listen_any<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventId
+    fn listen_any<F, R: Runtime, H: Listener<R> + Manager<R>>(handle: &H, handler: F) -> EventId
     where
         F: Fn(TypedEvent<Self>) + Send + 'static,
         Self: DeserializeOwned,
     {
-        let meta = get_meta!(handle);
-
-        handle.listen_any(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        handle.listen_any(
+            get_meta!(handle).wrap_with_plugin(Self::NAME),
+            make_handler!(handler),
+        )
     }
 
-    fn once<F, R: Runtime>(handle: &impl ManagerExt<R>, handler: F) -> EventId
+    fn once<F, R: Runtime, H: Listener<R> + Manager<R>>(handle: &H, handler: F) -> EventId
     where
         F: Fn(TypedEvent<Self>) + Send + 'static,
         Self: DeserializeOwned,
     {
-        let meta = get_meta!(handle);
-
-        handle.once(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        handle.once(
+            get_meta!(handle).wrap_with_plugin(Self::NAME),
+            make_handler!(handler),
+        )
     }
 
-    fn once_any<F, R: Runtime>(handle: &impl Manager<R>, handler: F) -> EventId
+    fn once_any<F, R: Runtime, H: Listener<R> + Manager<R>>(handle: &H, handler: F) -> EventId
     where
         F: FnOnce(TypedEvent<Self>) + Send + 'static,
         Self: DeserializeOwned,
     {
-        let meta = get_meta!(handle);
-
-        handle.once_any(meta.wrap_with_plugin(Self::NAME), make_handler!(handler))
+        handle.once_any(
+            get_meta!(handle).wrap_with_plugin(Self::NAME),
+            make_handler!(handler),
+        )
     }
 
-    fn emit<R: Runtime>(&self, handle: &impl Manager<R>) -> tauri::Result<()>
+    fn emit<R: Runtime, H: Emitter<R> + Manager<R>>(&self, handle: &H) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
     {
-        let meta = get_meta!(handle);
-
-        handle.emit(&meta.wrap_with_plugin(Self::NAME), self)
+        handle.emit(&get_meta!(handle).wrap_with_plugin(Self::NAME), self)
     }
 
-    fn emit_to<R: Runtime>(&self, handle: &impl Manager<R>, label: &str) -> tauri::Result<()>
+    fn emit_to<R: Runtime, H: Emitter<R> + Manager<R>>(
+        &self,
+        handle: &H,
+        label: &str,
+    ) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
     {
-        let meta = get_meta!(handle);
-
-        handle.emit_to(label, &meta.wrap_with_plugin(Self::NAME), self)
+        handle.emit_to(label, &get_meta!(handle).wrap_with_plugin(Self::NAME), self)
     }
 
-    fn emit_filter<F, R: Runtime>(&self, handle: &impl Manager<R>, filter: F) -> tauri::Result<()>
+    fn emit_filter<F, R: Runtime, H: Emitter<R> + Manager<R>>(
+        &self,
+        handle: &H,
+        filter: F,
+    ) -> tauri::Result<()>
     where
         F: Fn(&EventTarget) -> bool,
         Self: Serialize + Clone,
     {
-        let meta = get_meta!(handle);
-
-        handle.emit_filter(&meta.wrap_with_plugin(Self::NAME), self, filter)
+        handle.emit_filter(
+            &get_meta!(handle).wrap_with_plugin(Self::NAME),
+            self,
+            filter,
+        )
     }
 }
 
