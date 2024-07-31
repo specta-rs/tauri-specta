@@ -13,3 +13,6 @@ serde = "1"
 specta = { workspace = true }
 tauri = { workspace = true }
 tauri-specta = { path = "../../../", features = ["typescript"] }
+
+[dev-dependencies]
+specta-typescript = { workspace = true }

@@ -3210,6 +3210,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "specta",
+ "specta-typescript",
  "tauri",
  "tauri-plugin",
  "tauri-specta",

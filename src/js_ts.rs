@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use specta::{datatype, DataType, TypeMap};
+use specta::{datatype, DataType, FunctionResultVariant, TypeMap};
 use specta_typescript as ts;
 use specta_typescript::ExportError;
 
@@ -109,10 +109,14 @@ fn return_as_result_tuple(expr: &str, as_any: bool) -> String {
     )
 }
 
-pub fn maybe_return_as_result_tuple(expr: &str, typ: Option<&DataType>, as_any: bool) -> String {
+pub fn maybe_return_as_result_tuple(
+    expr: &str,
+    typ: Option<&FunctionResultVariant>,
+    as_any: bool,
+) -> String {
     match typ {
-        // Some(DataType::Result(_)) => return_as_result_tuple(expr, as_any),
-        Some(_) => format!("return {expr};"),
+        Some(FunctionResultVariant::Result(_, _)) => return_as_result_tuple(expr, as_any),
+        Some(FunctionResultVariant::Value(_)) => format!("return {expr};"),
         None => format!("{expr};"),
     }
 }
@@ -149,16 +153,26 @@ pub fn handle_result(
     cfg: &ExportConfig,
 ) -> Result<String, ExportError> {
     Ok(match &function.result() {
-        // Some(DataType::Result(t)) => {
-        //     let (t, e) = t.as_ref();
-
-        //     format!(
-        //         "Result<{}, {}>",
-        //         ts::datatype(&cfg.inner, t, type_map)?,
-        //         ts::datatype(&cfg.inner, e, type_map)?
-        //     )
-        // }
-        Some(t) => ts::datatype(&cfg.inner, t, type_map)?,
+        Some(FunctionResultVariant::Result(t, e)) => {
+            format!(
+                "Result<{}, {}>",
+                ts::datatype(
+                    &cfg.inner,
+                    &FunctionResultVariant::Value(t.clone()),
+                    type_map
+                )?,
+                ts::datatype(
+                    &cfg.inner,
+                    &FunctionResultVariant::Value(e.clone()),
+                    type_map
+                )?
+            )
+        }
+        Some(FunctionResultVariant::Value(t)) => ts::datatype(
+            &cfg.inner,
+            &FunctionResultVariant::Value(t.clone()),
+            type_map,
+        )?,
         None => "void".to_string(),
     })
 }
@@ -208,7 +222,11 @@ pub fn events_types(
         .map(|event| {
             let name_camel = event.name.to_lower_camel_case();
 
-            let typ = ts::datatype(&cfg.inner, &event.typ, type_map)?;
+            let typ = ts::datatype(
+                &cfg.inner,
+                &FunctionResultVariant::Value(event.typ.clone()),
+                type_map,
+            )?;
 
             Ok(format!(r#"{name_camel}: {typ}"#))
         })

@@ -4,7 +4,7 @@ use crate::{
 };
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use specta::datatype;
+use specta::{datatype, FunctionResultVariant};
 use specta_typescript as ts;
 use specta_typescript::{js_doc, ExportError};
 use tauri::Runtime;
@@ -41,8 +41,12 @@ impl ExportLanguage for Language {
                 let arg_defs = function
                     .args()
                     .map(|(name, typ)| {
-                        ts::datatype(&cfg.inner, typ, type_map)
-                            .map(|ty| format!("{}: {}", unraw(name).to_lower_camel_case(), ty))
+                        ts::datatype(
+                            &cfg.inner,
+                            &FunctionResultVariant::Value(typ.clone()),
+                            type_map,
+                        )
+                        .map(|ty| format!("{}: {}", unraw(name).to_lower_camel_case(), ty))
                     })
                     .collect::<Result<Vec<_>, _>>()?;
 
