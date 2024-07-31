@@ -429,6 +429,10 @@ where
         let commands = export_fn(&mut type_map);
 
         types.collect(&mut type_map);
+        // TODO: This is required for channels to work correctly.
+        // This should be unfeature gated once the upstream fix is merged: https://github.com/tauri-apps/tauri/pull/10435
+        #[cfg(feature = "UNSTABLE_channels")]
+        type_map.remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
 
         let rendered = TLang::render(&commands, &events, &type_map, &statics, &config)?;
 

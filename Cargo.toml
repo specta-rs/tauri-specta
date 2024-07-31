@@ -21,6 +21,9 @@ rustdoc-args = ["--cfg", "docsrs"]
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
 
+# TODO: https://github.com/tauri-apps/tauri/pull/10435
+UNSTABLE_channels = []
+
 [dependencies]
 # Public
 specta = { workspace = true, features = ["function"] }
@@ -38,10 +41,10 @@ indoc = "2.0.5"
 
 [workspace]
 members = [
-    "examples/app/src-tauri",
-    "examples/custom-plugin/app/src-tauri",
-    "examples/custom-plugin/plugin",
-    "macros",
+  "examples/app/src-tauri",
+  "examples/custom-plugin/app/src-tauri",
+  "examples/custom-plugin/plugin",
+  "macros",
 ]
 
 [workspace.dependencies]
@@ -51,6 +54,9 @@ specta-util = { version = "0.0.3" }
 specta-typescript = { version = "0.0.3" }
 
 [patch.crates-io]
+# tauri = { git = "https://github.com/oscartbeaumont/tauri.git", branch = "fix-channel-specta-remote-impl" }
+# tauri-build = { git = "https://github.com/oscartbeaumont/tauri.git", branch = "fix-channel-specta-remote-impl" }
+
 specta = { path = "../specta/specta" }
 specta-util = { path = "../specta/specta-util" }
 specta-typescript = { path = "../specta/specta-typescript" }
