@@ -55,7 +55,7 @@ mod test {
         specta_builder!()
             .path("./bindings.ts")
             .config(
-                specta_typescript::ExportConfig::default()
+                specta_typescript::Typescript::default()
                     .formatter(specta_typescript::formatter::prettier),
             )
             .export_for_plugin(PLUGIN_NAME)

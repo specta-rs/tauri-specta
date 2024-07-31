@@ -122,7 +122,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use specta::{datatype, NamedDataType, SpectaID, TypeMap};
+use specta::{datatype, datatype::NamedDataType, SpectaID, TypeMap};
 use specta_util::TypeCollection;
 
 use tauri::{ipc::Invoke, Manager, Runtime};

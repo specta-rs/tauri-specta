@@ -131,7 +131,7 @@ fn main() {
             .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
             .types(TypeCollection::default().register::<Custom>())
             .config(
-                specta_typescript::ExportConfig::default()
+                specta_typescript::Typescript::default()
                     .formatter(specta_typescript::formatter::prettier),
             )
             .types(TypeCollection::default().register::<Testing>())

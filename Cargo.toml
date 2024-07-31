@@ -18,6 +18,7 @@ rustc-args = ["--cfg", "docsrs"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
+default = []
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
 
@@ -57,6 +58,6 @@ specta-typescript = { version = "0.0.3" }
 # tauri = { git = "https://github.com/oscartbeaumont/tauri.git", branch = "fix-channel-specta-remote-impl" }
 # tauri-build = { git = "https://github.com/oscartbeaumont/tauri.git", branch = "fix-channel-specta-remote-impl" }
 
-specta = { path = "../specta/specta" }
-specta-util = { path = "../specta/specta-util" }
-specta-typescript = { path = "../specta/specta-typescript" }
+specta = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
+specta-util = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
+specta-typescript = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }

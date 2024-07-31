@@ -1,7 +1,7 @@
 use crate::{js_ts, *};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use specta::{datatype, FunctionResultVariant};
+use specta::{datatype, datatype::FunctionResultVariant};
 use specta_typescript as ts;
 use specta_typescript::{js_doc, ExportError};
 use tauri::Runtime;
@@ -15,7 +15,7 @@ pub fn builder<TRuntime: Runtime>() -> Builder<Language, NoCommands<TRuntime>, N
 
 pub const GLOBALS: &str = include_str!("./globals.ts");
 
-type Config = specta_typescript::ExportConfig;
+type Config = specta_typescript::Typescript;
 pub type ExportConfig = crate::ExportConfig<Config>;
 
 impl ExportLanguage for Language {
