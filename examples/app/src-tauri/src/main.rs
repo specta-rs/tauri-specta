@@ -4,7 +4,8 @@
 )]
 
 use serde::{Deserialize, Serialize};
-use specta::{Type, TypeCollection};
+use specta::Type;
+use specta_util::TypeCollection;
 use tauri_specta::*;
 use thiserror::Error;
 
@@ -129,7 +130,10 @@ fn main() {
             ])
             .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
             .types(TypeCollection::default().register::<Custom>())
-            .config(specta::ts::ExportConfig::default().formatter(specta::ts::formatter::prettier))
+            .config(
+                specta_typescript::ExportConfig::default()
+                    .formatter(specta_typescript::formatter::prettier),
+            )
             .types(TypeCollection::default().register::<Testing>())
             .statics(StaticCollection::default().register("universalConstant", 42))
             .header("/* These are my Tauri Specta Bindings! */");

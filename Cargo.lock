@@ -487,7 +487,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13b588ba4ac1a99f7f2964d24b3d896ddc6bf847ee3855dbd4366f058cfcd331"
 dependencies = [
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -497,7 +497,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edb49164822f3ee45b17acd4a208cfc1251410cf0cad9a833234c9890774dd9f"
 dependencies = [
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -521,7 +521,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -532,7 +532,7 @@ checksum = "836a9bbc7ad63342d6d6e7b815ccab164bc77a2d95d84bc3117a8c0d5c98e2d5"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -577,16 +577,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dirs-next"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b98cf8ebf19c3d1b223e151f99a4f9f0690dca41414773390fc824184ac833e1"
-dependencies = [
- "cfg-if",
- "dirs-sys-next",
-]
-
-[[package]]
 name = "dirs-sys"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -596,17 +586,6 @@ dependencies = [
  "option-ext",
  "redox_users",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "dirs-sys-next"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ebda144c4fe02d1f7ea1a7d9641b6fc6b580adcfa024ae48797ecdeb6825b4d"
-dependencies = [
- "libc",
- "redox_users",
- "winapi",
 ]
 
 [[package]]
@@ -644,7 +623,7 @@ checksum = "f2b99bf03862d7f545ebc28ddd33a665b50865f4dfd84031a393823879bd4c54"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -709,6 +688,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
+name = "erased-serde"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24e2389d65ab4fab27dc2a5de7b191e1f6617d1f1c8855c0dc569c94a4cbb18d"
+dependencies = [
+ "serde",
+ "typeid",
+]
+
+[[package]]
 name = "fdeflate"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -761,7 +750,7 @@ checksum = "1a5c6c585bc94aaf2c7b51dd4c2ba22680844aba4c687be581871a6f518c5742"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -829,7 +818,7 @@ checksum = "89ca545a94061b6365f2c7355b4b32bd20df3ff95f02da9329b34ccc3bd6ee72"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -1096,7 +1085,7 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -1175,7 +1164,7 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -2032,7 +2021,7 @@ dependencies = [
  "phf_shared 0.11.2",
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -2079,7 +2068,7 @@ checksum = "2f38a4412a78282e09a2cf38d195ea5420d15ba0602cb375210efbc877243965"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -2191,9 +2180,9 @@ checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.81"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d1597b0c024618f09a9c3b8655b7e430397a36d23fdafec26d6965e9eec3eba"
+checksum = "5e719e8df665df0d1c8fbfd238015744736151d4445ec0836b8e628aae103b77"
 dependencies = [
  "unicode-ident",
 ]
@@ -2493,7 +2482,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde_derive_internals",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -2539,22 +2528,33 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.199"
+version = "1.0.204"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c9f6e76df036c77cd94996771fb40db98187f096dd0b9af39c6c6e452ba966a"
+checksum = "bc76f558e0cbb2a839d37354c575f1dc3fdc6546b5be373ba43d95f231bf7c12"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
-name = "serde_derive"
-version = "1.0.199"
+name = "serde-untagged"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11bd257a6541e141e42ca6d24ae26f7714887b47e89aa739099104c7e4d3b7fc"
+checksum = "2676ba99bd82f75cae5cbd2c8eda6fa0b8760f18978ea840e980dd5567b5c5b6"
+dependencies = [
+ "erased-serde",
+ "serde",
+ "typeid",
+]
+
+[[package]]
+name = "serde_derive"
+version = "1.0.204"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0cd7e117be63d3c3678776753929474f3b04a43a080c744d6b0ae2a8c28e222"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -2565,7 +2565,7 @@ checksum = "330f01ce65a3a5fe59a60c82f3c9a024b573b8a6e875bd233fe5f934e71d54e3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -2587,7 +2587,7 @@ checksum = "8725e1dfadb3a50f7e5ce0b1a540466f6ed3fe7a0fca2ac2b8b831d31316bd00"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -2637,7 +2637,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -2779,27 +2779,47 @@ dependencies = [
 
 [[package]]
 name = "specta"
-version = "2.0.0-rc.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ebf48e468c721a5c988aaad26f671d749a2831cf92ef3fcc89b3ac033392c62"
+version = "2.0.0-rc.16"
 dependencies = [
- "once_cell",
  "paste",
- "serde",
  "specta-macros",
  "thiserror",
 ]
 
 [[package]]
 name = "specta-macros"
-version = "2.0.0-rc.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dbb681fb9262be852c614fd7633b46081131fc63b445345b2d8f870ec751ac8"
+version = "2.0.0-rc.16"
 dependencies = [
  "Inflector",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.72",
+]
+
+[[package]]
+name = "specta-serde"
+version = "0.0.3"
+dependencies = [
+ "specta",
+ "thiserror",
+]
+
+[[package]]
+name = "specta-typescript"
+version = "0.0.3"
+dependencies = [
+ "specta",
+ "specta-serde",
+ "thiserror",
+]
+
+[[package]]
+name = "specta-util"
+version = "0.0.3"
+dependencies = [
+ "serde",
+ "serde_json",
+ "specta",
 ]
 
 [[package]]
@@ -2873,9 +2893,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.60"
+version = "2.0.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "909518bc7b1c9b779f1bbf07f2929d35af9f0f37e47c6e9ef7f9dddc1e1821f3"
+checksum = "dc4b9b9bf2add8093d3f2c0204471e951b2285580335de42f9d2534f3ae7a8af"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2912,9 +2932,9 @@ dependencies = [
 
 [[package]]
 name = "tao"
-version = "0.28.0"
+version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12a8121bd5721ebbbe0889f8286d5824673beeb04071519b68916fbed04f3093"
+checksum = "ea538df05fbc2dcbbd740ba0cfe8607688535f4798d213cbbfa13ce494f3451f"
 dependencies = [
  "bitflags 2.4.0",
  "cocoa",
@@ -2943,7 +2963,7 @@ dependencies = [
  "tao-macros",
  "unicode-segmentation",
  "url",
- "windows 0.56.0",
+ "windows 0.57.0",
  "windows-core",
  "windows-version",
  "x11-dl",
@@ -2968,8 +2988,9 @@ checksum = "9d0e916b1148c8e263850e1ebcbd046f333e0683c724876bb0da63ea4373dc8a"
 
 [[package]]
 name = "tauri"
-version = "2.0.0-beta.22"
-source = "git+https://github.com/brendonovich/tauri?branch=generic-channel#92506f2e3c9c839d91a9dad6300c053ed440e12c"
+version = "2.0.0-beta.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4339c67eb7700fe4a80ad6507e3b9af0b4159959f3d74aae48feed298baf4cbf"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2999,11 +3020,11 @@ dependencies = [
  "specta",
  "state",
  "swift-rs",
- "tauri-build 2.0.0-beta.17 (git+https://github.com/brendonovich/tauri?branch=generic-channel)",
+ "tauri-build",
  "tauri-macros",
  "tauri-runtime",
  "tauri-runtime-wry",
- "tauri-utils 2.0.0-beta.17 (git+https://github.com/brendonovich/tauri?branch=generic-channel)",
+ "tauri-utils",
  "thiserror",
  "tokio",
  "tray-icon",
@@ -3012,35 +3033,14 @@ dependencies = [
  "webkit2gtk",
  "webview2-com",
  "window-vibrancy",
- "windows 0.56.0",
+ "windows 0.57.0",
 ]
 
 [[package]]
 name = "tauri-build"
-version = "2.0.0-beta.17"
+version = "2.0.0-beta.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82b964bb6d03d97e24e12f896aab463b02a3c2ff76a60f728cc37b5548eb470e"
-dependencies = [
- "anyhow",
- "cargo_toml",
- "dirs-next",
- "glob",
- "heck 0.5.0",
- "json-patch",
- "schemars",
- "semver",
- "serde",
- "serde_json",
- "tauri-utils 2.0.0-beta.17 (registry+https://github.com/rust-lang/crates.io-index)",
- "tauri-winres",
- "toml 0.8.2",
- "walkdir",
-]
-
-[[package]]
-name = "tauri-build"
-version = "2.0.0-beta.17"
-source = "git+https://github.com/brendonovich/tauri?branch=generic-channel#92506f2e3c9c839d91a9dad6300c053ed440e12c"
+checksum = "498f587026501e4bbc5d6273b63f8956b03c37b3d3b2027f9c756fcd468e9c62"
 dependencies = [
  "anyhow",
  "cargo_toml",
@@ -3052,7 +3052,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "tauri-utils 2.0.0-beta.17 (git+https://github.com/brendonovich/tauri?branch=generic-channel)",
+ "tauri-utils",
  "tauri-winres",
  "toml 0.8.2",
  "walkdir",
@@ -3060,8 +3060,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-codegen"
-version = "2.0.0-beta.17"
-source = "git+https://github.com/brendonovich/tauri?branch=generic-channel#92506f2e3c9c839d91a9dad6300c053ed440e12c"
+version = "2.0.0-beta.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43bbc731067e319ef60601bf5716d1e706ee9ae28e38c0587f7165c7d6824cdf"
 dependencies = [
  "base64 0.22.0",
  "brotli",
@@ -3075,8 +3076,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "syn 2.0.60",
- "tauri-utils 2.0.0-beta.17 (git+https://github.com/brendonovich/tauri?branch=generic-channel)",
+ "syn 2.0.72",
+ "tauri-utils",
  "thiserror",
  "time",
  "url",
@@ -3086,22 +3087,23 @@ dependencies = [
 
 [[package]]
 name = "tauri-macros"
-version = "2.0.0-beta.17"
-source = "git+https://github.com/brendonovich/tauri?branch=generic-channel#92506f2e3c9c839d91a9dad6300c053ed440e12c"
+version = "2.0.0-beta.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36b4a44346577ccde75a24c62405a4c3b4f7a3a76614ee6cf1ed14a0b756795c"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
  "tauri-codegen",
- "tauri-utils 2.0.0-beta.17 (git+https://github.com/brendonovich/tauri?branch=generic-channel)",
+ "tauri-utils",
 ]
 
 [[package]]
 name = "tauri-plugin"
-version = "2.0.0-beta.17"
+version = "2.0.0-beta.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c8385fd0a4f661f5652b0d9e2d7256187d553bb174f88564d10ebcfa6a3af53"
+checksum = "1abe0b85472516d1033ba251ac81b9f18f02725aadcaad697c8b727e6505a6ad"
 dependencies = [
  "anyhow",
  "glob",
@@ -3109,7 +3111,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "tauri-utils 2.0.0-beta.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tauri-utils",
  "toml 0.8.2",
  "walkdir",
 ]
@@ -3139,6 +3141,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "specta",
+ "specta-typescript",
  "tauri",
  "tauri-plugin",
  "tauri-specta",
@@ -3146,8 +3149,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-runtime"
-version = "2.0.0-beta.18"
-source = "git+https://github.com/brendonovich/tauri?branch=generic-channel#92506f2e3c9c839d91a9dad6300c053ed440e12c"
+version = "2.0.0-beta.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "189510033be50f6fde35cfa50b50c7ab4e0ced0c867ae0f643b4907b8385bbe5"
 dependencies = [
  "dpi",
  "gtk",
@@ -3156,16 +3160,17 @@ dependencies = [
  "raw-window-handle 0.6.1",
  "serde",
  "serde_json",
- "tauri-utils 2.0.0-beta.17 (git+https://github.com/brendonovich/tauri?branch=generic-channel)",
+ "tauri-utils",
  "thiserror",
  "url",
- "windows 0.56.0",
+ "windows 0.57.0",
 ]
 
 [[package]]
 name = "tauri-runtime-wry"
-version = "2.0.0-beta.18"
-source = "git+https://github.com/brendonovich/tauri?branch=generic-channel#92506f2e3c9c839d91a9dad6300c053ed440e12c"
+version = "2.0.0-beta.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6938bd63b6658e7b08f0fe2151390148ee5a8ccdba100d4dff961d2c8734d9a9"
 dependencies = [
  "cocoa",
  "gtk",
@@ -3177,11 +3182,11 @@ dependencies = [
  "softbuffer",
  "tao",
  "tauri-runtime",
- "tauri-utils 2.0.0-beta.17 (git+https://github.com/brendonovich/tauri?branch=generic-channel)",
+ "tauri-utils",
  "url",
  "webkit2gtk",
  "webview2-com",
- "windows 0.56.0",
+ "windows 0.57.0",
  "wry",
 ]
 
@@ -3194,6 +3199,8 @@ dependencies = [
  "serde",
  "serde_json",
  "specta",
+ "specta-typescript",
+ "specta-util",
  "tauri",
  "tauri-specta-macros",
  "thiserror",
@@ -3206,8 +3213,10 @@ dependencies = [
  "serde",
  "serde_json",
  "specta",
+ "specta-typescript",
+ "specta-util",
  "tauri",
- "tauri-build 2.0.0-beta.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tauri-build",
  "tauri-plugin-os",
  "tauri-specta",
  "thiserror",
@@ -3220,7 +3229,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tauri",
- "tauri-build 2.0.0-beta.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tauri-build",
  "tauri-plugin-specta-example",
 ]
 
@@ -3231,46 +3240,14 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
 name = "tauri-utils"
-version = "2.0.0-beta.17"
+version = "2.0.0-beta.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f24a9c20d676a3f025331cc1c3841256ba88c9f25fb7fae709d2b3089c50d90"
-dependencies = [
- "cargo_metadata",
- "ctor",
- "dunce",
- "glob",
- "html5ever",
- "infer",
- "json-patch",
- "kuchikiki",
- "log",
- "memchr",
- "phf 0.11.2",
- "proc-macro2",
- "quote",
- "regex",
- "schemars",
- "semver",
- "serde",
- "serde_json",
- "serde_with",
- "swift-rs",
- "thiserror",
- "toml 0.8.2",
- "url",
- "urlpattern",
- "walkdir",
-]
-
-[[package]]
-name = "tauri-utils"
-version = "2.0.0-beta.17"
-source = "git+https://github.com/brendonovich/tauri?branch=generic-channel#92506f2e3c9c839d91a9dad6300c053ed440e12c"
+checksum = "e20e51856f343c503892749b27d34042e6ca83a0369a12de3c5552d9874d04e8"
 dependencies = [
  "brotli",
  "cargo_metadata",
@@ -3290,6 +3267,7 @@ dependencies = [
  "schemars",
  "semver",
  "serde",
+ "serde-untagged",
  "serde_json",
  "serde_with",
  "swift-rs",
@@ -3329,22 +3307,22 @@ checksum = "8eaa81235c7058867fa8c0e7314f33dcce9c215f535d1913822a2b3f5e289f3c"
 
 [[package]]
 name = "thiserror"
-version = "1.0.60"
+version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "579e9083ca58dd9dcf91a9923bb9054071b9ebbd800b342194c9feb0ee89fc18"
+checksum = "c0342370b38b6a11b6cc11d6a805569958d54cfa061a29969c3b5ce2ea405724"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.60"
+version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2470041c06ec3ac1ab38d0356a6119054dedaea53e12fbefc0de730a1c08524"
+checksum = "a4558b58466b9ad7ca0f102865eccc95938dca1a74a856f2b57b6629050da261"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -3538,7 +3516,7 @@ checksum = "5f4f31f56159e98206da9efd823404b79b6ef3143b4a7ab76e67b1751b25a4ab"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -3614,6 +3592,12 @@ name = "try-lock"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
+
+[[package]]
+name = "typeid"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "059d83cc991e7a42fc37bd50941885db0888e34209f8cfd9aab07ddec03bc9cf"
 
 [[package]]
 name = "typenum"
@@ -3819,7 +3803,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
  "wasm-bindgen-shared",
 ]
 
@@ -3853,7 +3837,7 @@ checksum = "54681b18a46765f095758388f2d0cf16eb8d4169b639ab575a8f5693af210c7b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -3944,13 +3928,13 @@ dependencies = [
 
 [[package]]
 name = "webview2-com"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c914dd492a52f0377bef56fd1b6e74a79090f9ee631d625d5b505a00e4538b6"
+checksum = "6516cfa64c6b3212686080eeec378e662c2af54bb2a5b2a22749673f5cb2226f"
 dependencies = [
  "webview2-com-macros",
  "webview2-com-sys",
- "windows 0.56.0",
+ "windows 0.57.0",
  "windows-core",
  "windows-implement",
  "windows-interface",
@@ -3964,17 +3948,17 @@ checksum = "ac1345798ecd8122468840bcdf1b95e5dc6d2206c5e4b0eafa078d061f59c9bc"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
 name = "webview2-com-sys"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a46bcf03482ec28eeb764ca788f67998cde4213adfbbfa90462622058530f5e"
+checksum = "c76d5b77320ff155660be1df3e6588bc85c75f1a9feef938cc4dc4dd60d1d7cf"
 dependencies = [
  "thiserror",
- "windows 0.56.0",
+ "windows 0.57.0",
  "windows-core",
 ]
 
@@ -4033,9 +4017,9 @@ dependencies = [
 
 [[package]]
 name = "windows"
-version = "0.56.0"
+version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1de69df01bdf1ead2f4ac895dc77c9351aefff65b2f3db429a343f9cbf05e132"
+checksum = "12342cb4d8e3b046f3d80effd474a7a02447231330ef77d71daa6fbc40681143"
 dependencies = [
  "windows-core",
  "windows-targets 0.52.5",
@@ -4043,9 +4027,9 @@ dependencies = [
 
 [[package]]
 name = "windows-core"
-version = "0.56.0"
+version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4698e52ed2d08f8658ab0c39512a7c00ee5fe2688c65f8c0a4f06750d729f2a6"
+checksum = "d2ed2439a290666cd67ecce2b0ffaad89c2a56b976b736e6ece670297897832d"
 dependencies = [
  "windows-implement",
  "windows-interface",
@@ -4055,24 +4039,24 @@ dependencies = [
 
 [[package]]
 name = "windows-implement"
-version = "0.56.0"
+version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6fc35f58ecd95a9b71c4f2329b911016e6bec66b3f2e6a4aad86bd2e99e2f9b"
+checksum = "9107ddc059d5b6fbfbffdfa7a7fe3e22a226def0b2608f72e9d552763d3e1ad7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
 name = "windows-interface"
-version = "0.56.0"
+version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08990546bf4edef8f431fa6326e032865f27138718c587dc21bc0265bbcb57cc"
+checksum = "29bee4b38ea3cde66011baa44dba677c432a78593e202392d1e9070cf2a7fca7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.60",
+ "syn 2.0.72",
 ]
 
 [[package]]
@@ -4329,9 +4313,9 @@ dependencies = [
 
 [[package]]
 name = "wry"
-version = "0.40.1"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa597526af53f310a8e6218630c5024fdde8271f229e70d7d2fc70b52b8fb1e"
+checksum = "68b00c945786b02d7805d09a969fa36d0eee4e0bd4fb3ec2a79d2bf45a1b44cd"
 dependencies = [
  "base64 0.22.0",
  "block",
@@ -4363,7 +4347,7 @@ dependencies = [
  "webkit2gtk",
  "webkit2gtk-sys",
  "webview2-com",
- "windows 0.56.0",
+ "windows 0.57.0",
  "windows-core",
  "windows-version",
  "x11-dl",

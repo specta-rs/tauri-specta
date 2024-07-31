@@ -1,7 +1,9 @@
 use crate::*;
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use specta::{function::FunctionDataType, js_doc, ts};
+use specta::{datatype, FunctionResultVariant};
+use specta_typescript as ts;
+use specta_typescript::js_doc;
 use tauri::Runtime;
 
 /// Implements [`ExportLanguage`] for JS exporting
@@ -13,7 +15,7 @@ pub fn builder<TRuntime: Runtime>() -> Builder<Language, NoCommands<TRuntime>, N
 
 pub const GLOBALS: &str = include_str!("./globals.js");
 
-type Config = specta::ts::ExportConfig;
+type Config = specta_typescript::ExportConfig;
 
 pub type ExportConfig = crate::ExportConfig<Config>;
 
@@ -27,7 +29,7 @@ impl ExportLanguage for Language {
 
     /// Renders a collection of [`FunctionDataType`] into a JavaScript string.
     fn render_commands(
-        commands: &[FunctionDataType],
+        commands: &[datatype::Function],
         type_map: &TypeMap,
         cfg: &ExportConfig,
     ) -> Result<String, Self::Error> {
@@ -39,16 +41,21 @@ impl ExportLanguage for Language {
 
                     let mut builder = js_doc::Builder::default();
 
-                    if let Some(d) = &function.deprecated {
+                    if let Some(d) = function.deprecated() {
                         builder.push_deprecated(d);
                     }
 
-                    if !function.docs.is_empty() {
-                        builder.extend(function.docs.split("\n"));
+                    if !function.docs().is_empty() {
+                        builder.extend(function.docs().split("\n"));
                     }
 
-                    builder.extend(function.args.iter().flat_map(|(name, typ)| {
-                        ts::datatype(&cfg.inner, typ, type_map).map(|typ| {
+                    builder.extend(function.args().flat_map(|(name, typ)| {
+                        ts::datatype(
+                            &cfg.inner,
+                            &FunctionResultVariant::Value(typ.clone()),
+                            type_map,
+                        )
+                        .map(|typ| {
                             let name = name.to_lower_camel_case();
 
                             format!("@param {{ {typ} }} {name}")
@@ -61,8 +68,9 @@ impl ExportLanguage for Language {
 
                 Ok(js_ts::function(
                     &jsdoc,
-                    &function.name.to_lower_camel_case(),
-                    &js_ts::arg_names(&function.args),
+                    &function.name().to_lower_camel_case(),
+                    // TODO: Don't `collect` the whole thing
+                    &js_ts::arg_names(&function.args().cloned().collect::<Vec<_>>()),
                     None,
                     &js_ts::command_body(cfg, function, false),
                 ))
@@ -111,7 +119,7 @@ impl ExportLanguage for Language {
     }
 
     fn render(
-        commands: &[FunctionDataType],
+        commands: &[datatype::Function],
         events: &[EventDataType],
         type_map: &TypeMap,
         statics: &StaticCollection,

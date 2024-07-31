@@ -8,7 +8,7 @@ repository = ""
 edition = "2021"
 
 [build-dependencies]
-tauri-build = { version = "2.0.0-beta.17", features = [] }
+tauri-build = { version = "2.0.0-beta.18", features = [] }
 
 [dependencies]
 tauri = { workspace = true, features = [] }
