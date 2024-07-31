@@ -14,26 +14,22 @@ fn add_numbers(a: i32, b: i32) -> i32 {
 #[derive(Clone, serde::Serialize, specta::Type, Event)]
 struct RandomNumber(i32);
 
-// We recommend re-using the builder via a macro rather than function as the builder's
-// generics can be tricky to deal with
-macro_rules! specta_builder {
-    () => {
-        ts::builder()
-            .commands(collect_commands![add_numbers])
-            .events(collect_events![RandomNumber])
-    };
-}
-
 const PLUGIN_NAME: &str = "specta-example";
 
+fn builder<R: Runtime>() -> tauri_specta::Builder2<R> {
+    tauri_specta::Builder2::new()
+        .plugin_name(PLUGIN_NAME)
+        .commands(collect_commands![add_numbers])
+        .events(collect_events![RandomNumber])
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    let (invoke_handler, register_events) =
-        specta_builder!().build_plugin_utils(PLUGIN_NAME).unwrap();
+    let builder = builder();
 
     Builder::new(PLUGIN_NAME)
-        .invoke_handler(invoke_handler)
+        .invoke_handler(builder.invoke_handler())
         .setup(move |app, _| {
-            register_events(app);
+            builder.mount_events(app);
 
             let app = app.clone();
             std::thread::spawn(move || loop {
@@ -52,13 +48,12 @@ mod test {
 
     #[test]
     fn export_types() {
-        specta_builder!()
-            .path("./bindings.ts")
-            .config(
+        builder()
+            .export_ts(
                 specta_typescript::Typescript::default()
-                    .formatter(specta_typescript::formatter::prettier),
+                    .formatter(specta_typescript::formatter::prettier)
+                    .path("./bindings.ts"),
             )
-            .export_for_plugin(PLUGIN_NAME)
             .expect("failed to export specta types");
     }
 }

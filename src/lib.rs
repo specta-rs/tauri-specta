@@ -107,11 +107,12 @@
 //! await commands.greet("Brendan");
 //! ```
 //!
-#![forbid(unsafe_code)]
-#![warn(clippy::all, clippy::unwrap_used, clippy::panic
-	// , missing_docs
-)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![doc(
+    // TODO: Tauri Specta logo
+    html_logo_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png",
+    html_favicon_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png"
+)]
 
 use std::{
     borrow::{Borrow, Cow},
@@ -126,7 +127,17 @@ use specta::{datatype, datatype::NamedDataType, SpectaID, TypeMap};
 use specta_util::TypeCollection;
 
 use tauri::{ipc::Invoke, Manager, Runtime};
+
+#[cfg(feature = "derive")]
+#[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
 pub use tauri_specta_macros::Event;
+
+mod builder;
+#[doc(hidden)]
+pub mod internal;
+mod macros;
+
+pub use builder::Builder as Builder2; // TODO: Rename
 
 /// The exporter for [Javascript](https://www.javascript.com).
 #[cfg(feature = "javascript")]
@@ -153,7 +164,7 @@ const DEFAULT_COLLECT_FN: CollectFunctionsResult = |_| vec![];
 
 pub type CollectCommandsTuple<TInvokeHandler> = (CollectFunctionsResult, TInvokeHandler);
 
-pub use tauri_specta_macros::collect_commands;
+// pub use tauri_specta_macros::collect_commands;
 
 /// A set of functions that produce language-specific code
 pub trait ExportLanguage: 'static {

@@ -2780,7 +2780,6 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "2.0.0-rc.16"
-source = "git+https://github.com/oscartbeaumont/specta.git?rev=cfa98fa10484e55923497f3cc21edf7418667c76#cfa98fa10484e55923497f3cc21edf7418667c76"
 dependencies = [
  "paste",
  "specta-macros",
@@ -2790,7 +2789,6 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.16"
-source = "git+https://github.com/oscartbeaumont/specta.git?rev=cfa98fa10484e55923497f3cc21edf7418667c76#cfa98fa10484e55923497f3cc21edf7418667c76"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -2801,7 +2799,6 @@ dependencies = [
 [[package]]
 name = "specta-serde"
 version = "0.0.3"
-source = "git+https://github.com/oscartbeaumont/specta.git?rev=cfa98fa10484e55923497f3cc21edf7418667c76#cfa98fa10484e55923497f3cc21edf7418667c76"
 dependencies = [
  "specta",
  "thiserror",
@@ -2810,7 +2807,6 @@ dependencies = [
 [[package]]
 name = "specta-typescript"
 version = "0.0.3"
-source = "git+https://github.com/oscartbeaumont/specta.git?rev=cfa98fa10484e55923497f3cc21edf7418667c76#cfa98fa10484e55923497f3cc21edf7418667c76"
 dependencies = [
  "specta",
  "specta-serde",
@@ -2820,7 +2816,6 @@ dependencies = [
 [[package]]
 name = "specta-util"
 version = "0.0.3"
-source = "git+https://github.com/oscartbeaumont/specta.git?rev=cfa98fa10484e55923497f3cc21edf7418667c76#cfa98fa10484e55923497f3cc21edf7418667c76"
 dependencies = [
  "serde",
  "specta",
@@ -3218,7 +3213,6 @@ dependencies = [
  "serde_json",
  "specta",
  "specta-typescript",
- "specta-util",
  "tauri",
  "tauri-build",
  "tauri-plugin-os",

@@ -1,5 +1,3 @@
-mod collect_commands;
-
 use heck::ToKebabCase;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
@@ -18,9 +16,4 @@ pub fn derive_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
     }
     .into()
-}
-
-#[proc_macro]
-pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    collect_commands::proc_macro(input)
 }

@@ -19,6 +19,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
+derive = ["dep:tauri-specta-macros"]
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
 
@@ -30,7 +31,7 @@ UNSTABLE_channels = []
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
 specta-util = { workspace = true }
-tauri-specta-macros = { version = "=2.0.0-rc.5", path = "./macros" }
+tauri-specta-macros = { version = "=2.0.0-rc.5", optional = true, path = "./macros" }
 serde = "1"
 serde_json = "1"
 thiserror = "1"
@@ -48,6 +49,18 @@ members = [
   "macros",
 ]
 
+[workspace.lints.rust]
+unsafe_code = { level = "forbid", priority = -1 }
+missing_docs = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+unwrap_used = { level = "warn", priority = -1 }
+panic = { level = "warn", priority = -1 }
+todo = { level = "warn", priority = -1 }
+panic_in_result_fn = { level = "warn", priority = -1 }
+
 [workspace.dependencies]
 tauri = { version = "=2.0.0-beta.25" }
 specta = { version = "=2.0.0-rc.16" }
@@ -55,9 +68,13 @@ specta-util = { version = "0.0.3" }
 specta-typescript = { version = "0.0.3" }
 
 [patch.crates-io]
-# tauri = { git = "https://github.com/oscartbeaumont/tauri.git", branch = "fix-channel-specta-remote-impl" }
-# tauri-build = { git = "https://github.com/oscartbeaumont/tauri.git", branch = "fix-channel-specta-remote-impl" }
+# tauri = { git = "https://github.com/oscartbeaumont/tauri.git", rev = "ddc64b706a7f2db271d40e9b216187b1aa153efa" }
+# tauri-build = { git = "https://github.com/oscartbeaumont/tauri.git", rev = "ddc64b706a7f2db271d40e9b216187b1aa153efa" }
 
-specta = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
-specta-util = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
-specta-typescript = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
+# specta = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
+# specta-util = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
+# specta-typescript = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
+
+specta = { path = "../specta/specta" }
+specta-util = { path = "../specta/specta-util" }
+specta-typescript = { path = "../specta/specta-typescript" }

@@ -22,7 +22,7 @@ impl EventRegistryMeta {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct EventCollection(pub(crate) BTreeSet<SpectaID>, BTreeSet<&'static str>);
 
 impl EventCollection {
@@ -37,6 +37,7 @@ impl EventCollection {
     }
 }
 
+// TODO: Should this be pub
 #[derive(Default)]
 pub(crate) struct EventRegistry(pub(crate) RwLock<BTreeMap<SpectaID, EventRegistryMeta>>);
 
@@ -193,26 +194,3 @@ pub struct EventDataType {
 
 #[doc(hidden)]
 pub type CollectEventsTuple = (EventCollection, Vec<EventDataType>, specta::TypeMap);
-
-#[macro_export]
-macro_rules! collect_events {
-    ($($event:path),* $(,)?) => {{
-    	let mut collection: $crate::EventCollection = ::core::default::Default::default();
-
-     	$(collection.register::<$event>();)*
-
-      	let mut type_map = Default::default();
-
-      	let event_data_types = [$(
-	       $crate::EventDataType {
-	       		name: <$event as $crate::Event>::NAME,
-	       		typ: <$event as ::specta::Type>::reference(&mut type_map, &[]).inner
-	       }
-       	),*]
-        .into_iter()
-        .collect::<Vec<_>>();
-
-      	let result: $crate::CollectEventsTuple = (collection, event_data_types, type_map);
-        result
-    }};
-}
