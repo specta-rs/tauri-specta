@@ -20,7 +20,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 default = []
 derive = ["dep:tauri-specta-macros"]
-javascript = ["dep:specta-typescript"]
+javascript = ["dep:specta-jsdoc"]
 typescript = ["dep:specta-typescript"]
 
 # TODO: https://github.com/tauri-apps/tauri/pull/10435
@@ -33,6 +33,7 @@ workspace = true
 # Public
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
+specta-jsdoc = { workspace = true, optional = true }
 specta-util = { workspace = true }
 tauri-specta-macros = { version = "=2.0.0-rc.5", optional = true, path = "./macros" }
 serde = "1"
@@ -69,6 +70,7 @@ tauri = { version = "=2.0.0-beta.25" }
 specta = { version = "=2.0.0-rc.16" }
 specta-util = { version = "0.0.3" }
 specta-typescript = { version = "0.0.3" }
+specta-jsdoc = { version = "0.0.3" }
 
 [patch.crates-io]
 # tauri = { git = "https://github.com/oscartbeaumont/tauri.git", rev = "ddc64b706a7f2db271d40e9b216187b1aa153efa" }
@@ -81,3 +83,4 @@ specta-typescript = { version = "0.0.3" }
 specta = { path = "../specta/specta" }
 specta-util = { path = "../specta/specta-util" }
 specta-typescript = { path = "../specta/specta-typescript" }
+specta-jsdoc = { path = "../specta/specta-jsdoc" }

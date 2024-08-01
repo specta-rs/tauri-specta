@@ -38,23 +38,8 @@ macro_rules! collect_commands {
 #[macro_export]
 macro_rules! collect_events {
     ($($event:path),* $(,)?) => {{
-        // TODO: Cleanup the internals of this
-
-    	let mut collection: $crate::EventCollection = ::core::default::Default::default();
-
-     	$(collection.register::<$event>();)*
-
-      	let mut type_map = Default::default();
-
-      	let event_data_types = [$(
-	       $crate::EventDataType {
-	       		name: <$event as $crate::Event>::NAME,
-	       		typ: <$event as ::specta::Type>::reference(&mut type_map, &[]).inner
-	       }
-       	),*]
-        .into_iter()
-        .collect::<Vec<_>>();
-
-        $crate::internal::events(collection, event_data_types, type_map)
+        let mut events: $crate::Events = ::core::default::Default::default();
+        $($crate::internal::register_event::<$event>(&mut events);)*
+        events
     }};
 }

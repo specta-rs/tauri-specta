@@ -16,8 +16,8 @@ struct RandomNumber(i32);
 
 const PLUGIN_NAME: &str = "specta-example";
 
-fn builder<R: Runtime>() -> tauri_specta::Builder2<R> {
-    tauri_specta::Builder2::new()
+fn builder<R: Runtime>() -> tauri_specta::Builder<R> {
+    tauri_specta::Builder::new()
         .plugin_name(PLUGIN_NAME)
         .commands(collect_commands![add_numbers])
         .events(collect_events![RandomNumber])
@@ -48,11 +48,11 @@ mod test {
 
     #[test]
     fn export_types() {
-        builder()
-            .export_ts(
+        builder::<tauri::Wry>()
+            .export(
                 specta_typescript::Typescript::default()
-                    .formatter(specta_typescript::formatter::prettier)
-                    .path("./bindings.ts"),
+                    .formatter(specta_typescript::formatter::prettier),
+                "./bindings.ts",
             )
             .expect("failed to export specta types");
     }

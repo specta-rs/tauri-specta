@@ -1,12 +1,11 @@
-use crate::{js_ts, Configuration, LanguageExt};
+use crate::{lang::js_ts, Configuration, LanguageExt};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
 use specta::datatype::FunctionResultVariant;
 use specta_typescript as ts;
 use specta_typescript::{js_doc, ExportError};
 
-// TODO: Make private
-pub(crate) const GLOBALS: &str = include_str!("./globals.ts");
+const GLOBALS: &str = include_str!("./globals.ts");
 
 impl LanguageExt for specta_typescript::Typescript {
     fn render_commands(&self, cfg: &Configuration) -> Result<String, ExportError> {
@@ -88,6 +87,6 @@ impl LanguageExt for specta_typescript::Typescript {
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
-        js_ts::render_all_parts::<Self>(self, cfg, &dependant_types, GLOBALS)
+        js_ts::render_all_parts::<Self>(self, cfg, &dependant_types, GLOBALS, &self.header)
     }
 }

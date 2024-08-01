@@ -10,6 +10,7 @@
     "esModuleInterop": true,
     "types": ["vite/client"],
     "noEmit": true,
+    "allowJs": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true

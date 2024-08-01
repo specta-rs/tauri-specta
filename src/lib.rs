@@ -114,51 +114,88 @@
     html_favicon_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png"
 )]
 
-use specta::{datatype, Language, TypeMap};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
+use specta::{
+    datatype::{self, DataType},
+    Language, SpectaID, TypeMap,
+};
+
+use tauri::{ipc::Invoke, Runtime};
 #[cfg(feature = "derive")]
 #[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
 pub use tauri_specta_macros::Event;
 
 mod builder;
-#[doc(hidden)]
-pub mod internal;
+mod event;
+mod lang;
 mod macros;
 
 pub use builder::Builder;
-
-/// The exporter for [Javascript](https://www.javascript.com).
-#[cfg(feature = "javascript")]
-#[cfg_attr(docsrs, doc(cfg(feature = "javascript")))]
-pub mod js;
-
-/// The exporter for [TypeScript](https://www.typescriptlang.org).
-#[cfg(feature = "typescript")]
-#[cfg_attr(docsrs, doc(cfg(feature = "typescript")))]
-pub mod ts;
-
-#[cfg(any(feature = "javascript", feature = "typescript"))]
-mod js_ts;
-
-mod event;
+#[allow(unused)]
+pub use lang::*;
 
 // TODO: Probs drop
 pub use event::*;
 
+/// A wrapper around the output of the `collect_commands` macro.
+///
+/// This acts to seal the implementation details of the macro.
+pub struct Commands<R: Runtime>(
+    // Bounds copied from `tauri::Builder::invoke_handler`
+    pub(crate) Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
+    pub(crate) fn(&mut TypeMap) -> Vec<datatype::Function>,
+);
+
+impl<R: Runtime> Default for Commands<R> {
+    fn default() -> Self {
+        Self(
+            Arc::new(tauri::generate_handler![]),
+            ::specta::function::collect_functions![],
+        )
+    }
+}
+
+/// A wrapper around the output of the `collect_commands` macro.
+///
+/// This acts to seal the implementation details of the macro.
+#[derive(Default)]
+pub struct Events(BTreeMap<&'static str, fn(&mut TypeMap) -> (SpectaID, DataType)>);
+
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct Configuration {
-    commands: Vec<datatype::Function>,
-    events: Vec<EventDataType>,
-    type_map: TypeMap,
-    constants: (), // TODO
     plugin_name: Option<&'static str>,
+    commands: Vec<datatype::Function>,
+    events: BTreeMap<&'static str, DataType>,
+    type_map: TypeMap,
+    constants: HashMap<Cow<'static, str>, serde_json::Value>,
 }
+
+impl Configuration {}
 
 pub trait LanguageExt: Language {
     fn render_commands(&self, cfg: &Configuration) -> Result<String, Self::Error>;
     fn render_events(&self, cfg: &Configuration) -> Result<String, Self::Error>;
     fn render(&self, cfg: &Configuration) -> Result<String, Self::Error>;
+}
+
+impl<L: LanguageExt> LanguageExt for &L {
+    fn render_commands(&self, cfg: &Configuration) -> Result<String, Self::Error> {
+        (*self).render_commands(cfg)
+    }
+
+    fn render_events(&self, cfg: &Configuration) -> Result<String, Self::Error> {
+        (*self).render_events(cfg)
+    }
+
+    fn render(&self, cfg: &Configuration) -> Result<String, Self::Error> {
+        (*self).render(cfg)
+    }
 }
 
 // TODO: Remove this
@@ -167,6 +204,7 @@ pub(crate) enum ItemType {
     Command,
 }
 
+// TODO: Move onto `Configuration`
 pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -> String {
     format!(
         "plugin:{}{}{}",
@@ -177,4 +215,38 @@ pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -
         },
         s,
     )
+}
+
+#[doc(hidden)]
+pub mod internal {
+    //! Internal logic for Tauri Specta.
+    //! Nothing in this module has to conform to semver so it should not be used outside of this crate.
+    //! It has to be public so macro's can access it.
+
+    use specta::NamedType;
+
+    use super::*;
+
+    /// called by `collect_commands` to construct `Commands`
+    pub fn command<R: Runtime, F>(
+        f: F,
+        types: fn(&mut TypeMap) -> Vec<datatype::Function>,
+    ) -> Commands<R>
+    where
+        F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
+    {
+        Commands(Arc::new(f), types)
+    }
+
+    /// called by `collect_events` to register events to an `Events`
+    pub fn register_event<E: Event>(Events(events): &mut Events) {
+        if events
+            .insert(E::NAME, |type_map| {
+                (E::sid(), E::reference(type_map, &[]).inner)
+            })
+            .is_some()
+        {
+            panic!("Another event with name {} is already registered!", E::NAME)
+        }
+    }
 }

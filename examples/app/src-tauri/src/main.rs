@@ -133,11 +133,21 @@ fn main() {
 
     #[cfg(debug_assertions)]
     builder
-        .export_ts(
+        .export(
             Typescript::default()
                 .formatter(specta_typescript::formatter::prettier)
-                .header("/* These are my Tauri Specta Bindings! */")
-                .path("../src/bindings.ts"),
+                .header("/* eslint-disable */"),
+            "../src/bindings.ts",
+        )
+        .expect("Failed to export typescript bindings");
+
+    #[cfg(debug_assertions)]
+    builder
+        .export(
+            specta_jsdoc::JSDoc::default()
+                .formatter(specta_typescript::formatter::prettier)
+                .header("/* eslint-disable */"),
+            "../src/bindings-jsdoc.js",
         )
         .expect("Failed to export typescript bindings");
 
