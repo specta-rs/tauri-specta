@@ -1,3 +1,16 @@
+/// Collect commands and their types.
+///
+/// This is a combination of Tauri's [`generate_handler`](tauri::generate_handler) and Specta's [`collect_functions`](specta::function::collect_functions).
+///
+/// This returns a [`Commands`](crate::Commands) struct that can be passed to [`Builder::commands`](crate::Builder::commands).
+///
+/// # Usage
+/// ```rust
+/// collect_commands![];
+/// collect_commands![hello_world];
+/// collect_commands![hello_world, some::path::function, generic_fn::<String>];
+/// ```
+///
 // TODO: Hide it's implementation details from the generated rustdoc.
 #[macro_export]
 macro_rules! collect_commands {
@@ -34,6 +47,17 @@ macro_rules! collect_commands {
     };
 }
 
+/// Collect events and their types.
+///
+/// This returns a [`Events`](crate::Events) struct that can be passed to [`Builder::events`](crate::Builder::events).
+///
+/// # Usage
+/// ```rust
+/// collect_events![];
+/// collect_events![MyEvent];
+/// collect_events![MyEvent, module::MyOtherEvent];
+/// ```
+///
 // TODO: Hide it's implementation details from the generated rustdoc.
 #[macro_export]
 macro_rules! collect_events {

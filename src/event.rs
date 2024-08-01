@@ -32,8 +32,11 @@ impl EventRegistry {
     }
 }
 
+/// A typed event that was emitted.
 pub struct TypedEvent<T: Event> {
+    /// The [`EventId`] of the handler that was triggered.
     pub id: EventId,
+    /// The event payload.
     pub payload: T,
 }
 
@@ -49,6 +52,28 @@ macro_rules! make_handler {
     };
 }
 
+/// Extends your event type with typesafe methods for listening to and emitting events.
+///
+/// You should rely on the [`Event`](macro@crate::Event) derive macro to implement this for you.
+///
+/// # Example
+/// ```rust
+/// use serde::{Serialize, Deserialize};
+/// use specta::Type;
+/// use tauri_specta::Event;
+/// use tauri::AppHandle
+///
+/// #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+/// pub struct MyEvent(String);
+///
+/// fn use_event(app: AppHandle) {
+///     DemoEvent::listen(handle, |event| {
+///         dbg!(event.payload);
+///     });
+///  
+///     DemoEvent("Test".to_string()).emit(handle).ok();
+/// }
+/// ```
 pub trait Event: NamedType {
     const NAME: &'static str;
 

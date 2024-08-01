@@ -2,14 +2,14 @@ use heck::ToLowerCamelCase;
 use specta::datatype::FunctionResultVariant;
 use specta_typescript::js_doc;
 
-use crate::{Configuration, LanguageExt};
+use crate::{ExportContext, LanguageExt};
 
 use super::js_ts;
 
 const GLOBALS: &str = include_str!("./globals.js");
 
 impl LanguageExt for specta_jsdoc::JSDoc {
-    fn render_commands(&self, cfg: &Configuration) -> Result<String, Self::Error> {
+    fn render_commands(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         let commands = cfg
             .commands
             .iter()
@@ -63,7 +63,7 @@ impl LanguageExt for specta_jsdoc::JSDoc {
         ))
     }
 
-    fn render_events(&self, cfg: &Configuration) -> Result<String, Self::Error> {
+    fn render_events(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         if cfg.events.is_empty() {
             return Ok(Default::default());
         }
@@ -92,7 +92,7 @@ export const events = __typedMakeEvents__({{
         })
     }
 
-    fn render(&self, cfg: &Configuration) -> Result<String, Self::Error> {
+    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         let dependant_types = cfg
             .type_map
             .iter()

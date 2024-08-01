@@ -51,6 +51,7 @@ use crate::{Commands, EventRegistry, Events, LanguageExt};
 /// # TODO
 /// ```
 pub struct Builder<R: Runtime = tauri::Wry> {
+    // TODO: Can we just hold a `ExportContext` here to make it a bit neater???
     plugin_name: Option<&'static str>,
     commands: Commands<R>,
     command_types: Vec<Function>,
@@ -92,7 +93,7 @@ impl<R: Runtime> Builder<R> {
 
     /// Register commands with the builder.
     ///
-    /// WARNING: This method will overwrite any previously registered commands.
+    /// **WARNING:** This method will overwrite any previously registered commands.
     pub fn commands(mut self, commands: Commands<R>) -> Self {
         Self {
             command_types: (commands.1)(&mut self.types),
@@ -103,7 +104,7 @@ impl<R: Runtime> Builder<R> {
 
     /// Register events with the builder.
     ///
-    /// WARNING: This method will overwrite any previously registered events.
+    /// **WARNING:** This method will overwrite any previously registered events.
     pub fn events(mut self, events: Events) -> Self {
         let mut event_sids = BTreeSet::new();
         let events = events
@@ -178,7 +179,7 @@ impl<R: Runtime> Builder<R> {
         // TODO: Handle duplicate type names
         // TODO: Serde checking
 
-        language.render(&crate::Configuration {
+        language.render(&crate::ExportContext {
             // TODO: Don't clone stuff
             commands: self.command_types.clone(),
             events: self.events.clone(),

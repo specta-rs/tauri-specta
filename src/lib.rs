@@ -114,6 +114,7 @@
     html_favicon_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png"
 )]
 
+use core::fmt;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
@@ -126,6 +127,10 @@ use specta::{
 };
 
 use tauri::{ipc::Invoke, Runtime};
+/// Implements the [`Event`](trait@crate::Event) trait for a struct.
+///
+/// Refer to the [`Event`](trait@crate::Event) trait for more information.
+///
 #[cfg(feature = "derive")]
 #[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
 pub use tauri_specta_macros::Event;
@@ -136,20 +141,24 @@ mod lang;
 mod macros;
 
 pub use builder::Builder;
-#[allow(unused)]
-pub use lang::*;
-
-// TODO: Probs drop
-pub use event::*;
+pub(crate) use event::EventRegistry;
+pub use event::{Event, TypedEvent};
 
 /// A wrapper around the output of the `collect_commands` macro.
 ///
 /// This acts to seal the implementation details of the macro.
+#[derive(Clone)]
 pub struct Commands<R: Runtime>(
     // Bounds copied from `tauri::Builder::invoke_handler`
     pub(crate) Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
     pub(crate) fn(&mut TypeMap) -> Vec<datatype::Function>,
 );
+
+impl<R: Runtime> fmt::Debug for Commands<R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Commands").finish()
+    }
+}
 
 impl<R: Runtime> Default for Commands<R> {
     fn default() -> Self {
@@ -166,45 +175,47 @@ impl<R: Runtime> Default for Commands<R> {
 #[derive(Default)]
 pub struct Events(BTreeMap<&'static str, fn(&mut TypeMap) -> (SpectaID, DataType)>);
 
+/// The context of what needs to be exported. Used when implementing [`LanguageExt`].
 #[derive(Debug, Clone)]
 #[non_exhaustive]
-pub struct Configuration {
-    plugin_name: Option<&'static str>,
-    commands: Vec<datatype::Function>,
-    events: BTreeMap<&'static str, DataType>,
-    type_map: TypeMap,
-    constants: HashMap<Cow<'static, str>, serde_json::Value>,
+pub struct ExportContext {
+    pub plugin_name: Option<&'static str>,
+    pub commands: Vec<datatype::Function>,
+    pub events: BTreeMap<&'static str, DataType>,
+    pub type_map: TypeMap,
+    pub constants: HashMap<Cow<'static, str>, serde_json::Value>,
 }
 
-impl Configuration {}
-
+/// Implemented for all languages which Tauri Specta supports exporting to.
+///
+/// Currently implemented for:
+///  - [`specta_typescript::Typescript`]
+///  - [`specta_jsdoc::JSDoc`]
 pub trait LanguageExt: Language {
-    fn render_commands(&self, cfg: &Configuration) -> Result<String, Self::Error>;
-    fn render_events(&self, cfg: &Configuration) -> Result<String, Self::Error>;
-    fn render(&self, cfg: &Configuration) -> Result<String, Self::Error>;
+    fn render_commands(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
+    fn render_events(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
+    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
 }
 
 impl<L: LanguageExt> LanguageExt for &L {
-    fn render_commands(&self, cfg: &Configuration) -> Result<String, Self::Error> {
+    fn render_commands(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         (*self).render_commands(cfg)
     }
 
-    fn render_events(&self, cfg: &Configuration) -> Result<String, Self::Error> {
+    fn render_events(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         (*self).render_events(cfg)
     }
 
-    fn render(&self, cfg: &Configuration) -> Result<String, Self::Error> {
+    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         (*self).render(cfg)
     }
 }
 
-// TODO: Remove this
 pub(crate) enum ItemType {
     Event,
     Command,
 }
 
-// TODO: Move onto `Configuration`
 pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -> String {
     format!(
         "plugin:{}{}{}",
@@ -222,8 +233,6 @@ pub mod internal {
     //! Internal logic for Tauri Specta.
     //! Nothing in this module has to conform to semver so it should not be used outside of this crate.
     //! It has to be public so macro's can access it.
-
-    use specta::NamedType;
 
     use super::*;
 
