@@ -156,15 +156,13 @@ fn main() {
         .setup(move |app| {
             builder.mount_events(app);
 
-            let handle = app.handle();
-
-            DemoEvent::listen(handle, |event| {
+            DemoEvent::listen(app, |event| {
                 dbg!(event.payload);
             });
 
-            DemoEvent("Test".to_string()).emit(handle).ok();
+            DemoEvent("Test".to_string()).emit(app).ok();
 
-            EmptyEvent::listen(handle, |_| {
+            EmptyEvent::listen(app, |_| {
                 println!("Got event from frontend!!");
             });
 

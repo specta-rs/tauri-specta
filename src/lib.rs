@@ -1,111 +1,178 @@
-//! Typesafe Tauri commands
+//! Tauri Specta will generate a [Typescript](https://www.typescriptlang.org) or [JSDoc](https://jsdoc.app) file (powered by [Specta](https://docs.rs/specta)) to provide a typesafe interface to your Tauri backend.
 //!
-//! ## Install
+//! ## Installation
 //!
-//! ```bash
-//! cargo add specta
-//! cargo add tauri-specta --features javascript,typescript
+//! <section class="warning">
+//!
+//! Tauri Specta v2 is still in beta, and requires using [Tauri v2](https://beta.tauri.app) and [Specta v2](https://github.com/oscartbeaumont/specta) lands as stable.
+//!
+//! It is really important you use `=` in your versions to ensure your project will not break after future updates!
+//!
+//! </section>
+//!
+//! To get started run the following commands to add the required dependencies to your `Cargo.toml`:
+//!
+//! ```sh
+//! # Always required
+//! cargo add tauri@=2.0.0-beta.25 specta@=2.0.0-rc.16
+//!
+//! # Typescript
+//! cargo add specta-typescript@0.0.3
+//! cargo add tauri-specta@=2.0.0-rc.12 --features derive,typescript
+//!
+//! # JSDoc
+//! cargo add specta-jsdoc@0.0.3
+//! cargo add tauri-specta@=2.0.0-rc.12 --features derive,javascript
 //! ```
 //!
-//! ## Adding Specta to custom types
+//! ## Features
+//!
+//! There are the following optional features which can be enabled:
+//!
+//! - `derive` - Enables the `Event` derive macro. This is only required if your using events.
+//! - `javascript` - Enables the JSDoc exporter.
+//! - `typescript` - Enables the Typescript exporter.
+//!
+//! ## Setup
+//!
+//! The follow is a minimal example of how to setup Tauri Specta with Typescript.
 //!
 //! ```rust
-//! use specta::Type;
+//! #![cfg_attr(
+//!     all(not(debug_assertions), target_os = "windows"),
+//!     windows_subsystem = "windows"
+//! )]
+//!
 //! use serde::{Deserialize, Serialize};
+//! use specta_typescript::Typescript;
+//! use tauri_specta::{collect_commands, Builder};
 //!
-//! // The `specta::Type` macro allows us to understand your types
-//! // We implement `specta::Type` on primitive types for you.
-//! // If you want to use a type from an external crate you may need to enable the feature on Specta.
-//! #[derive(Serialize, Type)]
-//! pub struct MyCustomReturnType {
-//!     pub some_field: String,
+//! #[tauri::command]
+//! #[specta::specta] // < You must annotate your commands
+//! fn hello_world(my_name: String) -> String {
+//!     format!("Hello, {my_name}! You've been greeted from Rust!")
 //! }
 //!
-//! #[derive(Deserialize, Type)]
-//! pub struct MyCustomArgumentType {
-//!     pub foo: String,
-//!     pub bar: i32,
-//! }
-//! ```
-//!
-//! ## Annotate your Tauri commands with Specta
-//!
-//! ```rust
-//! # //! #[derive(Serialize, Type)]
-//! # pub struct MyCustomReturnType {
-//! #    pub some_field: String,
-//! # }
-//! #[tauri::command]
-//! #[specta::specta] // <-- This bit here
-//! fn greet3() -> MyCustomReturnType {
-//!     MyCustomReturnType {
-//!         some_field: "Hello World".into(),
-//!     }
-//! }
-//!
-//! #[tauri::command]
-//! #[specta::specta] // <-- This bit here
-//! fn greet(name: String) -> String {
-//!   format!("Hello {name}!")
-//! }
-//! ```
-//!
-//! ## Export your bindings
-//!
-//! ```rust
-//! #[tauri::command]
-//! #[specta::specta]
-//! fn greet() {}
-//! #[tauri::command]
-//! #[specta::specta]
-//! fn greet2() {}
-//! #[tauri::command]
-//! #[specta::specta]
-//! fn greet3() {}
-
-//! use tauri_specta::*;
-//!
-//! // this example exports your types on startup when in debug mode or in a unit test. You can do whatever.
 //! fn main() {
-//!     #[cfg(debug_assertions)]
-//!		ts::builder()
-//!			.commands(collect_commands![greet, greet2, greet3])
-//!			.path("../src/bindings.ts")
-//!			.export()
-//!			.unwrap();
+//!     let mut builder = Builder::<tauri::Wry>::new()
+//!         // Then register them (separated by a comma)
+//!         .commands(collect_commands![hello_world,]);
 //!
-//!     // or export to JS with JSDoc
-//!     #[cfg(debug_assertions)]
-//!		js::builder()
-//!			.commands(collect_commands![greet, greet2, greet3])
-//!			.path("../src/bindings.js")
-//!			.export()
-//!			.unwrap();
+//!     #[cfg(debug_assertions)] // <- Only export on non-release builds
+//!     builder
+//!         .export(Typescript::default(), "../src/bindings.ts")
+//!         .expect("Failed to export typescript bindings");
+//!
+//!     tauri::Builder::default()
+//!         // and finally tell Tauri how to invoke them
+//!         .invoke_handler(builder.invoke_handler())
+//!         .setup(move |app| {
+//!             // This is also required if you want to use events
+//!             builder.mount_events(app);
+//!             
+//!             Ok(())
+//!         })
+//!         .run(tauri::generate_context!())
+//!         .expect("error while running tauri application");
 //! }
+//! ```
 //!
-//! #[test]
-//! fn export_bindings() {
-//!		ts::builder()
-//!			.commands(collect_commands![greet, greet2, greet3])
-//!			.path("../src/bindings.ts")
-//!			.export()
-//!			.unwrap();
+//! ## Export to JSDoc
 //!
-//!		js::builder()
-//!			.commands(collect_commands![greet, greet2, greet3])
-//!			.path("../src/bindings.js")
-//!			.export()
-//!			.unwrap();
-//! }
+//! If your interested in using JSDoc instead of Typescript you can replace the [`Typescript`](specta_typescript::Typescript) struct with [`JSDoc`](specta_jsdoc::JSDoc) like the following:
+//!
+//! ```rust
+//! #[cfg(debug_assertions)]
+//! builder
+//!     .export(specta_jsdoc::JSDoc::default(), "../src/bindings.js")
+//!     .expect("Failed to export typescript bindings");
 //! ```
 //!
 //! ## Usage on frontend
 //!
-//! ```ts
-//! import { commands } from "./bindings"; // This should point to the file we export from Rust
+//! ```typescript
+//! import { commands, events } from "./bindings"; // This should point to the file we export from Rust
 //!
-//! await commands.greet("Brendan");
+//! console.log(await commands.greet("Brendan"));
 //! ```
+//!
+//! ## Custom types
+//!
+//! Similar to [`serde::Serialize`] you must put the [`specta::Type`] derive macro on your own types to allow Specta to understand your types. For example:
+//! ```rust
+//! use serde::{Serialize, Deserialize};
+//! use specta::Type;
+//!
+//! #[derive(Serialize, Deserialize, Type)]
+//! pub struct MyStruct {
+//!     a: String
+//! }
+//! ```
+//!
+//! ## Events
+//!
+//! You can also make events typesafe by following the following example:
+//!
+//! ```rust
+//! use serde::{Serialize, Deserialize};
+//! use specta::Type;
+//! use tauri_specta::{Builder, collect_commands, collect_events, Event};
+//!
+//! // Add `tauri_specta::Event` to your event
+//! #[derive(Serialize, Deserialize, Debug, Clone, Type, Event)]
+//! pub struct DemoEvent(String);
+//!
+//! fn main() {
+//!     let mut builder = Builder::<tauri::Wry>::new()
+//!         .commands(collect_commands![hello_world,])
+//!         // and then register it to your builder
+//!         .events(collect_events![MyEvent,]);
+//!
+//!     tauri::Builder::default()
+//!         .invoke_handler(builder.invoke_handler())
+//!         .setup(move |app| {
+//!             // Ensure you mount your events!
+//!             builder.mount_events(app);
+//!
+//!             // Now you can use them
+//!
+//!             DemoEvent::listen(app, |event| {
+//!                 println!("{:?}", event.payload);
+//!             });
+//!
+//!             DemoEvent("Test".into()).emit(app).unwrap();
+//!             
+//!             Ok(())
+//!         })
+//!         .run(tauri::generate_context!())
+//!         .expect("error while running tauri application");
+//! }
+//! ```
+//!
+//! and it can be used on the frontend like the following:
+//!
+//! ```ts
+//! import { commands, events } from "./bindings";
+//! import { appWindow } from "@tauri-apps/api/window";
+//!
+//! // For all windows
+//! events.demoEvent.listen((e) => console.log(e));
+//!
+//! // For a single window
+//! events.demoEvent(appWindow).listen((e) => console.log(e));
+//!
+//! // Emit to the backend and all windows
+//! await events.demoEvent.emit("Test")
+//!
+//! // Emit to a window
+//! await events.demoEvent(appWindow).emit("Test")
+//! ```
+//!
+//! Refer to [`Event`] for all the possible methods for listening and emitting events.
+//!
+//! # Channel
+//!
+//! [Coming soon...](https://github.com/oscartbeaumont/tauri-specta/issues/111)
 //!
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
@@ -178,6 +245,7 @@ pub struct Events(BTreeMap<&'static str, fn(&mut TypeMap) -> (SpectaID, DataType
 /// The context of what needs to be exported. Used when implementing [`LanguageExt`].
 #[derive(Debug, Clone)]
 #[non_exhaustive]
+#[allow(missing_docs)]
 pub struct ExportContext {
     pub plugin_name: Option<&'static str>,
     pub commands: Vec<datatype::Function>,
@@ -192,6 +260,7 @@ pub struct ExportContext {
 ///  - [`specta_typescript::Typescript`]
 ///  - [`specta_jsdoc::JSDoc`]
 pub trait LanguageExt: Language {
+    /// render the bindings file
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
 }
 

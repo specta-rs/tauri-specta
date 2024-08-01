@@ -56,6 +56,14 @@ macro_rules! make_handler {
 ///
 /// You should rely on the [`Event`](macro@crate::Event) derive macro to implement this for you.
 ///
+/// Be aware most methods take anything that implements [`Manager`](tauri::Manager) so you can can scope the message using all of the following Tauri types:
+///  - [`App`](https://docs.rs/tauri/2.0.0-beta.16/tauri/struct.App.html)
+///  - [`AppHandle`](https://docs.rs/tauri/2.0.0-beta.16/tauri/struct.AppHandle.html)
+///  - [`Webview`](https://docs.rs/tauri/2.0.0-beta.16/tauri/webview/struct.Webview.html)
+///  - [`WebviewWindow`](https://docs.rs/tauri/2.0.0-beta.16/tauri/webview/struct.WebviewWindow.html)
+///  - [`Window`](https://docs.rs/tauri/2.0.0-beta.16/tauri/window/struct.Window.html)
+///
+///
 /// # Example
 /// ```rust
 /// use serde::{Serialize, Deserialize};
@@ -75,8 +83,10 @@ macro_rules! make_handler {
 /// }
 /// ```
 pub trait Event: NamedType {
+    /// The unique name for this event. Derived from the struct's name via the [`Event`](macro@crate::Event) derive macro.
     const NAME: &'static str;
 
+    /// Listen to an emitted event on this manager.
     fn listen<F, R: Runtime, H: Listener<R> + Manager<R>>(handle: &H, handler: F) -> EventId
     where
         F: Fn(TypedEvent<Self>) + Send + 'static,
@@ -88,6 +98,7 @@ pub trait Event: NamedType {
         )
     }
 
+    /// Listen to an emitted event to any [target](EventTarget).
     fn listen_any<F, R: Runtime, H: Listener<R> + Manager<R>>(handle: &H, handler: F) -> EventId
     where
         F: Fn(TypedEvent<Self>) + Send + 'static,
@@ -99,6 +110,7 @@ pub trait Event: NamedType {
         )
     }
 
+    /// Listen to an event on this manager only once.
     fn once<F, R: Runtime, H: Listener<R> + Manager<R>>(handle: &H, handler: F) -> EventId
     where
         F: Fn(TypedEvent<Self>) + Send + 'static,
@@ -110,6 +122,9 @@ pub trait Event: NamedType {
         )
     }
 
+    /// Listens once to an emitted event to any [target](EventTarget) .
+    ///
+    /// See [`Self::listen_any`] for more information.
     fn once_any<F, R: Runtime, H: Listener<R> + Manager<R>>(handle: &H, handler: F) -> EventId
     where
         F: FnOnce(TypedEvent<Self>) + Send + 'static,
@@ -121,6 +136,7 @@ pub trait Event: NamedType {
         )
     }
 
+    /// Emits an event to all [targets](EventTarget) matching the given target.
     fn emit<R: Runtime, H: Emitter<R> + Manager<R>>(&self, handle: &H) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
@@ -131,6 +147,7 @@ pub trait Event: NamedType {
         )
     }
 
+    /// Emits an event to all [targets](EventTarget) matching the given target.
     fn emit_to<R: Runtime, H: Emitter<R> + Manager<R>>(
         &self,
         handle: &H,
@@ -146,6 +163,7 @@ pub trait Event: NamedType {
         )
     }
 
+    /// Emits an event to all [targets](EventTarget) based on the given filter.
     fn emit_filter<F, R: Runtime, H: Emitter<R> + Manager<R>>(
         &self,
         handle: &H,
