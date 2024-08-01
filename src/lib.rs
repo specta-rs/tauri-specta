@@ -114,8 +114,6 @@
     html_favicon_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png"
 )]
 
-use std::{borrow::Cow, error, fmt, path::PathBuf};
-
 use specta::{datatype, Language, TypeMap};
 
 #[cfg(feature = "derive")]
@@ -143,11 +141,9 @@ pub mod ts;
 mod js_ts;
 
 mod event;
-mod statics;
 
 // TODO: Probs drop
 pub use event::*;
-pub use statics::StaticCollection;
 
 pub trait LanguageExt: Language {
     fn render_commands(
@@ -169,7 +165,6 @@ pub trait LanguageExt: Language {
         commands: &[datatype::Function],
         events: &[EventDataType],
         type_map: &TypeMap,
-        statics: &StaticCollection,
         plugin_name: &Option<&'static str>,
     ) -> Result<String, Self::Error>;
 }

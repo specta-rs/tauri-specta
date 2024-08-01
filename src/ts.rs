@@ -90,7 +90,6 @@ impl LanguageExt for specta_typescript::Typescript {
         commands: &[datatype::Function],
         events: &[EventDataType],
         type_map: &TypeMap,
-        statics: &StaticCollection,
         plugin_name: &Option<&'static str>,
     ) -> Result<String, ExportError> {
         let dependant_types = type_map
@@ -103,7 +102,6 @@ impl LanguageExt for specta_typescript::Typescript {
             commands,
             events,
             type_map,
-            statics,
             self,
             plugin_name,
             &dependant_types,

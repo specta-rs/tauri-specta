@@ -139,7 +139,6 @@ impl<R: Runtime> Builder<R> {
                 &commands,
                 &self.events.1,
                 &self.types,
-                &Default::default(), // TODO: fix statics
                 &language,
                 &self.plugin_name,
                 &dependant_types,
