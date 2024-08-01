@@ -116,7 +116,7 @@
 
 use std::{borrow::Cow, error, fmt, path::PathBuf};
 
-use specta::{datatype, TypeMap};
+use specta::{datatype, Language, TypeMap};
 
 #[cfg(feature = "derive")]
 #[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
@@ -127,7 +127,7 @@ mod builder;
 pub mod internal;
 mod macros;
 
-pub use builder::Builder; // TODO: Rename
+pub use builder::Builder;
 
 /// The exporter for [Javascript](https://www.javascript.com).
 #[cfg(feature = "javascript")]
@@ -149,36 +149,32 @@ mod statics;
 pub use event::*;
 pub use statics::StaticCollection;
 
-/// A set of functions that produce language-specific code
-pub trait ExportLanguage: 'static {
-    type Config: Default + Clone; // TODO: Remove
-    type Error: fmt::Debug + error::Error + From<std::io::Error>; // TODO: Review if this `From<std::io::Error>` should be removed before stabilisation
-
-    fn run_format(path: PathBuf, cfg: &ExportConfig<Self::Config>);
-
-    fn render_events(
-        events: &[EventDataType],
-        type_map: &TypeMap,
-        cfg: &ExportConfig<Self::Config>,
-    ) -> Result<String, Self::Error>;
-
-    /// Renders a collection of [`FunctionDataType`] into a string.
+pub trait LanguageExt: Language {
     fn render_commands(
+        &self,
         commands: &[datatype::Function],
         type_map: &TypeMap,
-        cfg: &ExportConfig<Self::Config>,
+        plugin_name: &Option<&'static str>,
     ) -> Result<String, Self::Error>;
 
-    /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
+    fn render_events(
+        &self,
+        events: &[EventDataType],
+        type_map: &TypeMap,
+        plugin_name: &Option<&'static str>,
+    ) -> Result<String, Self::Error>;
+
     fn render(
+        &self,
         commands: &[datatype::Function],
         events: &[EventDataType],
         type_map: &TypeMap,
         statics: &StaticCollection,
-        cfg: &ExportConfig<Self::Config>,
+        plugin_name: &Option<&'static str>,
     ) -> Result<String, Self::Error>;
 }
 
+// TODO: Remove
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct PluginName(&'static str);
 
@@ -205,25 +201,37 @@ impl PluginName {
     }
 }
 
-/// The configuration for the generator
-#[derive(Default, Clone)]
-pub struct ExportConfig<TConfig> {
-    /// The name of the plugin to invoke.
-    ///
-    /// If there is no plugin name (i.e. this is an app), this should be `None`.
-    pub(crate) plugin_name: Option<PluginName>,
-    /// The specta export configuration
-    pub(crate) inner: TConfig,
-    pub(crate) path: Option<PathBuf>,
-    pub(crate) header: Cow<'static, str>,
+pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -> String {
+    format!(
+        "plugin:{}{}{}",
+        plugin_name,
+        match item_type {
+            ItemType::Event => ":",
+            ItemType::Command => "|",
+        },
+        s,
+    )
 }
 
-impl<TConfig: Default> ExportConfig<TConfig> {
-    /// Creates a new [`ExportConfiguration`] from a [`specta::ts::ExportConfiguration`]
-    pub fn new(config: TConfig) -> Self {
-        Self {
-            inner: config,
-            ..Default::default()
-        }
-    }
-}
+// // TODO: Remove
+// #[derive(Default, Clone)]
+// pub struct ExportConfig<TConfig> {
+//     /// The name of the plugin to invoke.
+//     ///
+//     /// If there is no plugin name (i.e. this is an app), this should be `None`.
+//     pub(crate) plugin_name: Option<PluginName>,
+//     /// The specta export configuration
+//     pub(crate) inner: TConfig,
+//     pub(crate) path: Option<PathBuf>,
+//     pub(crate) header: Cow<'static, str>,
+// }
+
+// impl<TConfig: Default> ExportConfig<TConfig> {
+//     /// Creates a new [`ExportConfiguration`] from a [`specta::ts::ExportConfiguration`]
+//     pub fn new(config: TConfig) -> Self {
+//         Self {
+//             inner: config,
+//             ..Default::default()
+//         }
+//     }
+// }

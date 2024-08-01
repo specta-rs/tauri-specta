@@ -5,24 +5,16 @@ use specta::{datatype, datatype::FunctionResultVariant};
 use specta_typescript as ts;
 use specta_typescript::{js_doc, ExportError};
 
-const GLOBALS: &str = include_str!("./globals.ts");
+// TODO: Make private
+pub(crate) const GLOBALS: &str = include_str!("./globals.ts");
 
-type Config = specta_typescript::Typescript;
-pub type ExportConfig = crate::ExportConfig<Config>;
-
-impl ExportLanguage for specta_typescript::Typescript {
-    type Config = Config;
-    type Error = ts::ExportError;
-
-    fn run_format(path: PathBuf, cfg: &ExportConfig) {
-        cfg.inner.run_format(path).ok();
-    }
-
+impl LanguageExt for specta_typescript::Typescript {
     /// Renders a collection of [`FunctionDataType`] into a TypeScript string.
     fn render_commands(
+        &self,
         commands: &[datatype::Function],
         type_map: &TypeMap,
-        cfg: &ExportConfig,
+        plugin_name: &Option<&'static str>,
     ) -> Result<String, ExportError> {
         let commands = commands
             .iter()
@@ -30,16 +22,12 @@ impl ExportLanguage for specta_typescript::Typescript {
                 let arg_defs = function
                     .args()
                     .map(|(name, typ)| {
-                        ts::datatype(
-                            &cfg.inner,
-                            &FunctionResultVariant::Value(typ.clone()),
-                            type_map,
-                        )
-                        .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
+                        ts::datatype(self, &FunctionResultVariant::Value(typ.clone()), type_map)
+                            .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
                     })
                     .collect::<Result<Vec<_>, _>>()?;
 
-                let ret_type = js_ts::handle_result(function, type_map, cfg)?;
+                let ret_type = js_ts::handle_result(function, type_map, self)?;
 
                 let docs = {
                     let mut builder = js_doc::Builder::default();
@@ -59,7 +47,7 @@ impl ExportLanguage for specta_typescript::Typescript {
                     &function.name().to_lower_camel_case(),
                     &arg_defs,
                     Some(&ret_type),
-                    &js_ts::command_body(cfg, function, true),
+                    &js_ts::command_body(plugin_name, function, true),
                 ))
             })
             .collect::<Result<Vec<_>, ExportError>>()?
@@ -74,15 +62,16 @@ impl ExportLanguage for specta_typescript::Typescript {
     }
 
     fn render_events(
+        &self,
         events: &[EventDataType],
         type_map: &TypeMap,
-        cfg: &ExportConfig,
+        plugin_name: &Option<&'static str>,
     ) -> Result<String, ExportError> {
         if events.is_empty() {
             return Ok(Default::default());
         }
 
-        let (events_types, events_map) = js_ts::events_data(events, cfg, type_map)?;
+        let (events_types, events_map) = js_ts::events_data(events, self, plugin_name, type_map)?;
 
         let events_types = events_types.join(",\n");
 
@@ -97,15 +86,16 @@ impl ExportLanguage for specta_typescript::Typescript {
     }
 
     fn render(
+        &self,
         commands: &[datatype::Function],
         events: &[EventDataType],
         type_map: &TypeMap,
         statics: &StaticCollection,
-        cfg: &ExportConfig,
+        plugin_name: &Option<&'static str>,
     ) -> Result<String, ExportError> {
         let dependant_types = type_map
             .iter()
-            .map(|(_sid, ndt)| ts::export_named_datatype(&cfg.inner, ndt, type_map))
+            .map(|(_sid, ndt)| ts::export_named_datatype(&self, ndt, type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
@@ -114,7 +104,8 @@ impl ExportLanguage for specta_typescript::Typescript {
             events,
             type_map,
             statics,
-            cfg,
+            self,
+            plugin_name,
             &dependant_types,
             GLOBALS,
         )

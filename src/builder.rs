@@ -135,32 +135,26 @@ impl<R: Runtime> Builder<R> {
                 .collect::<Result<Vec<_>, _>>()
                 .map(|v| v.join("\n"))?;
 
-            let cfg = crate::ExportConfig {
-                plugin_name: self.plugin_name.map(PluginName),
-                path: language.path.clone(),
-                header: language.header.clone(),
-                inner: language.clone(),
-            };
-
             let rendered = crate::js_ts::render_all_parts::<specta_typescript::Typescript>(
                 &commands,
                 &self.events.1,
                 &self.types,
                 &Default::default(), // TODO: fix statics
-                &cfg,
+                &language,
+                &self.plugin_name,
                 &dependant_types,
                 crate::ts::GLOBALS,
             )?;
 
-            write!(file, "{}", format!("{}\n{rendered}", cfg.inner.header))?;
+            write!(file, "{}", format!("{}\n{rendered}", language.header))?;
 
-            cfg.inner.run_format(path.clone()).ok();
+            language.run_format(path.clone()).ok();
         }
 
         Ok(())
     }
 
     pub fn export_js_doc(&self, language: Typescript) {
-        // TODO
+        todo!();
     }
 }
