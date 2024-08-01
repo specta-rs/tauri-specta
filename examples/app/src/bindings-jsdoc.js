@@ -4,7 +4,7 @@
 /** user-defined commands **/
 
 export const commands = {
-    /**
+        /**
  * HELLO
  * WORLD
  * !!!!
@@ -30,6 +30,18 @@ async hasError()  {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  };
 }
+},
+/**
+ * @returns { Promise<MyStruct> }
+ */
+async someStruct()  {
+    return await TAURI_INVOKE("some_struct");
+},
+/**
+ * @returns { Promise<void> }
+ */
+async generic()  {
+    await TAURI_INVOKE("generic");
 },
 /**
  * @deprecated This is a deprecated function
@@ -60,24 +72,24 @@ async typesafeErrorsUsingThiserrorWithValue()  {
     else return { status: "error", error: e  };
 }
 }
-}
+    }
 
 /** user-defined events **/
 
 
-/**
+    /**
  * @type {typeof __makeEvents__<{
  * demoEvent: DemoEvent
  * emptyEvent: EmptyEvent
  * }>}
  */
 
-const __typedMakeEvents__ = __makeEvents__;
+    const __typedMakeEvents__ = __makeEvents__;
 
-export const events = __typedMakeEvents__({
-demoEvent: "demo-event",
+    export const events = __typedMakeEvents__({
+    demoEvent: "demo-event",
 emptyEvent: "empty-event"
-})
+    })
 
 /** user-defined constants **/
 
@@ -103,6 +115,10 @@ export const universalConstant = 42;
 
 /**
  * @typedef { { type: "IoError"; data: string } } MyError2
+ */
+
+/**
+ * @typedef { { some_field: string } } MyStruct
  */
 
 

@@ -72,7 +72,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                 &js_ts::command_body(&cfg.plugin_name, function, false),
             ))
         })
-        .collect::<Result<Vec<_>, _>>()?
+        .collect::<Result<Vec<_>, ExportError>>()?
         .join(",\n");
 
     Ok(format!(

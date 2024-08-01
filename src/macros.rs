@@ -11,39 +11,51 @@
 /// collect_commands![hello_world, some::path::function, generic_fn::<String>];
 /// ```
 ///
-// TODO: Hide it's implementation details from the generated rustdoc.
 #[macro_export]
 macro_rules! collect_commands {
+    // Hide distracting implementation details from the generated rustdoc.
+    ($($t:tt)*) => {
+        $crate::collect_commands_internal!([] [] $($t)*)
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! collect_commands_internal {
     () => {
-        $crate::internal::command(::tauri::generate_handler![], ::specta::function::collect_functions![])
+        $crate::internal::command(
+            ::tauri::generate_handler![],
+            ::specta::function::collect_functions![],
+        )
     };
-    ($i:ident) => {
-        $crate::internal::command(::tauri::generate_handler![$i], ::specta::function::collect_functions![$i])
+    // Alternate parsing mode between `<` and `>` where all chars are not put into `stripped` accumulator
+    ([$($stripped:tt)*] [$($raw:tt)*] []) => {
+        compile_error!("Unexpected end of input. Did you forget to close a generic argument?");
     };
-    ($i:ident, $($rest:tt)*) => {
-        $crate::internal::command($crate::collect_commands!(@internal; $i; $($rest)*), ::specta::function::collect_functions![$i, $($rest)*])
+    ([$($stripped:tt)*] [$($raw:tt)*] [] > $($rest:tt)*) => {
+        // Switch back to regular parsing mode
+        $crate::collect_commands_internal!([$($stripped)*] [$($raw)* >] $($rest)*)
     };
-    ($i:ident::<$g:path>) => {
-        $crate::internal::command(::tauri::generate_handler![$i], ::specta::function::collect_functions![$i<$g>])
+    ([$($stripped:tt)*] [$($raw:tt)*] [] $a:tt $($rest:tt)*) => {
+        $crate::collect_commands_internal!([$($stripped)*] [$($raw)* $a] [] $($rest)*)
     };
-    ($i:ident::<$g:path>, $($rest:tt)*) => {
-        $crate::internal::command($crate::collect_commands!(@internal; $i; $($rest)*), ::specta::function::collect_functions![$i<$g>, $($rest)*])
+    // Regular parsing mode
+    ([$($stripped:tt)*] [$($raw:tt)*]) => {
+        $crate::internal::command(
+            ::tauri::generate_handler![$($stripped)*],
+            ::specta::function::collect_functions![$($raw)*],
+        )
     };
-    //
-    (@internal; $($b:path),*;) => {
-        ::tauri::generate_handler![$($b),*]
+    ([$($stripped:tt)*] [$($raw:tt)*] ::< $($rest:tt)*) => {
+        // Switch to alternate parsing mode
+        $crate::collect_commands_internal!([$($stripped)*] [$($raw)* ::<] [] $($rest)*)
     };
-    (@internal; $($b:path),*; $i:ident) => {
-        ::tauri::generate_handler![$($b),*, $i]
+    ([$($stripped:tt)*] [$($raw:tt)*] $a:tt $($rest:tt)*) => {
+        $crate::collect_commands_internal!([$($stripped)* $a] [$($raw)* $a] $($rest)*)
     };
-    (@internal; $($b:path),*; $i:ident, $($rest:tt)*) => {
-        $crate::collect_commands!(@internal; $($b),*, $i; $($rest)*)
-    };
-    (@internal; $($b:path),*; $i:ident::<$g:path>) => {
-        ::tauri::generate_handler![$($b),*, $i]
-    };
-    (@internal; $($b:path),*; $i:ident::<$g:ident>, $($rest:tt)*) => {
-        $crate::collect_commands!(@internal; $($b),*, $i; $($rest)*)
+    // Input
+    ($($rest:tt)*) => {
+        $crate::collect_commands_internal!([] [] $($rest)*);
     };
 }
 
@@ -58,7 +70,6 @@ macro_rules! collect_commands {
 /// collect_events![MyEvent, module::MyOtherEvent];
 /// ```
 ///
-// TODO: Hide it's implementation details from the generated rustdoc.
 #[macro_export]
 macro_rules! collect_events {
     ($($event:path),* $(,)?) => {{

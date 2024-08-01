@@ -24,6 +24,12 @@ async hasError() : Promise<Result<string, number>> {
     else return { status: "error", error: e  as any };
 }
 },
+async someStruct() : Promise<MyStruct> {
+    return await TAURI_INVOKE("some_struct");
+},
+async generic() : Promise<void> {
+    await TAURI_INVOKE("generic");
+},
 /**
  * @deprecated This is a deprecated function
  */
@@ -70,6 +76,7 @@ export type DemoEvent = string
 export type EmptyEvent = null
 export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string }
 export type MyError2 = { type: "IoError"; data: string }
+export type MyStruct = { some_field: string }
 
 /** tauri-specta globals **/
 

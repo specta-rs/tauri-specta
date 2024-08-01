@@ -121,8 +121,8 @@ fn main() {
             hello_world,
             goodbye_world,
             has_error,
-            // nested::some_struct,
-            // generic::<tauri::Wry>,
+            nested::some_struct,
+            generic::<tauri::Wry>,
             deprecated,
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value
