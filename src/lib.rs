@@ -192,20 +192,10 @@ pub struct ExportContext {
 ///  - [`specta_typescript::Typescript`]
 ///  - [`specta_jsdoc::JSDoc`]
 pub trait LanguageExt: Language {
-    fn render_commands(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
-    fn render_events(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
 }
 
 impl<L: LanguageExt> LanguageExt for &L {
-    fn render_commands(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
-        (*self).render_commands(cfg)
-    }
-
-    fn render_events(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
-        (*self).render_events(cfg)
-    }
-
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         (*self).render(cfg)
     }
