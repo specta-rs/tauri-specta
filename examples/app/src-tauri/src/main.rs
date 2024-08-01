@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use specta_util::TypeCollection;
+use specta_typescript::Typescript;
 use tauri_specta::*;
 use thiserror::Error;
 
@@ -116,38 +116,45 @@ pub struct Testing {
 }
 
 fn main() {
-    let (invoke_handler, register_events) = {
-        let builder = ts::builder()
-            .commands(tauri_specta::collect_commands![
-                hello_world,
-                goodbye_world,
-                has_error,
-                nested::some_struct,
-                generic::<tauri::Wry>,
-                deprecated,
-                typesafe_errors_using_thiserror,
-                typesafe_errors_using_thiserror_with_value
-            ])
-            .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
-            .types(TypeCollection::default().register::<Custom>())
-            .config(
-                specta_typescript::Typescript::default()
-                    .formatter(specta_typescript::formatter::prettier),
-            )
-            .types(TypeCollection::default().register::<Testing>())
-            .statics(StaticCollection::default().register("universalConstant", 42))
-            .header("/* These are my Tauri Specta Bindings! */");
+    let mut builder = Builder::<tauri::Wry>::new()
+        .commands(tauri_specta::collect_commands![
+            hello_world,
+            goodbye_world,
+            has_error,
+            // nested::some_struct,
+            // generic::<tauri::Wry>,
+            deprecated,
+            typesafe_errors_using_thiserror,
+            typesafe_errors_using_thiserror_with_value
+        ])
+        .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
+        .ty::<Custom>()
+        .constant("universalConstant", 42);
 
-        #[cfg(debug_assertions)]
-        let builder = builder.path("../src/bindings.ts");
+    #[cfg(debug_assertions)]
+    builder
+        .export(
+            Typescript::default()
+                .formatter(specta_typescript::formatter::prettier)
+                .header("/* eslint-disable */"),
+            "../src/bindings.ts",
+        )
+        .expect("Failed to export typescript bindings");
 
-        builder.build().unwrap()
-    };
+    #[cfg(debug_assertions)]
+    builder
+        .export(
+            specta_jsdoc::JSDoc::default()
+                .formatter(specta_typescript::formatter::prettier)
+                .header("/* eslint-disable */"),
+            "../src/bindings-jsdoc.js",
+        )
+        .expect("Failed to export typescript bindings");
 
     tauri::Builder::default()
-        .invoke_handler(invoke_handler)
-        .setup(|app| {
-            register_events(app);
+        .invoke_handler(builder.invoke_handler())
+        .setup(move |app| {
+            builder.mount_events(app);
 
             let handle = app.handle();
 

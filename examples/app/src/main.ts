@@ -1,5 +1,6 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { commands, events } from "./bindings";
+// import { commands, events } from "./bindings-jsdoc.js";
 
 const appWindow = getCurrentWebview();
 

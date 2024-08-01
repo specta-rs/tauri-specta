@@ -107,477 +107,155 @@
 //! await commands.greet("Brendan");
 //! ```
 //!
-#![forbid(unsafe_code)]
-#![warn(clippy::all, clippy::unwrap_used, clippy::panic
-	// , missing_docs
-)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![doc(
+    // TODO: Tauri Specta logo
+    html_logo_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png",
+    html_favicon_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png"
+)]
 
+use core::fmt;
 use std::{
-    borrow::{Borrow, Cow},
-    error, fmt,
-    fs::{self, File},
-    io::Write,
-    marker::PhantomData,
-    path::{Path, PathBuf},
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
 };
 
-use specta::{datatype, datatype::NamedDataType, SpectaID, TypeMap};
-use specta_util::TypeCollection;
+use specta::{
+    datatype::{self, DataType},
+    Language, SpectaID, TypeMap,
+};
 
-use tauri::{ipc::Invoke, Manager, Runtime};
+use tauri::{ipc::Invoke, Runtime};
+/// Implements the [`Event`](trait@crate::Event) trait for a struct.
+///
+/// Refer to the [`Event`](trait@crate::Event) trait for more information.
+///
+#[cfg(feature = "derive")]
+#[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
 pub use tauri_specta_macros::Event;
 
-/// The exporter for [Javascript](https://www.javascript.com).
-#[cfg(feature = "javascript")]
-#[cfg_attr(docsrs, doc(cfg(feature = "javascript")))]
-pub mod js;
-
-/// The exporter for [TypeScript](https://www.typescriptlang.org).
-#[cfg(feature = "typescript")]
-#[cfg_attr(docsrs, doc(cfg(feature = "typescript")))]
-pub mod ts;
-
-#[cfg(any(feature = "javascript", feature = "typescript"))]
-mod js_ts;
-
+mod builder;
 mod event;
-mod statics;
+mod lang;
+mod macros;
 
-pub use event::*;
-pub use statics::StaticCollection;
+pub use builder::Builder;
+pub(crate) use event::EventRegistry;
+pub use event::{Event, TypedEvent};
 
-pub(crate) type CollectFunctionsResult = fn(type_map: &mut TypeMap) -> Vec<datatype::Function>;
-
-const DEFAULT_COLLECT_FN: CollectFunctionsResult = |_| vec![];
-
-pub type CollectCommandsTuple<TInvokeHandler> = (CollectFunctionsResult, TInvokeHandler);
-
-pub use tauri_specta_macros::collect_commands;
-
-/// A set of functions that produce language-specific code
-pub trait ExportLanguage: 'static {
-    type Config: Default + Clone;
-    type Error: fmt::Debug + error::Error + From<std::io::Error>; // TODO: Review if this `From<std::io::Error>` should be removed before stabilisation
-
-    fn run_format(path: PathBuf, cfg: &ExportConfig<Self::Config>);
-
-    fn render_events(
-        events: &[EventDataType],
-        type_map: &TypeMap,
-        cfg: &ExportConfig<Self::Config>,
-    ) -> Result<String, Self::Error>;
-
-    /// Renders a collection of [`FunctionDataType`] into a string.
-    fn render_commands(
-        commands: &[datatype::Function],
-        type_map: &TypeMap,
-        cfg: &ExportConfig<Self::Config>,
-    ) -> Result<String, Self::Error>;
-
-    /// Renders the output of [`globals`], [`render_functions`] and all dependant types into a TypeScript string.
-    fn render(
-        commands: &[datatype::Function],
-        events: &[EventDataType],
-        type_map: &TypeMap,
-        statics: &StaticCollection,
-        cfg: &ExportConfig<Self::Config>,
-    ) -> Result<String, Self::Error>;
-}
-
-pub trait CommandsTypeState: 'static {
-    type Runtime: tauri::Runtime;
-    type InvokeHandler: Fn(Invoke<Self::Runtime>) -> bool + Send + Sync + 'static;
-
-    fn split(self) -> CollectCommandsTuple<Self::InvokeHandler>;
-
-    fn macro_data(&self) -> CollectFunctionsResult;
-}
-
-fn dummy_invoke_handler(_: Invoke<impl Runtime>) -> bool {
-    false
-}
-
-pub struct NoCommands<TRuntime>(CollectFunctionsResult, PhantomData<TRuntime>);
-
-impl<TRuntime> CommandsTypeState for NoCommands<TRuntime>
-where
-    TRuntime: tauri::Runtime,
-{
-    type Runtime = TRuntime;
-    type InvokeHandler = fn(Invoke<TRuntime>) -> bool;
-
-    fn split(self) -> CollectCommandsTuple<Self::InvokeHandler> {
-        (DEFAULT_COLLECT_FN, dummy_invoke_handler)
-    }
-
-    fn macro_data(&self) -> CollectFunctionsResult {
-        self.0
-    }
-}
-
-pub struct Commands<TRuntime, TInvokeHandler>(
-    CollectCommandsTuple<TInvokeHandler>,
-    PhantomData<TRuntime>,
+/// A wrapper around the output of the `collect_commands` macro.
+///
+/// This acts to seal the implementation details of the macro.
+#[derive(Clone)]
+pub struct Commands<R: Runtime>(
+    // Bounds copied from `tauri::Builder::invoke_handler`
+    pub(crate) Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
+    pub(crate) fn(&mut TypeMap) -> Vec<datatype::Function>,
 );
 
-impl<TRuntime, TInvokeHandler> CommandsTypeState for Commands<TRuntime, TInvokeHandler>
-where
-    TRuntime: tauri::Runtime,
-    TInvokeHandler: Fn(Invoke<TRuntime>) -> bool + Send + Sync + 'static,
-{
-    type Runtime = TRuntime;
-    type InvokeHandler = TInvokeHandler;
-
-    fn split(self) -> CollectCommandsTuple<TInvokeHandler> {
-        self.0
-    }
-
-    fn macro_data(&self) -> CollectFunctionsResult {
-        self.0 .0
+impl<R: Runtime> fmt::Debug for Commands<R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Commands").finish()
     }
 }
 
-pub trait EventsTypeState: 'static {
-    fn get(self) -> CollectEventsTuple;
-}
-
-pub struct NoEvents;
-
-impl EventsTypeState for NoEvents {
-    fn get(self) -> CollectEventsTuple {
-        Default::default()
-    }
-}
-
-pub struct Events(CollectEventsTuple);
-
-impl EventsTypeState for Events {
-    fn get(self) -> CollectEventsTuple {
-        self.0
-    }
-}
-
-/// General exporter, takes a generic for the specific language that is being exported to.
-pub struct Builder<TLang: ExportLanguage, TCommands, TEvents> {
-    lang: PhantomData<TLang>,
-    commands: TCommands,
-    events: TEvents,
-    config: ExportConfig<TLang::Config>,
-    types: TypeCollection,
-    statics: StaticCollection,
-}
-
-impl<TLang, TRuntime> Default for Builder<TLang, NoCommands<TRuntime>, NoEvents>
-where
-    TLang: ExportLanguage,
-{
+impl<R: Runtime> Default for Commands<R> {
     fn default() -> Self {
-        Self {
-            lang: PhantomData,
-            commands: NoCommands(DEFAULT_COLLECT_FN, Default::default()),
-            events: NoEvents,
-            config: Default::default(),
-            types: TypeCollection::default(),
-            statics: StaticCollection::default(),
-        }
+        Self(
+            Arc::new(tauri::generate_handler![]),
+            ::specta::function::collect_functions![],
+        )
     }
 }
 
-impl<TLang, TEvents, TRuntime> Builder<TLang, NoCommands<TRuntime>, TEvents>
-where
-    TLang: ExportLanguage,
-    TRuntime: tauri::Runtime,
-{
-    pub fn commands<TInvokeHandler: Fn(Invoke<TRuntime>) -> bool + Send + Sync + 'static>(
-        self,
-        commands: CollectCommandsTuple<TInvokeHandler>,
-    ) -> Builder<TLang, Commands<TRuntime, TInvokeHandler>, TEvents> {
-        Builder {
-            lang: self.lang,
-            commands: Commands(commands, Default::default()),
-            events: self.events,
-            config: self.config,
-            types: self.types,
-            statics: self.statics,
-        }
-    }
+/// A wrapper around the output of the `collect_commands` macro.
+///
+/// This acts to seal the implementation details of the macro.
+#[derive(Default)]
+pub struct Events(BTreeMap<&'static str, fn(&mut TypeMap) -> (SpectaID, DataType)>);
+
+/// The context of what needs to be exported. Used when implementing [`LanguageExt`].
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct ExportContext {
+    pub plugin_name: Option<&'static str>,
+    pub commands: Vec<datatype::Function>,
+    pub events: BTreeMap<&'static str, DataType>,
+    pub type_map: TypeMap,
+    pub constants: HashMap<Cow<'static, str>, serde_json::Value>,
 }
 
-impl<TLang, TCommands> Builder<TLang, TCommands, NoEvents>
-where
-    TLang: ExportLanguage,
-{
-    pub fn events(self, events: CollectEventsTuple) -> Builder<TLang, TCommands, Events> {
-        Builder {
-            lang: self.lang,
-            events: Events(events),
-            commands: self.commands,
-            config: self.config,
-            types: self.types,
-            statics: self.statics,
-        }
-    }
+/// Implemented for all languages which Tauri Specta supports exporting to.
+///
+/// Currently implemented for:
+///  - [`specta_typescript::Typescript`]
+///  - [`specta_jsdoc::JSDoc`]
+pub trait LanguageExt: Language {
+    fn render_commands(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
+    fn render_events(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
+    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
 }
 
-impl<TLang, TCommands, TEvents> Builder<TLang, TCommands, TEvents>
-where
-    TLang: ExportLanguage,
-{
-    /// Allows for exporting types that are not part of any of the commands or events.
-    ///
-    /// ```rs
-    /// use tauri_specta::ts;
-    /// use specta::{Type, TypeCollection};
-    ///
-    /// #[derive(Type)]
-    /// pub struct Custom(String);
-    ///
-    /// ts::build()
-    ///    .types({
-    ///         let mut collection = TypeCollection::default();
-    ///         collection.register::<Custom>();
-    ///         collection
-    ///    });
-    /// ```
-    pub fn types(mut self, types: impl Borrow<TypeCollection>) -> Self {
-        self.types.extend(types);
-        self
+impl<L: LanguageExt> LanguageExt for &L {
+    fn render_commands(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
+        (*self).render_commands(cfg)
     }
 
-    /// Allows for exporting static along with your commands and events.
-    ///
-    /// ```rs
-    /// use tauri_specta::{ts, StaticCollection};
-    ///
-    /// ts::build()
-    ///    .statics(StaticCollection::default().register("universalConstant", 42));
-    /// ```
-    pub fn statics(mut self, statics: impl Borrow<StaticCollection>) -> Self {
-        self.statics.extend(statics);
-        self
+    fn render_events(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
+        (*self).render_events(cfg)
     }
 
-    /// Allows for specifying a custom [`ExportConfiguration`](specta::ts::ExportConfiguration).
-    pub fn config(mut self, config: TLang::Config) -> Self {
-        self.config.inner = config;
-        self
-    }
-
-    /// Allows for specifying a custom header to
-    pub fn header(mut self, header: &'static str) -> Self {
-        self.config.header = header.into();
-        self
-    }
-
-    pub fn path(mut self, path: impl AsRef<Path>) -> Self {
-        self.config.path = Some(path.as_ref().to_path_buf());
-        self
+    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
+        (*self).render(cfg)
     }
 }
-
-pub struct PluginUtils<TCommands, TManager, TSetup>
-where
-    TCommands: CommandsTypeState,
-    TManager: Manager<TCommands::Runtime>,
-    TSetup: FnOnce(&TManager),
-{
-    pub invoke_handler: TCommands::InvokeHandler,
-    pub setup: TSetup,
-    phantom: PhantomData<TManager>,
-}
-
-impl<TLang, TCommands, TEvents> Builder<TLang, TCommands, TEvents>
-where
-    TLang: ExportLanguage,
-    TCommands: CommandsTypeState,
-    TEvents: EventsTypeState,
-{
-    fn build_inner(self) -> Result<(TCommands::InvokeHandler, EventCollection), TLang::Error> {
-        let cfg = self.config.clone();
-
-        let (rendered, (invoke_handler, events)) = self.render()?;
-
-        if let Some(path) = cfg.path.clone() {
-            if let Some(export_dir) = path.parent() {
-                fs::create_dir_all(export_dir)?;
-            }
-
-            let mut file = File::create(&path)?;
-
-            write!(file, "{}", rendered)?;
-
-            TLang::run_format(path, &cfg);
-        }
-
-        Ok((invoke_handler, events))
-    }
-
-    fn render(self) -> Result<(String, (TCommands::InvokeHandler, EventCollection)), TLang::Error> {
-        let Self {
-            commands,
-            config,
-            events,
-            types,
-            statics,
-            ..
-        } = self;
-
-        let (export_fn, invoke_handler) = commands.split();
-
-        let (events_registry, events, mut type_map) = events.get();
-        let commands = export_fn(&mut type_map);
-
-        types.collect(&mut type_map);
-        // TODO: This is required for channels to work correctly.
-        // This should be unfeature gated once the upstream fix is merged: https://github.com/tauri-apps/tauri/pull/10435
-        #[cfg(feature = "UNSTABLE_channels")]
-        type_map.remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
-
-        let rendered = TLang::render(&commands, &events, &type_map, &statics, &config)?;
-
-        Ok((
-            format!("{}\n{rendered}", &config.header),
-            (invoke_handler, events_registry),
-        ))
-    }
-}
-
-impl<TLang, TCommands> Builder<TLang, TCommands, NoEvents>
-where
-    TLang: ExportLanguage,
-    TCommands: CommandsTypeState,
-{
-    #[must_use]
-    pub fn build_plugin_utils(
-        mut self,
-        plugin_name: &'static str,
-    ) -> Result<TCommands::InvokeHandler, TLang::Error> {
-        let plugin_name = PluginName::new(plugin_name);
-
-        self.config.plugin_name = Some(plugin_name);
-
-        Ok(self.build_inner()?.0)
-    }
-
-    #[must_use]
-    pub fn build(self) -> Result<TCommands::InvokeHandler, TLang::Error> {
-        Ok(self.build_inner()?.0)
-    }
-}
-
-impl<TLang, TCommands> Builder<TLang, TCommands, Events>
-where
-    TLang: ExportLanguage,
-    TCommands: CommandsTypeState,
-{
-    #[must_use]
-    pub fn build_plugin_utils<TManager: Manager<TCommands::Runtime>>(
-        mut self,
-        plugin_name: &'static str,
-    ) -> Result<(TCommands::InvokeHandler, impl FnOnce(&TManager)), TLang::Error> {
-        let plugin_name = PluginName::new(plugin_name);
-
-        self.config.plugin_name = Some(plugin_name);
-
-        let (invoke_handler, event_collection) = self.build_inner()?;
-
-        Ok((invoke_handler, move |app: &_| {
-            let registry = EventRegistry::get_or_manage(app);
-            registry.register_collection(event_collection, Some(plugin_name));
-        }))
-    }
-
-    #[must_use]
-    pub fn build<TManager: Manager<TCommands::Runtime>>(
-        self,
-    ) -> Result<(TCommands::InvokeHandler, impl FnOnce(&TManager)), TLang::Error> {
-        let (invoke_handler, event_collection) = self.build_inner()?;
-
-        Ok((invoke_handler, move |app: &_| {
-            let registry = EventRegistry::get_or_manage(app);
-            registry.register_collection(event_collection, None);
-        }))
-    }
-}
-
-// TODO: Add a proper solution to this into Specta
-fn collect_typemap<'a>(iter: impl Iterator<Item = (SpectaID, &'a NamedDataType)> + 'a) -> TypeMap {
-    let mut type_map = TypeMap::default();
-
-    for (sid, ndt) in iter {
-        type_map.insert(sid, ndt.clone());
-    }
-
-    type_map
-}
-
-type HardcodedRuntime = tauri::Wry;
-
-// Standalone export functions for
-impl<TLang, TCommands, TEvents> Builder<TLang, TCommands, TEvents>
-where
-    TLang: ExportLanguage,
-    TCommands: CommandsTypeState<Runtime = HardcodedRuntime>,
-    TEvents: EventsTypeState,
-{
-    /// Exports the output of [`internal::render`] for a collection of [`FunctionDataType`] into a TypeScript file.
-    pub fn export(self) -> Result<(), TLang::Error> {
-        self.build_inner().map(|_| ())
-    }
-
-    pub fn export_for_plugin(mut self, plugin_name: &'static str) -> Result<(), TLang::Error> {
-        self.config.plugin_name = Some(PluginName::new(plugin_name));
-
-        self.export()
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct PluginName(&'static str);
 
 pub(crate) enum ItemType {
     Event,
     Command,
 }
 
-impl PluginName {
-    pub fn new(plugin_name: &'static str) -> Self {
-        Self(plugin_name)
-    }
-
-    pub fn apply_as_prefix(&self, s: &str, item_type: ItemType) -> String {
-        format!(
-            "plugin:{}{}{}",
-            self.0,
-            match item_type {
-                ItemType::Event => ":",
-                ItemType::Command => "|",
-            },
-            s,
-        )
-    }
+pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -> String {
+    format!(
+        "plugin:{}{}{}",
+        plugin_name,
+        match item_type {
+            ItemType::Event => ":",
+            ItemType::Command => "|",
+        },
+        s,
+    )
 }
 
-/// The configuration for the generator
-#[derive(Default, Clone)]
-pub struct ExportConfig<TConfig> {
-    /// The name of the plugin to invoke.
-    ///
-    /// If there is no plugin name (i.e. this is an app), this should be `None`.
-    pub(crate) plugin_name: Option<PluginName>,
-    /// The specta export configuration
-    pub(crate) inner: TConfig,
-    pub(crate) path: Option<PathBuf>,
-    pub(crate) header: Cow<'static, str>,
-}
+#[doc(hidden)]
+pub mod internal {
+    //! Internal logic for Tauri Specta.
+    //! Nothing in this module has to conform to semver so it should not be used outside of this crate.
+    //! It has to be public so macro's can access it.
 
-impl<TConfig: Default> ExportConfig<TConfig> {
-    /// Creates a new [`ExportConfiguration`] from a [`specta::ts::ExportConfiguration`]
-    pub fn new(config: TConfig) -> Self {
-        Self {
-            inner: config,
-            ..Default::default()
+    use super::*;
+
+    /// called by `collect_commands` to construct `Commands`
+    pub fn command<R: Runtime, F>(
+        f: F,
+        types: fn(&mut TypeMap) -> Vec<datatype::Function>,
+    ) -> Commands<R>
+    where
+        F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
+    {
+        Commands(Arc::new(f), types)
+    }
+
+    /// called by `collect_events` to register events to an `Events`
+    pub fn register_event<E: Event>(Events(events): &mut Events) {
+        if events
+            .insert(E::NAME, |type_map| {
+                (E::sid(), E::reference(type_map, &[]).inner)
+            })
+            .is_some()
+        {
+            panic!("Another event with name {} is already registered!", E::NAME)
         }
     }
 }
