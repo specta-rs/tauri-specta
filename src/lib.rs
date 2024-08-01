@@ -145,28 +145,20 @@ mod event;
 // TODO: Probs drop
 pub use event::*;
 
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct Configuration {
+    commands: Vec<datatype::Function>,
+    events: Vec<EventDataType>,
+    type_map: TypeMap,
+    constants: (), // TODO
+    plugin_name: Option<&'static str>,
+}
+
 pub trait LanguageExt: Language {
-    fn render_commands(
-        &self,
-        commands: &[datatype::Function],
-        type_map: &TypeMap,
-        plugin_name: &Option<&'static str>,
-    ) -> Result<String, Self::Error>;
-
-    fn render_events(
-        &self,
-        events: &[EventDataType],
-        type_map: &TypeMap,
-        plugin_name: &Option<&'static str>,
-    ) -> Result<String, Self::Error>;
-
-    fn render(
-        &self,
-        commands: &[datatype::Function],
-        events: &[EventDataType],
-        type_map: &TypeMap,
-        plugin_name: &Option<&'static str>,
-    ) -> Result<String, Self::Error>;
+    fn render_commands(&self, cfg: &Configuration) -> Result<String, Self::Error>;
+    fn render_events(&self, cfg: &Configuration) -> Result<String, Self::Error>;
+    fn render(&self, cfg: &Configuration) -> Result<String, Self::Error>;
 }
 
 // TODO: Remove this

@@ -136,11 +136,15 @@ impl<R: Runtime> Builder<R> {
                 .map(|v| v.join("\n"))?;
 
             let rendered = crate::js_ts::render_all_parts::<specta_typescript::Typescript>(
-                &commands,
-                &self.events.1,
-                &self.types,
                 &language,
-                &self.plugin_name,
+                &crate::Configuration {
+                    commands,
+                    // TODO: Don't clone stuff
+                    events: self.events.1.clone(),
+                    type_map: self.types.clone(),
+                    constants: (),
+                    plugin_name: self.plugin_name,
+                },
                 &dependant_types,
                 crate::ts::GLOBALS,
             )?;

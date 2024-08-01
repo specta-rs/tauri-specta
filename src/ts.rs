@@ -1,7 +1,7 @@
-use crate::{js_ts, *};
+use crate::{js_ts, Configuration, LanguageExt};
 use heck::ToLowerCamelCase;
 use indoc::formatdoc;
-use specta::{datatype, datatype::FunctionResultVariant};
+use specta::datatype::FunctionResultVariant;
 use specta_typescript as ts;
 use specta_typescript::{js_doc, ExportError};
 
@@ -9,25 +9,24 @@ use specta_typescript::{js_doc, ExportError};
 pub(crate) const GLOBALS: &str = include_str!("./globals.ts");
 
 impl LanguageExt for specta_typescript::Typescript {
-    /// Renders a collection of [`FunctionDataType`] into a TypeScript string.
-    fn render_commands(
-        &self,
-        commands: &[datatype::Function],
-        type_map: &TypeMap,
-        plugin_name: &Option<&'static str>,
-    ) -> Result<String, ExportError> {
-        let commands = commands
+    fn render_commands(&self, cfg: &Configuration) -> Result<String, ExportError> {
+        let commands = cfg
+            .commands
             .iter()
             .map(|function| {
                 let arg_defs = function
                     .args()
                     .map(|(name, typ)| {
-                        ts::datatype(self, &FunctionResultVariant::Value(typ.clone()), type_map)
-                            .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
+                        ts::datatype(
+                            self,
+                            &FunctionResultVariant::Value(typ.clone()),
+                            &cfg.type_map,
+                        )
+                        .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
                     })
                     .collect::<Result<Vec<_>, _>>()?;
 
-                let ret_type = js_ts::handle_result(function, type_map, self)?;
+                let ret_type = js_ts::handle_result(function, &cfg.type_map, self)?;
 
                 let docs = {
                     let mut builder = js_doc::Builder::default();
@@ -47,7 +46,7 @@ impl LanguageExt for specta_typescript::Typescript {
                     &function.name().to_lower_camel_case(),
                     &arg_defs,
                     Some(&ret_type),
-                    &js_ts::command_body(plugin_name, function, true),
+                    &js_ts::command_body(&cfg.plugin_name, function, true),
                 ))
             })
             .collect::<Result<Vec<_>, ExportError>>()?
@@ -61,17 +60,13 @@ impl LanguageExt for specta_typescript::Typescript {
         })
     }
 
-    fn render_events(
-        &self,
-        events: &[EventDataType],
-        type_map: &TypeMap,
-        plugin_name: &Option<&'static str>,
-    ) -> Result<String, ExportError> {
-        if events.is_empty() {
+    fn render_events(&self, cfg: &Configuration) -> Result<String, ExportError> {
+        if cfg.events.is_empty() {
             return Ok(Default::default());
         }
 
-        let (events_types, events_map) = js_ts::events_data(events, self, plugin_name, type_map)?;
+        let (events_types, events_map) =
+            js_ts::events_data(&cfg.events, self, &cfg.plugin_name, &cfg.type_map)?;
 
         let events_types = events_types.join(",\n");
 
@@ -85,27 +80,14 @@ impl LanguageExt for specta_typescript::Typescript {
         })
     }
 
-    fn render(
-        &self,
-        commands: &[datatype::Function],
-        events: &[EventDataType],
-        type_map: &TypeMap,
-        plugin_name: &Option<&'static str>,
-    ) -> Result<String, ExportError> {
-        let dependant_types = type_map
+    fn render(&self, cfg: &Configuration) -> Result<String, ExportError> {
+        let dependant_types = cfg
+            .type_map
             .iter()
-            .map(|(_sid, ndt)| ts::export_named_datatype(&self, ndt, type_map))
+            .map(|(_sid, ndt)| ts::export_named_datatype(&self, ndt, &cfg.type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
-        js_ts::render_all_parts::<Self>(
-            commands,
-            events,
-            type_map,
-            self,
-            plugin_name,
-            &dependant_types,
-            GLOBALS,
-        )
+        js_ts::render_all_parts::<Self>(self, cfg, &dependant_types, GLOBALS)
     }
 }

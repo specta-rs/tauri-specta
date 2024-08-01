@@ -188,6 +188,7 @@ pub trait Event: NamedType {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct EventDataType {
     pub name: &'static str,
     pub typ: DataType,
