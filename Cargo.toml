@@ -34,7 +34,6 @@ workspace = true
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
 specta-jsdoc = { workspace = true, optional = true }
-specta-util = { workspace = true }
 tauri-specta-macros = { version = "=2.0.0-rc.5", optional = true, path = "./macros" }
 serde = "1"
 serde_json = "1"
@@ -43,7 +42,6 @@ tauri = { workspace = true, default-features = false, features = ["specta"] }
 
 # Private
 heck = "0.5.0"
-indoc = "2.0.5"
 
 [workspace]
 members = [
@@ -68,7 +66,6 @@ panic_in_result_fn = { level = "warn", priority = -1 }
 [workspace.dependencies]
 tauri = { version = "=2.0.0-beta.25" }
 specta = { version = "=2.0.0-rc.16" }
-specta-util = { version = "0.0.3" }
 specta-typescript = { version = "0.0.3" }
 specta-jsdoc = { version = "0.0.3" }
 
@@ -81,6 +78,5 @@ specta-jsdoc = { version = "0.0.3" }
 # specta-typescript = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
 
 specta = { path = "../specta/specta" }
-specta-util = { path = "../specta/specta-util" }
 specta-typescript = { path = "../specta/specta-typescript" }
 specta-jsdoc = { path = "../specta/specta-jsdoc" }

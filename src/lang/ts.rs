@@ -1,6 +1,5 @@
 use crate::{lang::js_ts, Configuration, LanguageExt};
 use heck::ToLowerCamelCase;
-use indoc::formatdoc;
 use specta::datatype::FunctionResultVariant;
 use specta_typescript as ts;
 use specta_typescript::{js_doc, ExportError};
@@ -51,11 +50,11 @@ impl LanguageExt for specta_typescript::Typescript {
             .collect::<Result<Vec<_>, ExportError>>()?
             .join(",\n");
 
-        Ok(formatdoc! {
+        Ok(format! {
             r#"
-            export const commands = {{
-            {commands}
-            }}"#
+export const commands = {{
+{commands}
+}}"#
         })
     }
 
@@ -69,13 +68,13 @@ impl LanguageExt for specta_typescript::Typescript {
 
         let events_types = events_types.join(",\n");
 
-        Ok(formatdoc! {
+        Ok(format! {
             r#"
-            export const events = __makeEvents__<{{
-            {events_types}
-            }}>({{
-            {events_map}
-            }})"#
+export const events = __makeEvents__<{{
+{events_types}
+}}>({{
+{events_map}
+}})"#
         })
     }
 

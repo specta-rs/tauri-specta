@@ -5,7 +5,6 @@
 use std::{any::TypeId, borrow::Cow, collections::BTreeMap};
 
 use heck::ToLowerCamelCase;
-use indoc::formatdoc;
 use specta::{
     datatype::{self, DataType, FunctionResultVariant},
     TypeMap,
@@ -57,31 +56,29 @@ pub fn render_all_parts<L: LanguageExt + 'static>(
         .collect::<Vec<_>>()
         .join("\n");
 
-    Ok(formatdoc! {
-        r#"
-            {header}
-            {DO_NOT_EDIT}
+    Ok(format! {
+        r#"{header}
+{DO_NOT_EDIT}
 
-            /** user-defined commands **/
+/** user-defined commands **/
 
-            {commands}
+{commands}
 
-            /** user-defined events **/
+/** user-defined events **/
 
-			{events}
+{events}
 
-            /** user-defined constants **/
+/** user-defined constants **/
 
-            {constants}
+{constants}
 
-			/** user-defined types **/
+/** user-defined types **/
 
-			{dependant_types}
+{dependant_types}
 
-			/** tauri-specta globals **/
+/** tauri-specta globals **/
 
-            {globals}
-        "#
+{globals}"#
     })
 }
 
@@ -98,14 +95,13 @@ pub fn arg_usages(args: &[String]) -> Option<String> {
 fn return_as_result_tuple(expr: &str, as_any: bool) -> String {
     let as_any = as_any.then_some(" as any").unwrap_or_default();
 
-    formatdoc!(
-        r#"
-		try {{
-		    return {{ status: "ok", data: {expr} }};
-		}} catch (e) {{
-		    if(e instanceof Error) throw e;
-		    else return {{ status: "error", error: e {as_any} }};
-		}}"#
+    format!(
+        r#"try {{
+    return {{ status: "ok", data: {expr} }};
+}} catch (e) {{
+    if(e instanceof Error) throw e;
+    else return {{ status: "error", error: e {as_any} }};
+}}"#
     )
 }
 
@@ -133,12 +129,11 @@ pub fn function(
         .map(|t| format!(": Promise<{}>", t))
         .unwrap_or_default();
 
-    formatdoc! {
-        r#"
-		{docs}async {name}({args}) {return_type} {{
-		{body}
-		}}"#
-    }
+    format!(
+        r#"{docs}async {name}({args}) {return_type} {{
+    {body}
+}}"#
+    )
 }
 
 fn tauri_invoke(name: &str, arg_usages: Option<String>) -> String {

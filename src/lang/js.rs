@@ -1,5 +1,4 @@
 use heck::ToLowerCamelCase;
-use indoc::formatdoc;
 use specta::datatype::FunctionResultVariant;
 use specta_typescript::js_doc;
 
@@ -57,12 +56,11 @@ impl LanguageExt for specta_jsdoc::JSDoc {
             .collect::<Result<Vec<_>, Self::Error>>()?
             .join(",\n");
 
-        Ok(formatdoc! {
-            r#"
-            export const commands = {{
-            {commands}
-            }}"#
-        })
+        Ok(format!(
+            r#"export const commands = {{
+    {commands}
+}}"#
+        ))
     }
 
     fn render_events(&self, cfg: &Configuration) -> Result<String, Self::Error> {
@@ -83,14 +81,14 @@ impl LanguageExt for specta_jsdoc::JSDoc {
             builder.build()
         };
 
-        Ok(formatdoc! {
+        Ok(format! {
             r#"
-                {events}
-                const __typedMakeEvents__ = __makeEvents__;
+{events}
+const __typedMakeEvents__ = __makeEvents__;
 
-    	        export const events = __typedMakeEvents__({{
-    	        {events_map}
-    	        }})"#
+export const events = __typedMakeEvents__({{
+{events_map}
+}})"#
         })
     }
 

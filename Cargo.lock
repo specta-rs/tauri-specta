@@ -1363,12 +1363,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "indoc"
-version = "2.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
-
-[[package]]
 name = "infer"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2892,14 +2886,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "specta-util"
-version = "0.0.3"
-dependencies = [
- "serde",
- "specta",
-]
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3272,13 +3258,11 @@ name = "tauri-specta"
 version = "2.0.0-rc.11"
 dependencies = [
  "heck 0.5.0",
- "indoc",
  "serde",
  "serde_json",
  "specta",
  "specta-jsdoc",
  "specta-typescript",
- "specta-util",
  "tauri",
  "tauri-specta-macros",
  "thiserror",
