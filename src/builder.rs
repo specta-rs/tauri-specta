@@ -142,7 +142,7 @@ impl<R: Runtime> Builder<R> {
                 inner: language.clone(),
             };
 
-            let rendered = crate::js_ts::render_all_parts::<crate::ts::Language>(
+            let rendered = crate::js_ts::render_all_parts::<specta_typescript::Typescript>(
                 &commands,
                 &self.events.1,
                 &self.types,

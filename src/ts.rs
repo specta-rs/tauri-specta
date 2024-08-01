@@ -4,21 +4,13 @@ use indoc::formatdoc;
 use specta::{datatype, datatype::FunctionResultVariant};
 use specta_typescript as ts;
 use specta_typescript::{js_doc, ExportError};
-use tauri::Runtime;
 
-/// Implements [`ExportLanguage`] for TypeScript exporting
-pub struct Language;
-
-pub fn builder<TRuntime: Runtime>() -> Builder<Language, NoCommands<TRuntime>, NoEvents> {
-    Builder::default()
-}
-
-pub const GLOBALS: &str = include_str!("./globals.ts");
+const GLOBALS: &str = include_str!("./globals.ts");
 
 type Config = specta_typescript::Typescript;
 pub type ExportConfig = crate::ExportConfig<Config>;
 
-impl ExportLanguage for Language {
+impl ExportLanguage for specta_typescript::Typescript {
     type Config = Config;
     type Error = ts::ExportError;
 

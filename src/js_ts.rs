@@ -7,8 +7,8 @@ use specta::{
     datatype::{DataType, FunctionResultVariant},
     TypeMap,
 };
-use specta_typescript as ts;
 use specta_typescript::ExportError;
+use specta_typescript::{self as ts};
 
 use crate::{EventDataType, ExportLanguage, ItemType, StaticCollection};
 
@@ -23,6 +23,8 @@ pub fn render_all_parts<T: ExportLanguage<Config = specta_typescript::Typescript
     events: &[EventDataType],
     type_map: &TypeMap,
     statics: &StaticCollection,
+    // plugin_name: &str,
+    // cfg: &Typescript,
     cfg: &ExportConfig,
     dependant_types: &str,
     globals: &str,

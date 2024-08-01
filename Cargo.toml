@@ -26,6 +26,9 @@ typescript = ["dep:specta-typescript"]
 # TODO: https://github.com/tauri-apps/tauri/pull/10435
 UNSTABLE_channels = []
 
+[lints]
+workspace = true
+
 [dependencies]
 # Public
 specta = { workspace = true, features = ["function"] }

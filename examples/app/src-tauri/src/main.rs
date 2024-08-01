@@ -116,7 +116,7 @@ pub struct Testing {
 }
 
 fn main() {
-    let mut builder = Builder2::<tauri::Wry>::new()
+    let mut builder = Builder::<tauri::Wry>::new()
         .commands(tauri_specta::collect_commands![
             hello_world,
             goodbye_world,
@@ -132,12 +132,14 @@ fn main() {
         .constant("universalConstant", 42);
 
     #[cfg(debug_assertions)]
-    builder.export_ts(
-        Typescript::default()
-            .formatter(specta_typescript::formatter::prettier)
-            .header("/* These are my Tauri Specta Bindings! */")
-            .path("../src/bindings.ts"),
-    );
+    builder
+        .export_ts(
+            Typescript::default()
+                .formatter(specta_typescript::formatter::prettier)
+                .header("/* These are my Tauri Specta Bindings! */")
+                .path("../src/bindings.ts"),
+        )
+        .expect("Failed to export typescript bindings");
 
     tauri::Builder::default()
         .invoke_handler(builder.invoke_handler())
