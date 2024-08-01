@@ -24,6 +24,7 @@ impl LanguageExt for specta_jsdoc::JSDoc {
             &self.0.header,
             render_commands(&self.0, cfg)?,
             render_events(&self.0, cfg)?,
+            false,
         )
     }
 }

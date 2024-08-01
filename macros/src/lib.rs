@@ -1,3 +1,9 @@
+#![doc(
+    // TODO: Tauri Specta logo
+    html_logo_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png",
+    html_favicon_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png"
+)]
+
 use heck::ToKebabCase;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};

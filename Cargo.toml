@@ -1,7 +1,7 @@
 [package]
 name = "tauri-specta"
 description = "Completely typesafe Tauri commands"
-version = "2.0.0-rc.11"
+version = "2.0.0-rc.12"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2021"
 license = "MIT"
@@ -34,7 +34,7 @@ workspace = true
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
 specta-jsdoc = { workspace = true, optional = true }
-tauri-specta-macros = { version = "=2.0.0-rc.5", optional = true, path = "./macros" }
+tauri-specta-macros = { version = "=2.0.0-rc.6", optional = true, path = "./macros" }
 serde = "1"
 serde_json = "1"
 thiserror = "1"
@@ -65,18 +65,13 @@ panic_in_result_fn = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
 tauri = { version = "=2.0.0-beta.25" }
-specta = { version = "=2.0.0-rc.16" }
-specta-typescript = { version = "0.0.3" }
-specta-jsdoc = { version = "0.0.3" }
+specta = { version = "=2.0.0-rc.18" }
+specta-typescript = { version = "0.0.5" }
+specta-jsdoc = { version = "0.0.5" }
 
-[patch.crates-io]
+# [patch.crates-io]
 # tauri = { git = "https://github.com/oscartbeaumont/tauri.git", rev = "ddc64b706a7f2db271d40e9b216187b1aa153efa" }
 # tauri-build = { git = "https://github.com/oscartbeaumont/tauri.git", rev = "ddc64b706a7f2db271d40e9b216187b1aa153efa" }
-
-# specta = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
-# specta-util = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
-# specta-typescript = { git  = "https://github.com/oscartbeaumont/specta.git", rev = "cfa98fa10484e55923497f3cc21edf7418667c76" }
-
-specta = { path = "../specta/specta" }
-specta-typescript = { path = "../specta/specta-typescript" }
-specta-jsdoc = { path = "../specta/specta-jsdoc" }
+# specta = { path = "../specta/specta" }
+# specta-typescript = { path = "../specta/specta-typescript" }
+# specta-jsdoc = { path = "../specta/specta-jsdoc" }

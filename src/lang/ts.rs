@@ -22,6 +22,7 @@ impl LanguageExt for specta_typescript::Typescript {
             &self.header,
             render_commands(self, cfg)?,
             render_events(self, cfg)?,
+            true,
         )
     }
 }

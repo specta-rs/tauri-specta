@@ -2842,7 +2842,9 @@ dependencies = [
 
 [[package]]
 name = "specta"
-version = "2.0.0-rc.16"
+version = "2.0.0-rc.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfd9c8f5ec3e3727784396e946bfa91a973853e70e3b1d637c36e5f99c1daf0e"
 dependencies = [
  "paste",
  "specta-macros",
@@ -2851,7 +2853,9 @@ dependencies = [
 
 [[package]]
 name = "specta-jsdoc"
-version = "0.0.3"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a084c2caf239158e761dd22034b240297fa79bdebc284ecb3e6a59db6c8eca76"
 dependencies = [
  "specta",
  "specta-serde",
@@ -2860,7 +2864,9 @@ dependencies = [
 
 [[package]]
 name = "specta-macros"
-version = "2.0.0-rc.16"
+version = "2.0.0-rc.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68999d29816965eb9e5201f60aec02a76512139811661a7e8e653abc810b8f72"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -2870,7 +2876,9 @@ dependencies = [
 
 [[package]]
 name = "specta-serde"
-version = "0.0.3"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1751ce21ddc96210530fc7dfb90c43f2ff680daf4e1030f2414126b316564b5e"
 dependencies = [
  "specta",
  "thiserror",
@@ -2878,7 +2886,9 @@ dependencies = [
 
 [[package]]
 name = "specta-typescript"
-version = "0.0.3"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3637aaf3b9b11e4bafec4fc2c6eaf1d252690f19dee2209fdcea8f16210fd1d8"
 dependencies = [
  "specta",
  "specta-serde",
@@ -3255,7 +3265,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta"
-version = "2.0.0-rc.11"
+version = "2.0.0-rc.12"
 dependencies = [
  "heck 0.5.0",
  "serde",
@@ -3297,7 +3307,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta-macros"
-version = "2.0.0-rc.5"
+version = "2.0.0-rc.6"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
