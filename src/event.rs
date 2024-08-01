@@ -7,17 +7,18 @@ use serde::{de::DeserializeOwned, Serialize};
 use specta::{DataType, NamedType, SpectaID};
 use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
-use crate::PluginName;
+use crate::apply_as_prefix;
 
 #[derive(Clone, Copy)]
 pub struct EventRegistryMeta {
-    plugin_name: Option<PluginName>,
+    plugin_name: Option<&'static str>,
 }
 
 impl EventRegistryMeta {
     fn wrap_with_plugin(&self, input: &str) -> String {
         self.plugin_name
-            .map(|n| n.apply_as_prefix(input, crate::ItemType::Event))
+            .as_ref()
+            .map(|n| apply_as_prefix(n, input, crate::ItemType::Event))
             .unwrap_or_else(|| input.to_string())
     }
 }
@@ -45,7 +46,7 @@ impl EventRegistry {
     pub fn register_collection(
         &self,
         collection: EventCollection,
-        plugin_name: Option<PluginName>,
+        plugin_name: Option<&'static str>,
     ) {
         let mut registry = self.0.write().expect("Failed to write EventRegistry");
 

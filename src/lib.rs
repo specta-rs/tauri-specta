@@ -174,31 +174,10 @@ pub trait LanguageExt: Language {
     ) -> Result<String, Self::Error>;
 }
 
-// TODO: Remove
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct PluginName(&'static str);
-
+// TODO: Remove this
 pub(crate) enum ItemType {
     Event,
     Command,
-}
-
-impl PluginName {
-    pub fn new(plugin_name: &'static str) -> Self {
-        Self(plugin_name)
-    }
-
-    pub fn apply_as_prefix(&self, s: &str, item_type: ItemType) -> String {
-        format!(
-            "plugin:{}{}{}",
-            self.0,
-            match item_type {
-                ItemType::Event => ":",
-                ItemType::Command => "|",
-            },
-            s,
-        )
-    }
 }
 
 pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -> String {
@@ -212,26 +191,3 @@ pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -
         s,
     )
 }
-
-// // TODO: Remove
-// #[derive(Default, Clone)]
-// pub struct ExportConfig<TConfig> {
-//     /// The name of the plugin to invoke.
-//     ///
-//     /// If there is no plugin name (i.e. this is an app), this should be `None`.
-//     pub(crate) plugin_name: Option<PluginName>,
-//     /// The specta export configuration
-//     pub(crate) inner: TConfig,
-//     pub(crate) path: Option<PathBuf>,
-//     pub(crate) header: Cow<'static, str>,
-// }
-
-// impl<TConfig: Default> ExportConfig<TConfig> {
-//     /// Creates a new [`ExportConfiguration`] from a [`specta::ts::ExportConfiguration`]
-//     pub fn new(config: TConfig) -> Self {
-//         Self {
-//             inner: config,
-//             ..Default::default()
-//         }
-//     }
-// }

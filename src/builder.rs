@@ -12,7 +12,7 @@ use tauri::{ipc::Invoke, App, Runtime};
 
 use crate::{
     internal::{Commands, Events},
-    EventRegistry, PluginName,
+    EventRegistry,
 };
 
 pub struct Builder<R: Runtime> {
