@@ -10,13 +10,13 @@ importers:
     dependencies:
       '@tauri-apps/api':
         specifier: next
-        version: 2.0.0-beta.16
+        version: 2.0.0-rc.0
 
   examples/app:
     dependencies:
       '@tauri-apps/api':
         specifier: next
-        version: 2.0.0-beta.16
+        version: 2.0.0-rc.0
     devDependencies:
       '@tauri-apps/cli':
         specifier: next
@@ -32,7 +32,7 @@ importers:
     dependencies:
       '@tauri-apps/api':
         specifier: next
-        version: 2.0.0-beta.16
+        version: 2.0.0-rc.0
       solid-js:
         specifier: ^1.8.19
         version: 1.8.19
@@ -386,8 +386,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@tauri-apps/api@2.0.0-beta.16':
-    resolution: {integrity: sha512-YGjkR9HxS/YyIoqoXDkk8o9Yy5NW6u9YxzeqEodwwOUoeS0nac6mzLTW3VYIuSelHmyUQCgbyENVY6e5CJXA4Q==}
+  '@tauri-apps/api@2.0.0-rc.0':
+    resolution: {integrity: sha512-v454Qs3REHc3Za59U+/eSmBsdmF+3NE5+76+lFDaitVqN4ZglDHENDaMARYKGJVZuxiSkzyqG0SeG7lLQjVkPA==}
     engines: {node: '>= 18.18', npm: '>= 6.6.0', yarn: '>= 1.19.1'}
 
   '@tauri-apps/cli-darwin-arm64@2.0.0-beta.23':
@@ -961,7 +961,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.19.1':
     optional: true
 
-  '@tauri-apps/api@2.0.0-beta.16': {}
+  '@tauri-apps/api@2.0.0-rc.0': {}
 
   '@tauri-apps/cli-darwin-arm64@2.0.0-beta.23':
     optional: true

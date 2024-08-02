@@ -1,4 +1,8 @@
-use std::{borrow::Cow, collections::BTreeSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeSet, HashMap},
+    sync::RwLock,
+};
 
 use serde::{de::DeserializeOwned, Serialize};
 use specta::{NamedType, SpectaID};
@@ -6,11 +10,14 @@ use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
 use crate::{apply_as_prefix, ItemType};
 
-/// A struct for managing events that is put into Tauri's state.
-pub(crate) struct EventRegistry {
-    pub(crate) plugin_name: Option<&'static str>,
-    pub(crate) events: BTreeSet<SpectaID>,
+#[derive(Default)]
+pub(crate) struct EventRegistryMeta {
+    pub plugin_name: Option<&'static str>,
 }
+
+/// A struct for managing events that is put into Tauri's state.
+#[derive(Default)]
+pub(crate) struct EventRegistry(pub(crate) RwLock<HashMap<SpectaID, EventRegistryMeta>>);
 
 impl EventRegistry {
     /// gets the name of the event (taking into account plugin prefixes) and ensuring it was correctly mounted to the current app.
@@ -22,13 +29,24 @@ impl EventRegistry {
             "EventRegistry not found in Tauri state - Did you forget to call Builder::mount_events?",
         ).inner();
 
-        this.events
-            .get(&E::sid())
+        let sid = E::sid();
+
+        let map = this.0.read().expect("Failed to read EventRegistry");
+        let meta = map
+            .get(&sid)
             .unwrap_or_else(|| panic!("Event {name} not found in registry!"));
 
-        this.plugin_name
+        meta.plugin_name
             .map(|n| apply_as_prefix(n, name, ItemType::Event).into())
             .unwrap_or_else(|| name.into())
+    }
+
+    pub fn get_or_manage<R: Runtime>(handle: &impl Manager<R>) -> tauri::State<'_, Self> {
+        if handle.try_state::<Self>().is_none() {
+            handle.manage(Self::default());
+        }
+
+        handle.state::<Self>()
     }
 }
 
@@ -78,7 +96,7 @@ macro_rules! make_handler {
 ///     DemoEvent::listen(handle, |event| {
 ///         dbg!(event.payload);
 ///     });
-///  
+///
 ///     DemoEvent("Test".to_string()).emit(handle).ok();
 /// }
 /// ```
