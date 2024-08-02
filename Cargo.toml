@@ -23,9 +23,6 @@ derive = ["dep:tauri-specta-macros"]
 javascript = ["dep:specta-jsdoc"]
 typescript = ["dep:specta-typescript"]
 
-# TODO: https://github.com/tauri-apps/tauri/pull/10435
-UNSTABLE_channels = []
-
 [lints]
 workspace = true
 

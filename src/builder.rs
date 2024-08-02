@@ -117,8 +117,6 @@ impl<R: Runtime> Builder<R> {
             })
             .collect();
 
-        // TODO: This must remain feature gated until this PR is merged and released: https://github.com/tauri-apps/tauri/pull/10435
-        #[cfg(feature = "UNSTABLE_channels")]
         self.types
             .remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
 
