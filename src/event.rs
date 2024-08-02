@@ -1,8 +1,4 @@
-use std::{
-    borrow::Cow,
-    collections::{BTreeSet, HashMap},
-    sync::RwLock,
-};
+use std::{borrow::Cow, collections::HashMap, sync::RwLock};
 
 use serde::{de::DeserializeOwned, Serialize};
 use specta::{NamedType, SpectaID};

@@ -3,5 +3,5 @@
   "identifier": "main-capability",
   "description": "Capability for the main window",
   "windows": ["main"],
-  "permissions": ["event:default", "specta-example:allow-add-numbers"]
+  "permissions": ["core:event:default", "specta-example:allow-add-numbers"]
 }

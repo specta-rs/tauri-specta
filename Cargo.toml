@@ -64,7 +64,7 @@ todo = { level = "warn", priority = -1 }
 panic_in_result_fn = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
-tauri = { version = "=2.0.0-beta.25" }
+tauri = { version = "=2.0.0-rc.0" }
 specta = { version = "=2.0.0-rc.19" }
 specta-typescript = { version = "0.0.6" }
 specta-jsdoc = { version = "0.0.6" }
