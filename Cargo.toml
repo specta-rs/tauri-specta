@@ -65,9 +65,9 @@ panic_in_result_fn = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
 tauri = { version = "=2.0.0-beta.25" }
-specta = { version = "=2.0.0-rc.18" }
-specta-typescript = { version = "0.0.5" }
-specta-jsdoc = { version = "0.0.5" }
+specta = { version = "=2.0.0-rc.19" }
+specta-typescript = { version = "0.0.6" }
+specta-jsdoc = { version = "0.0.6" }
 
 # [patch.crates-io]
 # tauri = { git = "https://github.com/oscartbeaumont/tauri.git", rev = "ddc64b706a7f2db271d40e9b216187b1aa153efa" }

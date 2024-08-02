@@ -13,49 +13,12 @@
 ///
 #[macro_export]
 macro_rules! collect_commands {
-    // Hide distracting implementation details from the generated rustdoc.
-    ($($t:tt)*) => {
-        $crate::collect_commands_internal!([] [] $($t)*)
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! collect_commands_internal {
-    () => {
+    ($($b:tt $(:: $($p:ident)? $(<$g:path>)? )* ),*) => {
+        // We strip generics (::<...>) from being parsed to Tauri as it doesn't support them.
         $crate::internal::command(
-            ::tauri::generate_handler![],
-            ::specta::function::collect_functions![],
+            ::tauri::generate_handler![$($b $($(::$p)? )* ),*],
+            ::specta::function::collect_functions![$($b $($(::$p)? $(::<$g>)? )* ),*],
         )
-    };
-    // Alternate parsing mode between `<` and `>` where all chars are not put into `stripped` accumulator
-    ([$($stripped:tt)*] [$($raw:tt)*] []) => {
-        compile_error!("Unexpected end of input. Did you forget to close a generic argument?");
-    };
-    ([$($stripped:tt)*] [$($raw:tt)*] [] > $($rest:tt)*) => {
-        // Switch back to regular parsing mode
-        $crate::collect_commands_internal!([$($stripped)*] [$($raw)* >] $($rest)*)
-    };
-    ([$($stripped:tt)*] [$($raw:tt)*] [] $a:tt $($rest:tt)*) => {
-        $crate::collect_commands_internal!([$($stripped)*] [$($raw)* $a] [] $($rest)*)
-    };
-    // Regular parsing mode
-    ([$($stripped:tt)*] [$($raw:tt)*]) => {
-        $crate::internal::command(
-            ::tauri::generate_handler![$($stripped)*],
-            ::specta::function::collect_functions![$($raw)*],
-        )
-    };
-    ([$($stripped:tt)*] [$($raw:tt)*] ::< $($rest:tt)*) => {
-        // Switch to alternate parsing mode
-        $crate::collect_commands_internal!([$($stripped)*] [$($raw)* ::<] [] $($rest)*)
-    };
-    ([$($stripped:tt)*] [$($raw:tt)*] $a:tt $($rest:tt)*) => {
-        $crate::collect_commands_internal!([$($stripped)* $a] [$($raw)* $a] $($rest)*)
-    };
-    // Input
-    ($($rest:tt)*) => {
-        $crate::collect_commands_internal!([] [] $($rest)*);
     };
 }
 

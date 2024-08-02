@@ -2842,9 +2842,9 @@ dependencies = [
 
 [[package]]
 name = "specta"
-version = "2.0.0-rc.18"
+version = "2.0.0-rc.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfd9c8f5ec3e3727784396e946bfa91a973853e70e3b1d637c36e5f99c1daf0e"
+checksum = "c55a15e1cd11cd8b7bb846d2770ac2870f661a3cfe0b9744acf9da4d902ad931"
 dependencies = [
  "paste",
  "specta-macros",
@@ -2853,9 +2853,9 @@ dependencies = [
 
 [[package]]
 name = "specta-jsdoc"
-version = "0.0.5"
+version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a084c2caf239158e761dd22034b240297fa79bdebc284ecb3e6a59db6c8eca76"
+checksum = "051453f7f0082a9f94d29f4c345da2c2581b890aba98e862c1f73757f3571184"
 dependencies = [
  "specta",
  "specta-serde",
@@ -2876,9 +2876,9 @@ dependencies = [
 
 [[package]]
 name = "specta-serde"
-version = "0.0.5"
+version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1751ce21ddc96210530fc7dfb90c43f2ff680daf4e1030f2414126b316564b5e"
+checksum = "22c118b7369eac59b0b6e84e72b0dcc443efee3f6390f78fc5e9b2f388130b7e"
 dependencies = [
  "specta",
  "thiserror",
@@ -2886,9 +2886,9 @@ dependencies = [
 
 [[package]]
 name = "specta-typescript"
-version = "0.0.5"
+version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3637aaf3b9b11e4bafec4fc2c6eaf1d252690f19dee2209fdcea8f16210fd1d8"
+checksum = "5f681a64d09d0f9a898af8b443d2d1b866b1adb350d09da6ada186e10321c4f6"
 dependencies = [
  "specta",
  "specta-serde",
