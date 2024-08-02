@@ -13,7 +13,7 @@ use specta::{
 };
 use tauri::{ipc::Invoke, Manager, Runtime};
 
-use crate::{Commands, EventRegistry, Events, LanguageExt};
+use crate::{event::EventRegistryMeta, Commands, EventRegistry, Events, LanguageExt};
 
 /// Builder for configuring Tauri Specta in your application.
 ///
@@ -161,11 +161,16 @@ impl<R: Runtime> Builder<R> {
 
     /// Mount all of the events in the builder onto a Tauri app.
     pub fn mount_events(&self, handle: &impl Manager<R>) {
-        if !handle.manage(EventRegistry {
-            plugin_name: self.plugin_name,
-            events: self.event_sids.clone(),
-        }) {
-            panic!("Attempted to mount Tauri Specta EventRegistry more than once. Did you call `Builder::mount_events` more than once?");
+        let registry = EventRegistry::get_or_manage(handle);
+        let mut map = registry.0.write().expect("Failed to lock EventRegistry");
+
+        for sid in &self.event_sids {
+            map.insert(
+                sid.clone(),
+                EventRegistryMeta {
+                    plugin_name: self.plugin_name,
+                },
+            );
         }
     }
 
