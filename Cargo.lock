@@ -3265,7 +3265,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta"
-version = "2.0.0-rc.12"
+version = "2.0.0-rc.13"
 dependencies = [
  "heck 0.5.0",
  "serde",
