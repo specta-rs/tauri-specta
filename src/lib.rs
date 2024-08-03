@@ -270,6 +270,7 @@ impl<L: LanguageExt> LanguageExt for &L {
     }
 }
 
+#[allow(unused)]
 pub(crate) enum ItemType {
     Event,
     Command,
