@@ -249,6 +249,7 @@ pub struct Events(BTreeMap<&'static str, fn(&mut TypeMap) -> (SpectaID, DataType
 pub struct ExportContext {
     pub plugin_name: Option<&'static str>,
     pub commands: Vec<datatype::Function>,
+    pub error_handling: ErrorHandlingMode,
     pub events: BTreeMap<&'static str, DataType>,
     pub type_map: TypeMap,
     pub constants: HashMap<Cow<'static, str>, serde_json::Value>,
@@ -286,6 +287,16 @@ pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -
         },
         s,
     )
+}
+
+/// The mode which the error handling is done in the bindings.
+#[derive(Debug, Default, Copy, Clone)]
+pub enum ErrorHandlingMode {
+    /// Errors will be thrown
+    Throw,
+    /// Errors will be returned as a Result enum
+    #[default]
+    Result,
 }
 
 #[doc(hidden)]
