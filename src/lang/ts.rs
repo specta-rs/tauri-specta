@@ -44,7 +44,8 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let ret_type = js_ts::handle_result(function, &cfg.type_map, ts, cfg.throw_error_of_result)?;
+            let ret_type =
+                js_ts::handle_result(function, &cfg.type_map, ts, cfg.throw_error_of_result)?;
 
             let docs = {
                 let mut builder = js_doc::Builder::default();

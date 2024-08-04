@@ -113,7 +113,7 @@ pub fn maybe_return_as_result_tuple(
             } else {
                 return_as_result_tuple(expr, as_any)
             }
-        },
+        }
         Some(FunctionResultVariant::Value(_)) => format!("return {expr};"),
         None => format!("{expr};"),
     }
