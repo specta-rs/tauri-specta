@@ -13,11 +13,11 @@
 ///
 #[macro_export]
 macro_rules! collect_commands {
-    ($($b:tt $(:: $($p:ident)? $(<$g:path>)? )* ),*) => {
+    ($($b:ident $(:: $($p:ident)? $(<$($g:path),*>)? )* ),* $(,)?) => {
         // We strip generics (::<...>) from being parsed to Tauri as it doesn't support them.
         $crate::internal::command(
             ::tauri::generate_handler![$($b $($(::$p)? )* ),*],
-            ::specta::function::collect_functions![$($b $($(::$p)? $(::<$g>)? )* ),*],
+            ::specta::function::collect_functions![$($b $($(::$p)? $(::<$($g),*>)? )* ),*],
         )
     };
 }

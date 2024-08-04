@@ -125,7 +125,7 @@ fn main() {
             generic::<tauri::Wry>,
             deprecated,
             typesafe_errors_using_thiserror,
-            typesafe_errors_using_thiserror_with_value
+            typesafe_errors_using_thiserror_with_value,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .ty::<Custom>()
