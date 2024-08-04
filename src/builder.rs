@@ -6,14 +6,15 @@ use std::{
     path::Path,
 };
 
+use crate::{
+    event::EventRegistryMeta, Commands, ErrorHandlingMode, EventRegistry, Events, LanguageExt,
+};
 use serde::Serialize;
 use specta::{
     datatype::{DataType, Function},
     NamedType, SpectaID, Type, TypeMap,
 };
 use tauri::{ipc::Invoke, Manager, Runtime};
-
-use crate::{event::EventRegistryMeta, Commands, EventRegistry, Events, LanguageExt};
 
 /// Builder for configuring Tauri Specta in your application.
 ///
@@ -55,7 +56,7 @@ pub struct Builder<R: Runtime = tauri::Wry> {
     plugin_name: Option<&'static str>,
     commands: Commands<R>,
     command_types: Vec<Function>,
-    throw_error_of_result: bool,
+    error_handling: ErrorHandlingMode,
     events: BTreeMap<&'static str, DataType>,
     event_sids: BTreeSet<SpectaID>,
     types: TypeMap,
@@ -68,7 +69,7 @@ impl<R: Runtime> Default for Builder<R> {
             plugin_name: None,
             commands: Commands::default(),
             command_types: Default::default(),
-            throw_error_of_result: false,
+            error_handling: Default::default(),
             events: Default::default(),
             event_sids: Default::default(),
             types: TypeMap::default(),
@@ -149,9 +150,9 @@ impl<R: Runtime> Builder<R> {
         self
     }
 
-    /// Throw error of `Result<T, R>` instead of wrapping with Result type
-    pub fn throw_error_of_result(mut self, throw_error_of_result: bool) -> Self {
-        self.throw_error_of_result = throw_error_of_result;
+    /// Set the error handling mode for the generated bindings.
+    pub fn error_handling(mut self, error_handling: ErrorHandlingMode) -> Self {
+        self.error_handling = error_handling;
         self
     }
 
@@ -193,7 +194,7 @@ impl<R: Runtime> Builder<R> {
         language.render(&crate::ExportContext {
             // TODO: Don't clone stuff
             commands: self.command_types.clone(),
-            throw_error_of_result: self.throw_error_of_result,
+            error_handling: self.error_handling,
             events: self.events.clone(),
             type_map: self.types.clone(),
             constants: self.constants.clone(),
