@@ -55,6 +55,7 @@ pub struct Builder<R: Runtime = tauri::Wry> {
     plugin_name: Option<&'static str>,
     commands: Commands<R>,
     command_types: Vec<Function>,
+    throw_error_of_result: bool,
     events: BTreeMap<&'static str, DataType>,
     event_sids: BTreeSet<SpectaID>,
     types: TypeMap,
@@ -67,6 +68,7 @@ impl<R: Runtime> Default for Builder<R> {
             plugin_name: None,
             commands: Commands::default(),
             command_types: Default::default(),
+            throw_error_of_result: false,
             events: Default::default(),
             event_sids: Default::default(),
             types: TypeMap::default(),
@@ -147,6 +149,12 @@ impl<R: Runtime> Builder<R> {
         self
     }
 
+    /// Throw error of `Result<T, R>` instead of wrapping with Result type
+    pub fn throw_error_of_result(mut self, throw_error_of_result: bool) -> Self {
+        self.throw_error_of_result = throw_error_of_result;
+        self
+    }
+
     // TODO: Maybe method to merge in a `TypeCollection`
 
     // TODO: Should we put a `.build` command here to ensure it's immutable from now on?
@@ -185,6 +193,7 @@ impl<R: Runtime> Builder<R> {
         language.render(&crate::ExportContext {
             // TODO: Don't clone stuff
             commands: self.command_types.clone(),
+            throw_error_of_result: self.throw_error_of_result,
             events: self.events.clone(),
             type_map: self.types.clone(),
             constants: self.constants.clone(),

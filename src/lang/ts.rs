@@ -44,7 +44,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let ret_type = js_ts::handle_result(function, &cfg.type_map, ts)?;
+            let ret_type = js_ts::handle_result(function, &cfg.type_map, ts, cfg.throw_error_of_result)?;
 
             let docs = {
                 let mut builder = js_doc::Builder::default();
@@ -64,7 +64,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                 &function.name().to_lower_camel_case(),
                 &arg_defs,
                 Some(&ret_type),
-                &js_ts::command_body(&cfg.plugin_name, function, true),
+                &js_ts::command_body(&cfg.plugin_name, function, true, cfg.throw_error_of_result),
             ))
         })
         .collect::<Result<Vec<_>, ExportError>>()?

@@ -104,9 +104,16 @@ pub fn maybe_return_as_result_tuple(
     expr: &str,
     typ: Option<&FunctionResultVariant>,
     as_any: bool,
+    throw_error_of_result: bool,
 ) -> String {
     match typ {
-        Some(FunctionResultVariant::Result(_, _)) => return_as_result_tuple(expr, as_any),
+        Some(FunctionResultVariant::Result(_, _)) => {
+            if throw_error_of_result {
+                format!("return {expr};")
+            } else {
+                return_as_result_tuple(expr, as_any)
+            }
+        },
         Some(FunctionResultVariant::Value(_)) => format!("return {expr};"),
         None => format!("{expr};"),
     }
@@ -141,14 +148,19 @@ pub fn handle_result(
     function: &datatype::Function,
     type_map: &TypeMap,
     cfg: &Typescript,
+    throw_error_of_result: bool,
 ) -> Result<String, ExportError> {
     Ok(match &function.result() {
         Some(FunctionResultVariant::Result(t, e)) => {
-            format!(
-                "Result<{}, {}>",
-                ts::datatype(cfg, &FunctionResultVariant::Value(t.clone()), type_map)?,
-                ts::datatype(cfg, &FunctionResultVariant::Value(e.clone()), type_map)?
-            )
+            if throw_error_of_result {
+                ts::datatype(cfg, &FunctionResultVariant::Value(t.clone()), type_map)?
+            } else {
+                format!(
+                    "Result<{}, {}>",
+                    ts::datatype(cfg, &FunctionResultVariant::Value(t.clone()), type_map)?,
+                    ts::datatype(cfg, &FunctionResultVariant::Value(e.clone()), type_map)?
+                )
+            }
         }
         Some(FunctionResultVariant::Value(t)) => {
             ts::datatype(cfg, &FunctionResultVariant::Value(t.clone()), type_map)?
@@ -161,6 +173,7 @@ pub fn command_body(
     plugin_name: &Option<&'static str>,
     function: &datatype::Function,
     as_any: bool,
+    throw_error_of_result: bool,
 ) -> String {
     let name = plugin_name
         .as_ref()
@@ -177,6 +190,7 @@ pub fn command_body(
         ),
         function.result(),
         as_any,
+        throw_error_of_result,
     )
 }
 

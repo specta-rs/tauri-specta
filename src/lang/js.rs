@@ -35,7 +35,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
         .iter()
         .map(|function| {
             let jsdoc = {
-                let ret_type = js_ts::handle_result(function, &cfg.type_map, ts)?;
+                let ret_type = js_ts::handle_result(function, &cfg.type_map, ts, cfg.throw_error_of_result)?;
 
                 let mut builder = js_doc::Builder::default();
 
@@ -70,7 +70,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                 // TODO: Don't `collect` the whole thing
                 &js_ts::arg_names(&function.args().cloned().collect::<Vec<_>>()),
                 None,
-                &js_ts::command_body(&cfg.plugin_name, function, false),
+                &js_ts::command_body(&cfg.plugin_name, &function, false, cfg.throw_error_of_result),
             ))
         })
         .collect::<Result<Vec<_>, ExportError>>()?

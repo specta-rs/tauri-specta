@@ -249,6 +249,7 @@ pub struct Events(BTreeMap<&'static str, fn(&mut TypeMap) -> (SpectaID, DataType
 pub struct ExportContext {
     pub plugin_name: Option<&'static str>,
     pub commands: Vec<datatype::Function>,
+    pub throw_error_of_result: bool,
     pub events: BTreeMap<&'static str, DataType>,
     pub type_map: TypeMap,
     pub constants: HashMap<Cow<'static, str>, serde_json::Value>,
