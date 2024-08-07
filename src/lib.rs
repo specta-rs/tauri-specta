@@ -79,7 +79,8 @@
 //!
 //! ## Export to JSDoc
 //!
-//! If your interested in using JSDoc instead of Typescript you can replace the [`Typescript`](specta_typescript::Typescript) struct with [`JSDoc`](specta_jsdoc::JSDoc) like the following:
+//! If your interested in using JSDoc instead of Typescript you can replace the [`specta_typescript::Typescript`](https://docs.rs/specta-typescript/latest/specta_typescript/struct.Typescript.html) struct
+//! with [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html) like the following:
 //!
 //! ```rust
 //! #[cfg(debug_assertions)]
@@ -126,13 +127,12 @@
 //! #[derive(Serialize, Deserialize, Debug, Clone, Type, Event)]
 //! pub struct DemoEvent(String);
 //!
-//! fn main() {
-//!     let mut builder = Builder::<tauri::Wry>::new()
+//! let mut builder = Builder::<tauri::Wry>::new()
 //!         .commands(collect_commands![hello_world,])
 //!         // and then register it to your builder
 //!         .events(collect_events![MyEvent,]);
 //!
-//!     tauri::Builder::default()
+//! tauri::Builder::default()
 //!         .invoke_handler(builder.invoke_handler())
 //!         .setup(move |app| {
 //!             // Ensure you mount your events!
@@ -150,7 +150,6 @@
 //!         })
 //!         .run(tauri::generate_context!())
 //!         .expect("error while running tauri application");
-//! }
 //! ```
 //!
 //! and it can be used on the frontend like the following:
@@ -262,8 +261,8 @@ pub struct ExportContext {
 /// Implemented for all languages which Tauri Specta supports exporting to.
 ///
 /// Currently implemented for:
-///  - [`specta_typescript::Typescript`]
-///  - [`specta_jsdoc::JSDoc`]
+///  - [`specta_typescript::Typescript`](https://docs.rs/specta-typescript/latest/specta_typescript/struct.Typescript.html)
+///  - [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html)
 pub trait LanguageExt: Language {
     /// render the bindings file
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
