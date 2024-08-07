@@ -5,7 +5,7 @@
 ///
 /// It can be used with generic functions as well.
 /// # Usage
-/// ```rust
+/// ```
 /// use tauri_specta::{collect_commands,Builder};
 ///
 /// #[tauri::command]

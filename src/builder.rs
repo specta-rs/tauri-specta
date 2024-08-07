@@ -26,13 +26,13 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 ///
 /// You can extend this example by calling other methods on the builder to configure your application further.
 ///
-/// ```rust
+/// ```
 /// let mut builder = <Builder>::new()
 ///     .commands(tauri_specta::collect_commands![]);
 ///
 /// #[cfg(debug_assertions)]
 /// builder
-///     .export(Typescript::default().path("../src/bindings.ts"))
+///     .export(Typescript::default(),"../src/bindings.ts")
 ///     .expect("Failed to export typescript bindings");
 ///
 /// tauri::Builder::default()
@@ -41,9 +41,7 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 ///         builder.mount_events(app); // < Required for events to work
 ///
 ///         Ok(())
-///     })
-///     .run(tauri::generate_context!())
-///     .expect("error while running tauri application");
+///     });
 /// ```
 ///
 /// # Exporting using JSDoc
@@ -185,7 +183,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     /// ```rust
-    /// # TODO
+    /// // TODO
     /// ```
     pub fn export_str<L: LanguageExt>(&self, language: L) -> Result<String, L::Error> {
         // TODO: Handle duplicate type names
@@ -206,7 +204,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     /// ```rust
-    /// # TODO
+    /// // TODO
     /// ```
     pub fn export<L: LanguageExt>(
         &self,
