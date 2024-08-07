@@ -102,11 +102,15 @@
 //! ```rust
 //! use serde::{Serialize, Deserialize};
 //! use specta::Type;
+//! use tauri_specta::Builder;
 //!
 //! #[derive(Serialize, Deserialize, Type)]
 //! pub struct MyStruct {
 //!     a: String
 //! }
+//!
+//! // Call `ty()` as much as you want.
+//! let mut builder = Builder::<tauri::Wry>::new().ty::<MyStruct>();
 //! ```
 //!
 //! ## Events
