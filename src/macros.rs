@@ -1,14 +1,21 @@
 /// Collect commands and their types.
 ///
-/// This is a combination of Tauri's [`generate_handler`](tauri::generate_handler) and Specta's [`collect_functions`](specta::function::collect_functions).
+/// This is a combination of Tauri's [`generate_handler`](tauri::generate_handler) and Specta's [`collect_functions`](specta::function::collect_functions),
+/// returning a [`Commands`](crate::Commands) struct that can be passed to [`Builder::commands`](crate::Builder::commands).
 ///
-/// This returns a [`Commands`](crate::Commands) struct that can be passed to [`Builder::commands`](crate::Builder::commands).
-///
+/// It can be used with generic functions as well.
 /// # Usage
 /// ```rust
-/// collect_commands![];
-/// collect_commands![hello_world];
-/// collect_commands![hello_world, some::path::function, generic_fn::<String>];
+/// use tauri_specta::{collect_commands,Builder};
+///
+/// #[tauri::command]
+/// #[specta::specta] // < You must annotate your commands
+/// fn hello_world(my_name: String) -> String {
+///     format!("Hello, {my_name}! You've been greeted from Rust!")
+/// }
+///
+/// let mut builder = Builder::<tauri::Wry>::new()
+///     .commands(collect_commands![hello_world]);
 /// ```
 ///
 #[macro_export]
@@ -28,9 +35,15 @@ macro_rules! collect_commands {
 ///
 /// # Usage
 /// ```rust
-/// collect_events![];
-/// collect_events![MyEvent];
-/// collect_events![MyEvent, module::MyOtherEvent];
+/// use serde::{Serialize, Deserialize};
+/// use specta::Type;
+/// use tauri_specta::{Event,Builder,collect_events};
+///
+/// #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
+/// pub struct MyEvent(String);
+///
+/// let mut builder = Builder::<tauri::Wry>::new()
+///     .events(collect_events![MyEvent]);
 /// ```
 ///
 #[macro_export]
