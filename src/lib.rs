@@ -71,9 +71,7 @@
 //!             builder.mount_events(app);
 //!             
 //!             Ok(())
-//!         })
-//!         .run(tauri::generate_context!())
-//!         .expect("error while running tauri application");
+//!         });
 //! }
 //! ```
 //!
@@ -83,6 +81,10 @@
 //! with [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html) like the following:
 //!
 //! ```rust
+//! use tauri_specta::Builder;
+//!
+//! let mut builder = Builder::<tauri::Wry>::new();
+//!
 //! #[cfg(debug_assertions)]
 //! builder
 //!     .export(specta_jsdoc::JSDoc::default(), "../src/bindings.js")
@@ -128,9 +130,8 @@
 //! pub struct DemoEvent(String);
 //!
 //! let mut builder = Builder::<tauri::Wry>::new()
-//!         .commands(collect_commands![hello_world,])
 //!         // and then register it to your builder
-//!         .events(collect_events![MyEvent,]);
+//!         .events(collect_events![DemoEvent]);
 //!
 //! tauri::Builder::default()
 //!         .invoke_handler(builder.invoke_handler())
@@ -147,9 +148,7 @@
 //!             DemoEvent("Test".into()).emit(app).unwrap();
 //!             
 //!             Ok(())
-//!         })
-//!         .run(tauri::generate_context!())
-//!         .expect("error while running tauri application");
+//!         });
 //! ```
 //!
 //! and it can be used on the frontend like the following:
