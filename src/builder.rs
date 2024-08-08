@@ -27,7 +27,7 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 /// You can extend this example by calling other methods on the builder to configure your application further.
 ///
 /// ```
-/// use tauri_specta::{collect_commands,collect_events};
+/// use tauri_specta::{collect_commands,collect_events,Builder};
 /// use specta_typescript::Typescript;
 ///
 ///
@@ -52,7 +52,7 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 /// # Exporting using JSDoc
 ///
 /// ```
-/// use tauri_specta::{collect_commands,collect_events};
+/// use tauri_specta::{collect_commands,collect_events,Builder};
 /// use specta_jsdoc::JSDoc;
 ///
 ///
@@ -245,7 +245,7 @@ impl<R: Runtime> Builder<R> {
     /// # Example
     ///
     /// ```
-    /// use tauri_specta::Builder;
+    /// use tauri_specta::{Builder,collect_events};
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![]);
     ///
@@ -277,12 +277,17 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     /// ```
+    /// use tauri_specta::{Builder};
+    /// use std::{
+    ///     fs::File,
+    ///     io::Write
+    /// };
     /// use specta_typescript::Typescript;
     ///
-    /// let mut file = File::create(&path)?;
+    /// let mut file = File::create("../src/bindings.ts").unwrap();
     /// let mut builder = Builder::<tauri::Wry>::new();
     ///
-    /// write!(file, "{}", builder.export_str(Typescript)?)?;
+    /// write!(file, "{}", builder.export_str(Typescript::new()).unwrap()).unwrap();
     /// ```
     pub fn export_str<L: LanguageExt>(&self, language: L) -> Result<String, L::Error> {
         // TODO: Handle duplicate type names
