@@ -71,7 +71,9 @@
 //!             builder.mount_events(app);
 //!             
 //!             Ok(())
-//!         });
+//!         })
+//!         .run(tauri::generate_context!())
+//!         .expect("error while running tauri application");
 //! }
 //! ```
 //!
@@ -81,9 +83,7 @@
 //! with [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html) like the following:
 //!
 //! ```rust
-//! use tauri_specta::Builder;
-//!
-//! let mut builder = Builder::<tauri::Wry>::new();
+//! let mut builder = tauri_specta::Builder::<tauri::Wry>::new();
 //!
 //! #[cfg(debug_assertions)]
 //! builder
@@ -105,15 +105,14 @@
 //! ```rust
 //! use serde::{Serialize, Deserialize};
 //! use specta::Type;
-//! use tauri_specta::Builder;
 //!
 //! #[derive(Serialize, Deserialize, Type)]
 //! pub struct MyStruct {
 //!     a: String
 //! }
 //!
-//! // Call `ty()` as much as you want.
-//! let mut builder = Builder::<tauri::Wry>::new().ty::<MyStruct>();
+//! // Call `typ()` as much as you want.
+//! let mut builder = tauri_specta::Builder::<tauri::Wry>::new().typ::<MyStruct>();
 //! ```
 //!
 //! ## Events
@@ -260,8 +259,8 @@ pub struct ExportContext {
 /// Implemented for all languages which Tauri Specta supports exporting to.
 ///
 /// Currently implemented for:
-///  - [`specta_typescript::Typescript`](https://docs.rs/specta-typescript/latest/specta_typescript/struct.Typescript.html)
-///  - [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html)
+///  - [`specta_typescript::Typescript`]
+///  - [`specta_jsdoc::JSDoc`]
 pub trait LanguageExt: Language {
     /// render the bindings file
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
