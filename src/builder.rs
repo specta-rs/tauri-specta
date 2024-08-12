@@ -26,7 +26,7 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 ///
 /// You can extend this example by calling other methods on the builder to configure your application further.
 ///
-/// ```
+/// ```rust,no_run
 /// use tauri_specta::{collect_commands, collect_events, Builder};
 /// use specta_typescript::Typescript;
 ///
@@ -47,13 +47,14 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 ///
 ///         Ok(())
 ///     })
-///     .run(tauri::generate_context!())
+///     // on an actual app, remove the string argument
+///     .run(tauri::generate_context!("tests/tauri.conf.json"))
 ///     .expect("error while running tauri application");
 /// ```
 ///
 /// # Exporting using JSDoc
 ///
-/// ```
+/// ```rust,no_run
 /// use tauri_specta::{collect_commands,collect_events,Builder};
 /// use specta_jsdoc::JSDoc;
 ///
@@ -75,7 +76,8 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 ///
 ///         Ok(())
 ///     })
-///     .run(tauri::generate_context!())
+///     // on an actual app, remove the string argument
+///     .run(tauri::generate_context!("tests/tauri.conf.json"))
 ///     .expect("error while running tauri application");
 /// ```
 pub struct Builder<R: Runtime = tauri::Wry> {
@@ -258,7 +260,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust,no_run
     /// use tauri_specta::{Builder, collect_events};
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![]);
@@ -269,7 +271,8 @@ impl<R: Runtime> Builder<R> {
     ///             
     ///         Ok(())
     ///     })
-    ///     .run(tauri::generate_context!())
+    ///     // on an actual app, remove the string argument
+    ///     .run(tauri::generate_context!("tests/tauri.conf.json"))
     ///     .expect("error while running tauri application");
     /// ```
     pub fn mount_events(&self, handle: &impl Manager<R>) {

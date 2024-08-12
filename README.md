@@ -36,6 +36,13 @@ cd examples/app/
 pnpm tauri dev
 ```
 
+### Running tests
+
+```bash
+mkdir _out
+OUT_DIR="$(pwd)/_out" cargo test --all --all-features
+```
+
 ## Credit
 
 Created by [oscartbeaumont](https://github.com/oscartbeaumont) and [Brendonovich](https://github.com/brendonovich).

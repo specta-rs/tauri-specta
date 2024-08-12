@@ -22,7 +22,7 @@
 /// mod hello {
 ///     #[tauri::command]
 ///     #[specta::specta] // < You must annotate your commands
-///     fn world() -> String {
+///     pub fn world() -> String {
 ///         format!("Hello world")
 ///     }
 /// }
@@ -58,17 +58,22 @@ macro_rules! collect_commands {
 /// ```rust
 /// use serde::{Serialize, Deserialize};
 /// use specta::Type;
-/// use tauri_specta::{Event,Builder,collect_events};
+/// use tauri_specta::{Event, Builder, collect_events};
 ///
 /// #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 /// pub struct MyEvent(String);
 ///
 /// #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
-/// pub struct MyGenericEvent<T: Debug + Clone + Serialize + Deserialize + Type>(T);
+/// pub struct MyGenericEvent<T: Type>(T);
 ///
 /// mod hello {
+/// # use serde::{Serialize, Deserialize};
+/// # use specta::Type;
+/// # use tauri_specta::{Event, Builder, collect_events};
+///     use super::*;
+///     
 ///     #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
-///    pub struct World(String);
+///     pub struct World(String);
 /// }
 ///
 /// let mut builder = Builder::<tauri::Wry>::new()

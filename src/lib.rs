@@ -37,7 +37,7 @@
 //!
 //! The follow is a minimal example of how to setup Tauri Specta with Typescript.
 //!
-//! ```rust
+//! ```rust,no_run
 //! #![cfg_attr(
 //!     all(not(debug_assertions), target_os = "windows"),
 //!     windows_subsystem = "windows"
@@ -72,7 +72,8 @@
 //!             
 //!             Ok(())
 //!         })
-//!         .run(tauri::generate_context!())
+//!         // on an actual app, remove the string argument
+//!         .run(tauri::generate_context!("tests/tauri.conf.json"))
 //!         .expect("error while running tauri application");
 //! }
 //! ```
