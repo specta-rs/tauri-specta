@@ -1,0 +1,1 @@
+*Please don't submit Tauri version upgrades as PR's, just put a comment on #126*
