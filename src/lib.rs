@@ -14,7 +14,7 @@
 //!
 //! ```sh
 //! # Always required
-//! cargo add tauri@=2.0.0-rc.0 specta@=2.0.0-rc.20
+//! cargo add tauri@=2.0.0-rc.2 specta@=2.0.0-rc.20
 //!
 //! # Typescript
 //! cargo add specta-typescript@0.0.7

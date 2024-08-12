@@ -10,7 +10,7 @@ rust-version = "1.57"
 publish = false
 
 [build-dependencies]
-tauri-build = { version = "=2.0.0-rc.0", features = [] }
+tauri-build = { version = "=2.0.0-rc.2", features = [] }
 
 [dependencies]
 serde_json = "1.0"
@@ -20,7 +20,7 @@ tauri = { workspace = true, features = [] }
 tauri-specta = { path = "../../../", features = ["derive", "typescript", "javascript"] }
 specta-typescript = { workspace = true }
 specta-jsdoc = { workspace = true }
-tauri-plugin-os = "^2.0.0-beta.3"
+tauri-plugin-os = "^2.0.0-alpha.2"
 thiserror = "1"
 
 [features]
