@@ -83,17 +83,17 @@ macro_rules! make_handler {
 /// use serde::{Serialize, Deserialize};
 /// use specta::Type;
 /// use tauri_specta::Event;
-/// use tauri::AppHandle
+/// use tauri::AppHandle;
 ///
 /// #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 /// pub struct MyEvent(String);
 ///
-/// fn use_event(app: AppHandle) {
-///     DemoEvent::listen(handle, |event| {
+/// fn use_event(app_handle: AppHandle) {
+///     MyEvent::listen(&app_handle, |event| {
 ///         dbg!(event.payload);
 ///     });
 ///
-///     DemoEvent("Test".to_string()).emit(handle).ok();
+///     MyEvent("Test".to_string()).emit(&app_handle).ok();
 /// }
 /// ```
 pub trait Event: NamedType {

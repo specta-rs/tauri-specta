@@ -26,13 +26,18 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 ///
 /// You can extend this example by calling other methods on the builder to configure your application further.
 ///
-/// ```rust
+/// ```rust,no_run
+/// use tauri_specta::{collect_commands, collect_events, Builder};
+/// use specta_typescript::Typescript;
+///
+///
 /// let mut builder = <Builder>::new()
-///     .commands(tauri_specta::collect_commands![]);
+///     .commands(collect_commands![])
+///     .events(collect_events![]);
 ///
 /// #[cfg(debug_assertions)]
 /// builder
-///     .export(Typescript::default().path("../src/bindings.ts"))
+///     .export(Typescript::default(), "../src/bindings.ts")
 ///     .expect("Failed to export typescript bindings");
 ///
 /// tauri::Builder::default()
@@ -42,14 +47,38 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 ///
 ///         Ok(())
 ///     })
-///     .run(tauri::generate_context!())
+///     // on an actual app, remove the string argument
+///     .run(tauri::generate_context!("tests/tauri.conf.json"))
 ///     .expect("error while running tauri application");
 /// ```
 ///
 /// # Exporting using JSDoc
 ///
-/// ```rs
-/// # TODO
+/// ```rust,no_run
+/// use tauri_specta::{collect_commands,collect_events,Builder};
+/// use specta_jsdoc::JSDoc;
+///
+///
+/// let mut builder = <Builder>::new()
+///     .commands(collect_commands![])
+///     .events(collect_events![]);
+///
+/// // exporting to JsDoc
+/// #[cfg(debug_assertions)]
+/// builder
+///     .export(JSDoc::default(), "../src/bindings.js")
+///     .expect("Failed to export jsdoc bindings");
+///
+/// tauri::Builder::default()
+///     .invoke_handler(builder.invoke_handler()) // < Required for commands to work
+///     .setup(move |app| {
+///         builder.mount_events(app); // < Required for events to work
+///
+///         Ok(())
+///     })
+///     // on an actual app, remove the string argument
+///     .run(tauri::generate_context!("tests/tauri.conf.json"))
+///     .expect("error while running tauri application");
 /// ```
 pub struct Builder<R: Runtime = tauri::Wry> {
     // TODO: Can we just hold a `ExportContext` here to make it a bit neater???
@@ -97,6 +126,20 @@ impl<R: Runtime> Builder<R> {
     /// Register commands with the builder.
     ///
     /// **WARNING:** This method will overwrite any previously registered commands.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tauri_specta::{Builder, collect_commands};
+    ///
+    /// #[tauri::command]
+    /// #[specta::specta]
+    /// fn hello_world(my_name: String) -> String {
+    ///     format!("Hello, {my_name}! You've been greeted from Rust!")
+    /// }
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().commands(collect_commands![hello_world]);
+    /// ```
     pub fn commands(mut self, commands: Commands<R>) -> Self {
         Self {
             command_types: (commands.1)(&mut self.types),
@@ -108,6 +151,19 @@ impl<R: Runtime> Builder<R> {
     /// Register events with the builder.
     ///
     /// **WARNING:** This method will overwrite any previously registered events.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use serde::{Serialize, Deserialize};
+    /// use specta::Type;
+    /// use tauri_specta::{Builder, collect_events, Event};
+    ///
+    /// #[derive(Serialize, Deserialize, Debug, Clone, Type, Event)]
+    /// pub struct DemoEvent(String);
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![DemoEvent]);
+    /// ```
     pub fn events(mut self, events: Events) -> Self {
         let mut event_sids = BTreeSet::new();
         let events = events
@@ -129,10 +185,34 @@ impl<R: Runtime> Builder<R> {
             ..self
         }
     }
+
+    /// This method is deprecated. Please use [Self::typ].
+    #[deprecated(note = "Use `Self::ty` instead")]
+    pub fn ty<T: NamedType>(mut self) -> Self {
+        let dt = T::definition_named_data_type(&mut self.types);
+        self.types.insert(T::sid(), dt);
+        self
+    }
+
     /// Export a new type with the frontend.
     ///
     /// This is useful if you want to export types that do not appear in any events or commands.
-    pub fn ty<T: NamedType>(mut self) -> Self {
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tauri_specta::Builder;
+    /// use serde::{Serialize, Deserialize};
+    /// use specta::Type;
+    ///
+    /// #[derive(Serialize, Deserialize, Type)]
+    /// pub struct MyStruct {
+    ///     a: String
+    /// }
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().typ::<MyStruct>();
+    /// ```
+    pub fn typ<T: NamedType>(mut self) -> Self {
         let dt = T::definition_named_data_type(&mut self.types);
         self.types.insert(T::sid(), dt);
         self
@@ -141,6 +221,14 @@ impl<R: Runtime> Builder<R> {
     /// Export a constant value to the frontend.
     ///
     /// This is useful to share application-wide constants or expose data which is generated by Rust.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tauri_specta::Builder;
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().constant("CONSTANT_NAME","ANY_CONSTANT_VALUE");
+    /// ```
     #[track_caller]
     pub fn constant<T: Serialize + Type>(mut self, k: impl Into<Cow<'static, str>>, v: T) -> Self {
         self.constants.insert(
@@ -167,6 +255,26 @@ impl<R: Runtime> Builder<R> {
     }
 
     /// Mount all of the events in the builder onto a Tauri app.
+    ///
+    /// This should be called within [`tauri::Builder::setup`](tauri::Builder::setup) like the example below.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use tauri_specta::{Builder, collect_events};
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![]);
+    ///
+    /// tauri::Builder::default()
+    ///     .setup(move |app| {
+    ///         builder.mount_events(app);
+    ///             
+    ///         Ok(())
+    ///     })
+    ///     // on an actual app, remove the string argument
+    ///     .run(tauri::generate_context!("tests/tauri.conf.json"))
+    ///     .expect("error while running tauri application");
+    /// ```
     pub fn mount_events(&self, handle: &impl Manager<R>) {
         let registry = EventRegistry::get_or_manage(handle);
         let mut map = registry.0.write().expect("Failed to lock EventRegistry");
@@ -183,9 +291,22 @@ impl<R: Runtime> Builder<R> {
 
     /// Export the bindings to a string.
     ///
+    /// You should prefer to use [`Self::export`], unless you need explicit control over saving.
+    ///
     /// # Example
-    /// ```rust
-    /// # TODO
+    /// ```
+    /// use std::{
+    ///     fs::File,
+    ///     io::Write
+    /// };
+    /// use specta_typescript::Typescript;
+    ///
+    /// println!(
+    ///     "{}",
+    ///     tauri_specta::Builder::<tauri::Wry>::new()
+    ///         .export_str(Typescript::new())
+    ///         .unwrap()
+    /// );
     /// ```
     pub fn export_str<L: LanguageExt>(&self, language: L) -> Result<String, L::Error> {
         // TODO: Handle duplicate type names
@@ -205,8 +326,18 @@ impl<R: Runtime> Builder<R> {
     /// Export the bindings to a file.
     ///
     /// # Example
-    /// ```rust
-    /// # TODO
+    /// ```
+    /// use tauri_specta::{Builder, collect_commands, collect_events};
+    /// use specta_typescript::Typescript;
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new()
+    ///     .commands(collect_commands![])
+    ///     .events(collect_events![]);
+    ///
+    /// #[cfg(debug_assertions)] // only export on debug builds.
+    /// builder
+    ///     .export(Typescript::default(), "../src/bindings.ts")
+    ///     .expect("Failed to export typescript bindings");
     /// ```
     pub fn export<L: LanguageExt>(
         &self,

@@ -116,7 +116,7 @@ pub struct Testing {
 }
 
 fn main() {
-    let mut builder = Builder::<tauri::Wry>::new()
+    let builder = Builder::<tauri::Wry>::new()
         .commands(tauri_specta::collect_commands![
             hello_world,
             goodbye_world,
@@ -128,7 +128,7 @@ fn main() {
             typesafe_errors_using_thiserror_with_value,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
-        .ty::<Custom>()
+        .typ::<Custom>()
         .constant("universalConstant", 42);
 
     #[cfg(debug_assertions)]

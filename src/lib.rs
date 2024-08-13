@@ -37,7 +37,7 @@
 //!
 //! The follow is a minimal example of how to setup Tauri Specta with Typescript.
 //!
-//! ```rust
+//! ```rust,no_run
 //! #![cfg_attr(
 //!     all(not(debug_assertions), target_os = "windows"),
 //!     windows_subsystem = "windows"
@@ -72,16 +72,20 @@
 //!             
 //!             Ok(())
 //!         })
-//!         .run(tauri::generate_context!())
+//!         // on an actual app, remove the string argument
+//!         .run(tauri::generate_context!("tests/tauri.conf.json"))
 //!         .expect("error while running tauri application");
 //! }
 //! ```
 //!
 //! ## Export to JSDoc
 //!
-//! If your interested in using JSDoc instead of Typescript you can replace the [`Typescript`](specta_typescript::Typescript) struct with [`JSDoc`](specta_jsdoc::JSDoc) like the following:
+//! If your interested in using JSDoc instead of Typescript you can replace the [`specta_typescript::Typescript`](https://docs.rs/specta-typescript/latest/specta_typescript/struct.Typescript.html) struct
+//! with [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html) like the following:
 //!
 //! ```rust
+//! let mut builder = tauri_specta::Builder::<tauri::Wry>::new();
+//!
 //! #[cfg(debug_assertions)]
 //! builder
 //!     .export(specta_jsdoc::JSDoc::default(), "../src/bindings.js")
@@ -107,6 +111,9 @@
 //! pub struct MyStruct {
 //!     a: String
 //! }
+//!
+//! // Call `typ()` as much as you want.
+//! let mut builder = tauri_specta::Builder::<tauri::Wry>::new().typ::<MyStruct>();
 //! ```
 //!
 //! ## Events
@@ -122,13 +129,11 @@
 //! #[derive(Serialize, Deserialize, Debug, Clone, Type, Event)]
 //! pub struct DemoEvent(String);
 //!
-//! fn main() {
-//!     let mut builder = Builder::<tauri::Wry>::new()
-//!         .commands(collect_commands![hello_world,])
+//! let mut builder = Builder::<tauri::Wry>::new()
 //!         // and then register it to your builder
-//!         .events(collect_events![MyEvent,]);
+//!         .events(collect_events![DemoEvent]);
 //!
-//!     tauri::Builder::default()
+//! tauri::Builder::default()
 //!         .invoke_handler(builder.invoke_handler())
 //!         .setup(move |app| {
 //!             // Ensure you mount your events!
@@ -143,10 +148,7 @@
 //!             DemoEvent("Test".into()).emit(app).unwrap();
 //!             
 //!             Ok(())
-//!         })
-//!         .run(tauri::generate_context!())
-//!         .expect("error while running tauri application");
-//! }
+//!         });
 //! ```
 //!
 //! and it can be used on the frontend like the following:
