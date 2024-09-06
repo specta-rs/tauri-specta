@@ -187,7 +187,7 @@ impl<R: Runtime> Builder<R> {
     }
 
     /// This method is deprecated. Please use [Self::typ].
-    #[deprecated(note = "Use `Self::ty` instead")]
+    #[deprecated(note = "Use `Self::typ` instead")]
     pub fn ty<T: NamedType>(mut self) -> Self {
         let dt = T::definition_named_data_type(&mut self.types);
         self.types.insert(T::sid(), dt);
