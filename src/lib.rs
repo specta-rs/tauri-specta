@@ -14,15 +14,15 @@
 //!
 //! ```sh
 //! # Always required
-//! cargo add tauri@=2.0.0-rc.10 specta@=2.0.0-rc.20
+//! cargo add tauri@2.0.0-rc.15 specta@=2.0.0-rc.20
 //!
 //! # Typescript
 //! cargo add specta-typescript@0.0.7
-//! cargo add tauri-specta@=2.0.0-rc.19 --features derive,typescript
+//! cargo add tauri-specta@=2.0.0-rc.20 --features derive,typescript
 //!
 //! # JSDoc
 //! cargo add specta-jsdoc@0.0.7
-//! cargo add tauri-specta@=2.0.0-rc.19 --features derive,javascript
+//! cargo add tauri-specta@=2.0.0-rc.20 --features derive,javascript
 //! ```
 //!
 //! ## Features
