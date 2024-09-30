@@ -295,18 +295,14 @@
       "type": "string",
       "oneOf": [
         {
-          "description": "allow-add-numbers -> Enables the add_numbers command without any pre-configured scope.",
+          "description": "Enables the add_numbers command without any pre-configured scope.",
           "type": "string",
-          "enum": [
-            "allow-add-numbers"
-          ]
+          "const": "allow-add-numbers"
         },
         {
-          "description": "deny-add-numbers -> Denies the add_numbers command without any pre-configured scope.",
+          "description": "Denies the add_numbers command without any pre-configured scope.",
           "type": "string",
-          "enum": [
-            "deny-add-numbers"
-          ]
+          "const": "deny-add-numbers"
         }
       ]
     }
