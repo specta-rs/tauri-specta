@@ -4,7 +4,7 @@
 //!
 //! <section class="warning">
 //!
-//! Tauri Specta v2 is still in beta, and requires using [Tauri v2](https://beta.tauri.app) and [Specta v2](https://github.com/oscartbeaumont/specta) lands as stable.
+//! Tauri Specta v2 is still in beta, and requires using [Tauri v2](https://tauri.app) and [Specta v2](https://github.com/oscartbeaumont/specta) lands as stable.
 //!
 //! It is really important you use `=` in your versions to ensure your project will not break after future updates!
 //!
