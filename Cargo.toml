@@ -21,7 +21,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 default = []
 derive = ["dep:tauri-specta-macros"]
 javascript = ["dep:specta-jsdoc"]
-typescript = ["dep:specta-typescript"]
+typescript = []
 
 [lints]
 workspace = true
@@ -29,7 +29,7 @@ workspace = true
 [dependencies]
 # Public
 specta = { workspace = true, features = ["function"] }
-specta-typescript = { workspace = true, optional = true }
+specta-typescript = { workspace = true }
 specta-jsdoc = { workspace = true, optional = true }
 tauri-specta-macros = { version = "=2.0.0-rc.16", optional = true, path = "./macros" }
 serde = "1"
