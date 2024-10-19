@@ -7,6 +7,7 @@ use crate::{ExportContext, LanguageExt};
 use super::js_ts;
 
 const GLOBALS: &str = include_str!("./globals.js");
+const GLOBALS_EVENTS: &str = include_str!("./globals_events.js");
 
 impl LanguageExt for specta_jsdoc::JSDoc {
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
@@ -21,6 +22,7 @@ impl LanguageExt for specta_jsdoc::JSDoc {
             cfg,
             &dependant_types,
             GLOBALS,
+            GLOBALS_EVENTS,
             &self.0.header,
             render_commands(&self.0, cfg)?,
             render_events(&self.0, cfg)?,
