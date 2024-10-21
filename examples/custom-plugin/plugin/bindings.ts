@@ -52,7 +52,7 @@ type __EventObj__<T> = {
 	once: (
 		cb: TAURI_API_EVENT.EventCallback<T>,
 	) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
-	emit: null extends T
+	emit: T extends null
 	? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
 	: (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
