@@ -127,7 +127,7 @@ pub trait Event: NamedType {
     /// Listen to an event on this manager only once.
     fn once<F, R: Runtime, H: Listener<R> + Manager<R>>(handle: &H, handler: F) -> EventId
     where
-        F: Fn(TypedEvent<Self>) + Send + 'static,
+        F: FnOnce(TypedEvent<Self>) + Send + 'static,
         Self: DeserializeOwned,
     {
         handle.once(
