@@ -162,16 +162,16 @@ pub trait Event: NamedType {
     }
 
     /// Emits an event to all [targets](EventTarget) matching the given target.
-    fn emit_to<R: Runtime, H: Emitter<R> + Manager<R>>(
+    fn emit_to<R: Runtime, H: Emitter<R> + Manager<R>, I: Into<EventTarget>>(
         &self,
         handle: &H,
-        label: &str,
+        target: I,
     ) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
     {
         handle.emit_to(
-            label,
+            target,
             &EventRegistry::get_event_name::<Self, _>(handle, Self::NAME),
             self,
         )
