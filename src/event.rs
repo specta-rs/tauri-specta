@@ -150,7 +150,7 @@ pub trait Event: NamedType {
         )
     }
 
-    /// Emits an event to all [targets](EventTarget) matching the given target.
+    /// Emits an event to all [targets](EventTarget).
     fn emit<R: Runtime, H: Emitter<R> + Manager<R>>(&self, handle: &H) -> tauri::Result<()>
     where
         Self: Serialize + Clone,
