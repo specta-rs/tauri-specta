@@ -20,6 +20,7 @@ pub fn render_all_parts<L: LanguageExt>(
     cfg: &ExportContext,
     dependant_types: &str,
     globals: &str,
+    globals_events: &str,
     header: &str,
     commands: String,
     events: String,
@@ -73,7 +74,9 @@ pub fn render_all_parts<L: LanguageExt>(
 
 /** tauri-specta globals **/
 
-{globals}"#
+{globals}
+{}"#,
+    if events.is_empty(){""} else {globals_events}
     })
 }
 
