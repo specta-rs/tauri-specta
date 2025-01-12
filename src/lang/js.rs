@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use heck::ToLowerCamelCase;
 use specta::datatype::FunctionResultVariant;
 use specta_typescript::{js_doc, ExportError, Typescript};
@@ -9,10 +11,12 @@ use super::js_ts;
 const GLOBALS: &str = include_str!("./globals.js");
 
 impl LanguageExt for specta_jsdoc::JSDoc {
+    type Error = ExportError;
+
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         let dependant_types = cfg
             .type_map
-            .iter()
+            .into_iter()
             .map(|(_sid, ndt)| js_doc::typedef_named_datatype(&self.0, ndt, &cfg.type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
@@ -26,6 +30,13 @@ impl LanguageExt for specta_jsdoc::JSDoc {
             render_events(&self.0, cfg)?,
             false,
         )
+    }
+
+    fn format(&self, path: &Path) -> Result<(), Self::Error> {
+        if let Some(formatter) = self.0.formatter {
+            formatter(path)?;
+        }
+        Ok(())
     }
 }
 

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{lang::js_ts, ExportContext, LanguageExt};
 use heck::ToLowerCamelCase;
 use specta::datatype::FunctionResultVariant;
@@ -7,10 +9,12 @@ use specta_typescript::{js_doc, ExportError};
 const GLOBALS: &str = include_str!("./globals.ts");
 
 impl LanguageExt for specta_typescript::Typescript {
+    type Error = ExportError;
+
     fn render(&self, cfg: &ExportContext) -> Result<String, ExportError> {
         let dependant_types = cfg
             .type_map
-            .iter()
+            .into_iter()
             .map(|(_sid, ndt)| ts::export_named_datatype(&self, ndt, &cfg.type_map))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
@@ -24,6 +28,13 @@ impl LanguageExt for specta_typescript::Typescript {
             render_events(self, cfg)?,
             true,
         )
+    }
+
+    fn format(&self, path: &Path) -> Result<(), Self::Error> {
+        if let Some(formatter) = self.formatter {
+            formatter(path)?;
+        }
+        Ok(())
     }
 }
 

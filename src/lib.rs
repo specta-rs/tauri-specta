@@ -14,15 +14,15 @@
 //!
 //! ```sh
 //! # Always required
-//! cargo add tauri@2.0 specta@=2.0.0-rc.20
+//! cargo add tauri@2.0 specta@=2.0.0-rc.21
 //!
 //! # Typescript
-//! cargo add specta-typescript@0.0.7
-//! cargo add tauri-specta@=2.0.0-rc.20 --features derive,typescript
+//! cargo add specta-typescript@0.0.8
+//! cargo add tauri-specta@=2.0.0-rc.21 --features derive,typescript
 //!
 //! # JSDoc
-//! cargo add specta-jsdoc@0.0.7
-//! cargo add tauri-specta@=2.0.0-rc.20 --features derive,javascript
+//! cargo add specta-jsdoc@0.0.8
+//! cargo add tauri-specta@=2.0.0-rc.21 --features derive,javascript
 //! ```
 //!
 //! ## Features
@@ -69,7 +69,7 @@
 //!         .setup(move |app| {
 //!             // This is also required if you want to use events
 //!             builder.mount_events(app);
-//!             
+//!
 //!             Ok(())
 //!         })
 //!         // on an actual app, remove the string argument
@@ -146,7 +146,7 @@
 //!             });
 //!
 //!             DemoEvent("Test".into()).emit(app).unwrap();
-//!             
+//!
 //!             Ok(())
 //!         });
 //! ```
@@ -187,6 +187,7 @@ use core::fmt;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
+    path::Path,
     sync::Arc,
 };
 
@@ -262,14 +263,26 @@ pub struct ExportContext {
 /// Currently implemented for:
 ///  - [`specta_typescript::Typescript`]
 ///  - [`specta_jsdoc::JSDoc`]
-pub trait LanguageExt: Language {
+pub trait LanguageExt {
+    /// TODO
+    type Error: std::error::Error + From<std::io::Error>;
+
     /// render the bindings file
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
+
+    /// TODO
+    fn format(&self, path: &Path) -> Result<(), Self::Error>;
 }
 
 impl<L: LanguageExt> LanguageExt for &L {
+    type Error = L::Error;
+
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         (*self).render(cfg)
+    }
+
+    fn format(&self, path: &Path) -> Result<(), Self::Error> {
+        (*self).format(path)
     }
 }
 
