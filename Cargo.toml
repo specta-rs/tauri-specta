@@ -42,10 +42,10 @@ heck = "0.5.0"
 
 [workspace]
 members = [
-  "examples/app/src-tauri",
-  "examples/custom-plugin/app/src-tauri",
-  "examples/custom-plugin/plugin",
-  "macros",
+    "examples/app/src-tauri",
+    "examples/custom-plugin/app/src-tauri",
+    "examples/custom-plugin/plugin",
+    "macros",
 ]
 
 [workspace.lints.rust]
@@ -64,13 +64,10 @@ panic_in_result_fn = { level = "warn", priority = -1 }
 tauri = { version = "2.2" }
 tauri-build = { version = "2.0" }
 tauri-plugin = { version = "2.0" }
-specta = { version = "=2.0.0-rc.21" }
-specta-typescript = { version = "0.0.8" }
-specta-jsdoc = { version = "0.0.8" }
+specta = { version = "=2.0.0-rc.22" }
+specta-typescript = { version = "0.0.9" }
+specta-jsdoc = { version = "0.0.9" }
 
 [patch.crates-io]
-tauri = { path = "/Users/oscar/Desktop/tauri/crates/tauri" }
-specta = { path = "/Users/oscar/Desktop/specta/specta" }
-specta-typescript = { path = "/Users/oscar/Desktop/specta/specta-typescript" }
-specta-jsdoc = { path = "/Users/oscar/Desktop/specta/specta-jsdoc" }
-specta-util = { path = "/Users/oscar/Desktop/specta/specta-util" }
+# Waiting for release of https://github.com/tauri-apps/tauri/pull/12371
+tauri = { git = "https://github.com/tauri-apps/tauri", rev = "75d56e8364fb203387bb5a5235f316dd7dfa6acd" }

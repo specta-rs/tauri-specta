@@ -3042,7 +3042,9 @@ dependencies = [
 
 [[package]]
 name = "specta"
-version = "2.0.0-rc.21"
+version = "2.0.0-rc.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab7f01e9310a820edd31c80fde3cae445295adde21a3f9416517d7d65015b971"
 dependencies = [
  "paste",
  "specta-macros",
@@ -3051,7 +3053,9 @@ dependencies = [
 
 [[package]]
 name = "specta-jsdoc"
-version = "0.0.8"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c80a3da00adc2aff522a6bbc2f766870ae2d3381a5c937b94c30e4fd9e82109"
 dependencies = [
  "specta",
  "specta-serde",
@@ -3061,6 +3065,8 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0074b9e30ed84c6924eb63ad8d2fe71cdc82628525d84b1fcb1f2fd40676517"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -3070,7 +3076,9 @@ dependencies = [
 
 [[package]]
 name = "specta-serde"
-version = "0.0.8"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77216504061374659e7245eac53d30c7b3e5fe64b88da97c753e7184b0781e63"
 dependencies = [
  "specta",
  "thiserror 1.0.69",
@@ -3078,7 +3086,9 @@ dependencies = [
 
 [[package]]
 name = "specta-typescript"
-version = "0.0.8"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3220a0c365e51e248ac98eab5a6a32f544ff6f961906f09d3ee10903a4f52b2d"
 dependencies = [
  "specta",
  "specta-serde",
@@ -3255,7 +3265,8 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tauri"
-version = "2.2.0"
+version = "2.2.1"
+source = "git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd#75d56e8364fb203387bb5a5235f316dd7dfa6acd"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3286,11 +3297,11 @@ dependencies = [
  "serialize-to-javascript",
  "specta",
  "swift-rs",
- "tauri-build 2.0.4",
+ "tauri-build 2.0.5",
  "tauri-macros",
  "tauri-runtime",
  "tauri-runtime-wry",
- "tauri-utils 2.1.1",
+ "tauri-utils 2.1.1 (git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd)",
  "thiserror 2.0.10",
  "tokio",
  "tray-icon",
@@ -3300,26 +3311,6 @@ dependencies = [
  "webview2-com",
  "window-vibrancy",
  "windows",
-]
-
-[[package]]
-name = "tauri-build"
-version = "2.0.4"
-dependencies = [
- "anyhow",
- "cargo_toml 0.21.0",
- "dirs",
- "glob",
- "heck 0.5.0",
- "json-patch",
- "schemars",
- "semver",
- "serde",
- "serde_json",
- "tauri-utils 2.1.1",
- "tauri-winres",
- "toml 0.8.19",
- "walkdir",
 ]
 
 [[package]]
@@ -3339,7 +3330,28 @@ dependencies = [
  "serde",
  "serde_json",
  "tauri-utils 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "tauri-winres",
+ "tauri-winres 0.1.1",
+ "toml 0.8.19",
+ "walkdir",
+]
+
+[[package]]
+name = "tauri-build"
+version = "2.0.5"
+source = "git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd#75d56e8364fb203387bb5a5235f316dd7dfa6acd"
+dependencies = [
+ "anyhow",
+ "cargo_toml 0.21.0",
+ "dirs",
+ "glob",
+ "heck 0.5.0",
+ "json-patch",
+ "schemars",
+ "semver",
+ "serde",
+ "serde_json",
+ "tauri-utils 2.1.1 (git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd)",
+ "tauri-winres 0.2.0",
  "toml 0.8.19",
  "walkdir",
 ]
@@ -3347,6 +3359,7 @@ dependencies = [
 [[package]]
 name = "tauri-codegen"
 version = "2.0.4"
+source = "git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd#75d56e8364fb203387bb5a5235f316dd7dfa6acd"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -3361,7 +3374,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "syn 2.0.96",
- "tauri-utils 2.1.1",
+ "tauri-utils 2.1.1 (git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd)",
  "thiserror 2.0.10",
  "time",
  "url",
@@ -3372,13 +3385,14 @@ dependencies = [
 [[package]]
 name = "tauri-macros"
 version = "2.0.4"
+source = "git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd#75d56e8364fb203387bb5a5235f316dd7dfa6acd"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.96",
  "tauri-codegen",
- "tauri-utils 2.1.1",
+ "tauri-utils 2.1.1 (git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd)",
 ]
 
 [[package]]
@@ -3432,6 +3446,7 @@ dependencies = [
 [[package]]
 name = "tauri-runtime"
 version = "2.3.0"
+source = "git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd#75d56e8364fb203387bb5a5235f316dd7dfa6acd"
 dependencies = [
  "dpi",
  "gtk",
@@ -3440,7 +3455,7 @@ dependencies = [
  "raw-window-handle",
  "serde",
  "serde_json",
- "tauri-utils 2.1.1",
+ "tauri-utils 2.1.1 (git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd)",
  "thiserror 2.0.10",
  "url",
  "windows",
@@ -3449,6 +3464,7 @@ dependencies = [
 [[package]]
 name = "tauri-runtime-wry"
 version = "2.3.0"
+source = "git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd#75d56e8364fb203387bb5a5235f316dd7dfa6acd"
 dependencies = [
  "gtk",
  "http",
@@ -3462,7 +3478,7 @@ dependencies = [
  "softbuffer",
  "tao",
  "tauri-runtime",
- "tauri-utils 2.1.1",
+ "tauri-utils 2.1.1 (git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd)",
  "url",
  "webkit2gtk",
  "webview2-com",
@@ -3495,7 +3511,7 @@ dependencies = [
  "specta-jsdoc",
  "specta-typescript",
  "tauri",
- "tauri-build 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tauri-build 2.0.4",
  "tauri-plugin-os",
  "tauri-specta",
  "thiserror 1.0.69",
@@ -3508,7 +3524,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tauri",
- "tauri-build 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tauri-build 2.0.4",
  "tauri-plugin-specta-example",
 ]
 
@@ -3520,41 +3536,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.96",
-]
-
-[[package]]
-name = "tauri-utils"
-version = "2.1.1"
-dependencies = [
- "brotli",
- "cargo_metadata",
- "ctor",
- "dunce",
- "glob",
- "html5ever",
- "http",
- "infer",
- "json-patch",
- "kuchikiki",
- "log",
- "memchr",
- "phf 0.11.3",
- "proc-macro2",
- "quote",
- "regex",
- "schemars",
- "semver",
- "serde",
- "serde-untagged",
- "serde_json",
- "serde_with",
- "swift-rs",
- "thiserror 2.0.10",
- "toml 0.8.19",
- "url",
- "urlpattern",
- "uuid",
- "walkdir",
 ]
 
 [[package]]
@@ -3594,6 +3575,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-utils"
+version = "2.1.1"
+source = "git+https://github.com/tauri-apps/tauri?rev=75d56e8364fb203387bb5a5235f316dd7dfa6acd#75d56e8364fb203387bb5a5235f316dd7dfa6acd"
+dependencies = [
+ "brotli",
+ "cargo_metadata",
+ "ctor",
+ "dunce",
+ "glob",
+ "html5ever",
+ "http",
+ "infer",
+ "json-patch",
+ "kuchikiki",
+ "log",
+ "memchr",
+ "phf 0.11.3",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "schemars",
+ "semver",
+ "serde",
+ "serde-untagged",
+ "serde_json",
+ "serde_with",
+ "swift-rs",
+ "thiserror 2.0.10",
+ "toml 0.8.19",
+ "url",
+ "urlpattern",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
 name = "tauri-winres"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3601,6 +3618,16 @@ checksum = "5993dc129e544393574288923d1ec447c857f3f644187f4fbf7d9a875fbfc4fb"
 dependencies = [
  "embed-resource",
  "toml 0.7.8",
+]
+
+[[package]]
+name = "tauri-winres"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff389a3b73a46a4537e17dfce42061c4f0c31be9fbb4f87e49150b94e3e26377"
+dependencies = [
+ "embed-resource",
+ "toml 0.8.19",
 ]
 
 [[package]]
@@ -4829,7 +4856,3 @@ dependencies = [
  "quote",
  "syn 2.0.96",
 ]
-
-[[patch.unused]]
-name = "specta-util"
-version = "0.0.8"

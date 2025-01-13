@@ -17,11 +17,11 @@
 //! cargo add tauri@2.0 specta@=2.0.0-rc.21
 //!
 //! # Typescript
-//! cargo add specta-typescript@0.0.8
+//! cargo add specta-typescript@0.0.9
 //! cargo add tauri-specta@=2.0.0-rc.21 --features derive,typescript
 //!
 //! # JSDoc
-//! cargo add specta-jsdoc@0.0.8
+//! cargo add specta-jsdoc@0.0.9
 //! cargo add tauri-specta@=2.0.0-rc.21 --features derive,javascript
 //! ```
 //!
