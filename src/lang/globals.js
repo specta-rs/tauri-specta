@@ -42,7 +42,7 @@ function __makeEvents__(mappings) {
 			get: (_, event) => {
 				const name = mappings[event];
 
-				new Proxy(() => {}, {
+				return new Proxy(() => {}, {
 					apply: (_, __, [window]) => ({
 						listen: (arg) => window.listen(name, arg),
 						once: (arg) => window.once(name, arg),
