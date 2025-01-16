@@ -24,6 +24,8 @@ export type Result<T, E> =
 function __makeEvents__<T extends Record<string, any>>(
 	mappings: Record<keyof T, string>,
 ) {
+	const eventObjects: Record<string, T[keyof T]> = {};
+
 	return new Proxy(
 		{} as unknown as {
 			[K in keyof T]: __EventObj__<T[K]> & {
@@ -34,23 +36,30 @@ function __makeEvents__<T extends Record<string, any>>(
 			get: (_, event) => {
 				const name = mappings[event as keyof T];
 
-				return new Proxy((() => {}) as any, {
-					apply: (_, __, [window]: [__WebviewWindow__]) => ({
-						listen: (arg: any) => window.listen(name, arg),
-						once: (arg: any) => window.once(name, arg),
-						emit: (arg: any) => window.emit(name, arg),
-					}),
-					get: (_, command: keyof __EventObj__<any>) => {
-						switch (command) {
-							case "listen":
-								return (arg: any) => TAURI_API_EVENT.listen(name, arg);
-							case "once":
-								return (arg: any) => TAURI_API_EVENT.once(name, arg);
-							case "emit":
-								return (arg: any) => TAURI_API_EVENT.emit(name, arg);
-						}
-					},
-				});
+				let eventObject = eventObjects[name];
+				if (!eventObject) {
+					eventObject = new Proxy((() => {}) as any, {
+						apply: (_, __, [window]: [__WebviewWindow__]) => ({
+							listen: (arg: any) => window.listen(name, arg),
+							once: (arg: any) => window.once(name, arg),
+							emit: (arg: any) => window.emit(name, arg),
+						}),
+						get: (_, command: keyof __EventObj__<any>) => {
+							switch (command) {
+								case "listen":
+									return (arg: any) => TAURI_API_EVENT.listen(name, arg);
+								case "once":
+									return (arg: any) => TAURI_API_EVENT.once(name, arg);
+								case "emit":
+									return (arg: any) => TAURI_API_EVENT.emit(name, arg);
+							}
+						},
+					});
+
+					eventObjects[name] = eventObject;
+				}
+
+				return eventObject;
 			},
 		},
 	);
