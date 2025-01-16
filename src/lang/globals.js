@@ -36,29 +36,38 @@ import * as TAURI_API_EVENT from "@tauri-apps/api/event";
  * }}
  */
 function __makeEvents__(mappings) {
+	const eventObjects = {};
+
 	return new Proxy(
 		{},
 		{
 			get: (_, event) => {
 				const name = mappings[event];
 
-				new Proxy(() => {}, {
-					apply: (_, __, [window]) => ({
-						listen: (arg) => window.listen(name, arg),
-						once: (arg) => window.once(name, arg),
-						emit: (arg) => window.emit(name, arg),
-					}),
-					get: (_, command) => {
-						switch (command) {
-							case "listen":
-								return (arg) => TAURI_API_EVENT.listen(name, arg);
-							case "once":
-								return (arg) => TAURI_API_EVENT.once(name, arg);
-							case "emit":
-								return (arg) => TAURI_API_EVENT.emit(name, arg);
-						}
-					},
-				});
+				let eventObject = eventObjects[name];
+				if (!eventObject) {
+					eventObject = new Proxy((() => {}), {
+						apply: (_, __, [window]) => ({
+							listen: (arg) => window.listen(name, arg),
+							once: (arg) => window.once(name, arg),
+							emit: (arg) => window.emit(name, arg),
+						}),
+						get: (_, command) => {
+							switch (command) {
+								case "listen":
+									return (arg) => TAURI_API_EVENT.listen(name, arg);
+								case "once":
+									return (arg) => TAURI_API_EVENT.once(name, arg);
+								case "emit":
+									return (arg) => TAURI_API_EVENT.emit(name, arg);
+							}
+						},
+					});
+
+					eventObjects[name] = eventObject;
+				}
+
+				return eventObject;
 			},
 		},
 	);
