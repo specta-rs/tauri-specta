@@ -7,6 +7,7 @@ use specta_typescript::{self as ts, Typescript};
 use specta_typescript::{js_doc, ExportError};
 
 const GLOBALS: &str = include_str!("./globals.ts");
+const GLOBALS_EVENTS: &str = include_str!("./globals_events.ts");
 
 impl LanguageExt for specta_typescript::Typescript {
     type Error = ExportError;
@@ -23,6 +24,7 @@ impl LanguageExt for specta_typescript::Typescript {
             cfg,
             &dependant_types,
             GLOBALS,
+            GLOBALS_EVENTS,
             &self.header,
             render_commands(self, cfg)?,
             render_events(self, cfg)?,
