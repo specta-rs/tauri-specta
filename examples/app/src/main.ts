@@ -1,5 +1,5 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { commands, events } from "./bindings";
+import { commands, events, MyClass } from "./bindings";
 // import { commands, events } from "./bindings-jsdoc.js";
 
 const appWindow = getCurrentWebview();
@@ -31,3 +31,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
 events.emptyEvent.listen((e) => console.log(e));
 events.emptyEvent(appWindow).listen((e) => console.log(e));
+
+const a = new MyClass({ id: 42 });
+a.method1("someArg").then(() => console.log("DONE!"));

@@ -13,9 +13,9 @@ impl LanguageExt for specta_typescript::Typescript {
 
     fn render(&self, cfg: &ExportContext) -> Result<String, ExportError> {
         let dependant_types = cfg
-            .type_map
+            .types
             .into_iter()
-            .map(|(_sid, ndt)| ts::export_named_datatype(&self, ndt, &cfg.type_map))
+            .map(|(_sid, ndt)| ts::export_named_datatype(&self, ndt, &cfg.types))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
@@ -26,6 +26,7 @@ impl LanguageExt for specta_typescript::Typescript {
             &self.header,
             render_commands(self, cfg)?,
             render_events(self, cfg)?,
+            render_classes(self, cfg)?,
             true,
         )
     }
@@ -46,16 +47,12 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
             let arg_defs = function
                 .args()
                 .map(|(name, typ)| {
-                    ts::datatype(
-                        ts,
-                        &FunctionResultVariant::Value(typ.clone()),
-                        &cfg.type_map,
-                    )
-                    .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
+                    ts::datatype(ts, &FunctionResultVariant::Value(typ.clone()), &cfg.types)
+                        .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let ret_type = js_ts::handle_result(function, &cfg.type_map, ts, cfg.error_handling)?;
+            let ret_type = js_ts::handle_result(function, &cfg.types, ts, cfg.error_handling)?;
 
             let docs = {
                 let mut builder = js_doc::Builder::default();
@@ -75,7 +72,14 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                 &function.name().to_lower_camel_case(),
                 &arg_defs,
                 Some(&ret_type),
-                &js_ts::command_body(&cfg.plugin_name, function, true, cfg.error_handling),
+                &js_ts::command_body(
+                    &cfg.plugin_name,
+                    function,
+                    None,
+                    true,
+                    cfg.error_handling,
+                    "",
+                ),
             ))
         })
         .collect::<Result<Vec<_>, ExportError>>()?
@@ -95,7 +99,7 @@ fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportE
     }
 
     let (events_types, events_map) =
-        js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.type_map)?;
+        js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.types)?;
 
     let events_types = events_types.join(",\n");
 
@@ -107,4 +111,74 @@ export const events = __makeEvents__<{{
 {events_map}
 }})"#
     })
+}
+
+fn render_classes(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportError> {
+    let mut result = String::new();
+    for class in &cfg.classes {
+        // TODO: Duplicate name
+        // TODO: Accessing `this`
+        // TODO: Generating proper commands
+
+        // TODO: Fields
+        // TODO: Constructor
+
+        // TODO: Support exporting documentation + deprecated attribute
+        result.push_str(&format!("export class {} {{\n\tinner: {};\n\n\tconstructor(inner: {1}) {{\n\t\tthis.inner = inner;\n\t}}\n\n", class.ident, specta_typescript::datatype(&ts, &FunctionResultVariant::Value(class.ndt.inner.clone()), &cfg.types)?));
+
+        for function in class.methods.iter() {
+            let arg_defs = function
+                .args()
+                .enumerate()
+                .map(|(i, (name, typ))| {
+                    // TODO: Do this in a more reliable way
+                    if name == "東京" && i == 0 {
+                        return Ok(None);
+                    };
+
+                    ts::datatype(ts, &FunctionResultVariant::Value(typ.clone()), &cfg.types)
+                        .map(|ty| Some(format!("{}: {}", name.to_lower_camel_case(), ty)))
+                })
+                .collect::<Result<Vec<Option<String>>, _>>()?;
+
+            let arg_defs = arg_defs.into_iter().filter_map(|v| v).collect::<Vec<_>>();
+
+            let ret_type = js_ts::handle_result(function, &cfg.types, ts, cfg.error_handling)?;
+
+            let docs = {
+                let mut builder = js_doc::Builder::default();
+
+                if let Some(d) = &function.deprecated() {
+                    builder.push_deprecated(d);
+                }
+
+                if !function.docs().is_empty() {
+                    builder.extend(function.docs().split("\n"));
+                }
+
+                builder.build()
+            };
+
+            result.push_str("\t");
+            result.push_str(&js_ts::function(
+                &docs,
+                &function.name().to_lower_camel_case(),
+                &arg_defs,
+                Some(&ret_type),
+                &js_ts::command_body(
+                    &cfg.plugin_name,
+                    function,
+                    Some(&format!("__{}__{}", class.ident, function.name())),
+                    true,
+                    cfg.error_handling,
+                    "const 東京 = this.inner;\n\t",
+                ),
+            ));
+            result.push_str("\n");
+        }
+
+        result.push_str("}\n");
+    }
+
+    Ok(result)
 }

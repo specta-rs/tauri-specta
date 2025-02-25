@@ -71,10 +71,22 @@ async typesafeErrorsUsingThiserrorWithValue()  {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  };
 }
+},
+/**
+ * @param { MyClass } 東京
+ * @param { string } someArg
+ * @returns { Promise<void> }
+ */
+async myClassMethod1(東京, someArg)  {
+    await TAURI_INVOKE("__MyClass__method1", { 東京, someArg });
 }
     }
 
 /** user-defined events **/
+
+
+
+/** user-defined classes **/
 
 
     /**
@@ -168,7 +180,7 @@ function __makeEvents__(mappings) {
 			get: (_, event) => {
 				const name = mappings[event];
 
-				new Proxy(() => {}, {
+				return new Proxy(() => {}, {
 					apply: (_, __, [window]) => ({
 						listen: (arg) => window.listen(name, arg),
 						once: (arg) => window.once(name, arg),

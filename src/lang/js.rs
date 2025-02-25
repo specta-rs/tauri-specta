@@ -15,9 +15,9 @@ impl LanguageExt for specta_jsdoc::JSDoc {
 
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         let dependant_types = cfg
-            .type_map
+            .types
             .into_iter()
-            .map(|(_sid, ndt)| js_doc::typedef_named_datatype(&self.0, ndt, &cfg.type_map))
+            .map(|(_sid, ndt)| js_doc::typedef_named_datatype(&self.0, ndt, &cfg.types))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
@@ -28,6 +28,7 @@ impl LanguageExt for specta_jsdoc::JSDoc {
             &self.0.header,
             render_commands(&self.0, cfg)?,
             render_events(&self.0, cfg)?,
+            "".into(), // TODO: Support classes
             false,
         )
     }
@@ -46,8 +47,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
         .iter()
         .map(|function| {
             let jsdoc = {
-                let ret_type =
-                    js_ts::handle_result(function, &cfg.type_map, ts, cfg.error_handling)?;
+                let ret_type = js_ts::handle_result(function, &cfg.types, ts, cfg.error_handling)?;
 
                 let mut builder = js_doc::Builder::default();
 
@@ -63,7 +63,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                     specta_typescript::datatype(
                         ts,
                         &FunctionResultVariant::Value(typ.clone()),
-                        &cfg.type_map,
+                        &cfg.types,
                     )
                     .map(|typ| {
                         let name = name.to_lower_camel_case();
@@ -82,7 +82,14 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                 // TODO: Don't `collect` the whole thing
                 &js_ts::arg_names(&function.args().cloned().collect::<Vec<_>>()),
                 None,
-                &js_ts::command_body(&cfg.plugin_name, &function, false, cfg.error_handling),
+                &js_ts::command_body(
+                    &cfg.plugin_name,
+                    &function,
+                    None,
+                    false,
+                    cfg.error_handling,
+                    "",
+                ),
             ))
         })
         .collect::<Result<Vec<_>, ExportError>>()?
@@ -101,7 +108,7 @@ fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportE
     }
 
     let (events_types, events_map) =
-        js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.type_map)?;
+        js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.types)?;
 
     let events = {
         let mut builder = js_doc::Builder::default();
