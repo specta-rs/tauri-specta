@@ -22,6 +22,7 @@ pub fn render_all_parts<L: LanguageExt>(
     globals: &str,
     header: &str,
     commands: String,
+    classes: String,
     events: String,
     as_const: bool,
 ) -> Result<String, L::Error> {
@@ -62,6 +63,10 @@ pub fn render_all_parts<L: LanguageExt>(
 /** user-defined events **/
 
 {events}
+
+/** user-defined classes **/
+
+{classes}
 
 /** user-defined constants **/
 
@@ -137,10 +142,10 @@ pub fn function(
     )
 }
 
-fn tauri_invoke(name: &str, arg_usages: Option<String>) -> String {
+fn tauri_invoke(name: &str, arg_usages: Option<String>, extra: &str) -> String {
     let arg_usages = arg_usages.map(|u| format!(", {u}")).unwrap_or_default();
 
-    format!(r#"await TAURI_INVOKE("{name}"{arg_usages})"#)
+    format!(r#"{extra}await TAURI_INVOKE("{name}"{arg_usages})"#)
 }
 
 pub fn handle_result(
@@ -172,13 +177,21 @@ pub fn handle_result(
 pub fn command_body(
     plugin_name: &Option<&'static str>,
     function: &datatype::Function,
+    name_override: Option<&str>,
     as_any: bool,
     error_handling: ErrorHandlingMode,
+    extra: &str,
 ) -> String {
     let name = plugin_name
         .as_ref()
-        .map(|n| apply_as_prefix(&n, &function.name(), ItemType::Command))
-        .unwrap_or_else(|| function.name().to_string());
+        .map(|n| {
+            apply_as_prefix(
+                &n,
+                name_override.unwrap_or(function.name()),
+                ItemType::Command,
+            )
+        })
+        .unwrap_or_else(|| name_override.unwrap_or(function.name()).to_string());
 
     maybe_return_as_result_tuple(
         &tauri_invoke(
@@ -187,6 +200,7 @@ pub fn command_body(
                 // TODO: Don't collect
                 &function.args().cloned().collect::<Vec<_>>(),
             )),
+            extra,
         ),
         function.result(),
         as_any,
