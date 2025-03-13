@@ -25,9 +25,10 @@ pub fn render_all_parts<L: LanguageExt>(
     events: String,
     as_const: bool,
 ) -> Result<String, L::Error> {
-    let constants = cfg
-        .constants
-        .iter()
+    let mut constants = cfg.constants.iter().collect::<Vec<_>>();
+    constants.sort_by(|(a, _), (b, _)| a.cmp(b));
+    let constants = constants
+        .into_iter()
         .map(|(name, value)| {
             let mut as_constt = None;
             if as_const {
