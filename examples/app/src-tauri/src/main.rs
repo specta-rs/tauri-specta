@@ -9,6 +9,8 @@ use specta_typescript::Typescript;
 use tauri_specta::*;
 use thiserror::Error;
 
+mod bruh;
+
 /// HELLO
 /// WORLD
 /// !!!!
@@ -126,8 +128,10 @@ fn main() {
             deprecated,
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
+            bruh::__MyClass__method1,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
+        .class::<bruh::MyClass>()
         .typ::<Custom>()
         .constant("universalConstant", 42);
 

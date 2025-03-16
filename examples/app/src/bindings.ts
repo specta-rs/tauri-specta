@@ -51,10 +51,33 @@ async typesafeErrorsUsingThiserrorWithValue() : Promise<Result<null, MyError2>> 
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async myClassMethod1(東京: MyClass, someArg: string) : Promise<void> {
+    await TAURI_INVOKE("__MyClass__method1", { 東京, someArg });
 }
 }
 
 /** user-defined events **/
+
+export class MyClass {
+	inner: { id: number };
+
+	constructor(inner: { id: number }) {
+		this.inner = inner;
+	}
+
+	async method1(someArg: string) : Promise<void> {
+    const 東京 = this.inner;
+	await TAURI_INVOKE("__MyClass__method1", { 東京, someArg });
+}
+	async method2(someArg: string) : Promise<void> {
+    const 東京 = this.inner;
+	await TAURI_INVOKE("__MyClass__method2", { someArg });
+}
+}
+
+
+/** user-defined classes **/
 
 
 export const events = __makeEvents__<{

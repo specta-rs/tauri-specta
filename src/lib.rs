@@ -192,8 +192,8 @@ use std::{
 };
 
 use specta::{
-    datatype::{self, DataType},
-    Language, SpectaID, TypeMap,
+    datatype::{self, DataType, Function, NamedDataType},
+    Language, SpectaID, TypeCollection, TypeMap,
 };
 
 use tauri::{ipc::Invoke, Runtime};
@@ -204,6 +204,11 @@ use tauri::{ipc::Invoke, Runtime};
 #[cfg(feature = "derive")]
 #[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
 pub use tauri_specta_macros::Event;
+
+/// TODO
+#[cfg(feature = "derive")]
+#[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
+pub use tauri_specta_macros::class;
 
 mod builder;
 mod event;
@@ -254,8 +259,9 @@ pub struct ExportContext {
     pub commands: Vec<datatype::Function>,
     pub error_handling: ErrorHandlingMode,
     pub events: BTreeMap<&'static str, DataType>,
-    pub type_map: TypeMap,
+    pub types: TypeMap,
     pub constants: HashMap<Cow<'static, str>, serde_json::Value>,
+    pub classes: Vec<ClassDefinition>,
 }
 
 /// Implemented for all languages which Tauri Specta supports exporting to.
@@ -344,4 +350,16 @@ pub mod internal {
             panic!("Another event with name {} is already registered!", E::NAME)
         }
     }
+}
+
+pub trait Class {
+    fn collect(types: &mut TypeCollection) -> ClassDefinition;
+}
+
+#[derive(Debug, Clone)]
+// #[non_exhaustive] // TODO
+pub struct ClassDefinition {
+    pub ident: &'static str,
+    pub ndt: NamedDataType,
+    pub methods: Vec<Function>,
 }

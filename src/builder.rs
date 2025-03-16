@@ -7,7 +7,8 @@ use std::{
 };
 
 use crate::{
-    event::EventRegistryMeta, Commands, ErrorHandlingMode, EventRegistry, Events, LanguageExt,
+    event::EventRegistryMeta, Class, ClassDefinition, Commands, ErrorHandlingMode, EventRegistry,
+    Events, LanguageExt,
 };
 use serde::Serialize;
 use specta::{
@@ -88,6 +89,7 @@ pub struct Builder<R: Runtime = tauri::Wry> {
     error_handling: ErrorHandlingMode,
     events: BTreeMap<&'static str, DataType>,
     event_sids: BTreeSet<SpectaID>,
+    classes: Vec<ClassDefinition>,
     types: TypeMap,
     constants: HashMap<Cow<'static, str>, serde_json::Value>,
 }
@@ -101,6 +103,7 @@ impl<R: Runtime> Default for Builder<R> {
             error_handling: Default::default(),
             events: Default::default(),
             event_sids: Default::default(),
+            classes: Default::default(),
             types: TypeMap::default(),
             constants: HashMap::default(),
         }
@@ -186,6 +189,11 @@ impl<R: Runtime> Builder<R> {
         }
     }
 
+    pub fn class<T: Class>(mut self) -> Self {
+        self.classes.push(T::collect(&mut self.types));
+        self
+    }
+
     /// This method is deprecated. Please use [Self::typ].
     #[deprecated(note = "Use `Self::typ` instead")]
     pub fn ty<T: NamedType>(mut self) -> Self {
@@ -268,7 +276,7 @@ impl<R: Runtime> Builder<R> {
     /// tauri::Builder::default()
     ///     .setup(move |app| {
     ///         builder.mount_events(app);
-    ///             
+    ///
     ///         Ok(())
     ///     })
     ///     // on an actual app, remove the string argument
@@ -312,14 +320,23 @@ impl<R: Runtime> Builder<R> {
         // TODO: Handle duplicate type names
         // TODO: Serde checking
 
+        // TODO: Replace this with: https://github.com/specta-rs/specta/issues/369
+        let mut types = self.types.clone();
+        for class in &self.classes {
+            if let Some(ext) = class.ndt.ext() {
+                types.remove(*ext.sid());
+            }
+        }
+
         language.render(&crate::ExportContext {
             // TODO: Don't clone stuff
             commands: self.command_types.clone(),
             error_handling: self.error_handling,
             events: self.events.clone(),
-            type_map: self.types.clone(),
+            types,
             constants: self.constants.clone(),
             plugin_name: self.plugin_name,
+            classes: self.classes.clone(),
         })
     }
 
