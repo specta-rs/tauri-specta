@@ -79,16 +79,16 @@ async typesafeErrorsUsingThiserrorWithValue()  {
 
     /**
  * @type {typeof __makeEvents__<{
- * demoEvent: DemoEvent
  * emptyEvent: EmptyEvent
+ * myDemoEvent: DemoEvent
  * }>}
  */
 
     const __typedMakeEvents__ = __makeEvents__;
 
     export const events = __typedMakeEvents__({
-    demoEvent: "demo-event",
-emptyEvent: "empty-event"
+    emptyEvent: "empty-event",
+myDemoEvent: "myDemoEvent"
     })
 
 /** user-defined constants **/
@@ -168,7 +168,7 @@ function __makeEvents__(mappings) {
 			get: (_, event) => {
 				const name = mappings[event];
 
-				new Proxy(() => {}, {
+				return new Proxy(() => {}, {
 					apply: (_, __, [window]) => ({
 						listen: (arg) => window.listen(name, arg),
 						once: (arg) => window.once(name, arg),

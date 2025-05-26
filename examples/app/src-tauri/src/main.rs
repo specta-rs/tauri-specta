@@ -102,6 +102,7 @@ fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
+#[tauri_specta(event_name = "myDemoEvent")] // Optionally rename event key (for JS/TS)
 pub struct DemoEvent(String);
 
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]

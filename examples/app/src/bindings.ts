@@ -58,11 +58,11 @@ async typesafeErrorsUsingThiserrorWithValue() : Promise<Result<null, MyError2>> 
 
 
 export const events = __makeEvents__<{
-demoEvent: DemoEvent,
-emptyEvent: EmptyEvent
+emptyEvent: EmptyEvent,
+myDemoEvent: DemoEvent
 }>({
-demoEvent: "demo-event",
-emptyEvent: "empty-event"
+emptyEvent: "empty-event",
+myDemoEvent: "myDemoEvent"
 })
 
 /** user-defined constants **/
