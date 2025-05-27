@@ -8,27 +8,50 @@ use heck::ToKebabCase;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, ConstParam, DeriveInput, GenericParam, Generics, LifetimeParam,
-    TypeParam, WhereClause,
+    parse_macro_input, parse_quote, ConstParam, DeriveInput, GenericParam, Generics, Ident,
+    LifetimeParam, LitStr, TypeParam, WhereClause,
 };
+
+use darling::FromDeriveInput;
+
+#[derive(Debug, FromDeriveInput)]
+#[darling(attributes(tauri_specta), supports(struct_any, enum_any))]
+struct EventOpts {
+    ident: Ident,
+    generics: Generics,
+
+    #[darling(default)]
+    event_name: Option<String>,
+}
 
 #[proc_macro_derive(Event, attributes(tauri_specta))]
 pub fn derive_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+    let opts = match EventOpts::from_derive_input(&ast) {
+        Ok(options) => options,
+        Err(e) => {
+            return e.write_errors().into();
+        }
+    };
+
     let crate_ref = quote!(tauri_specta);
+    let ident = &opts.ident;
+    let generics = &opts.generics;
 
-    let DeriveInput {
-        ident, generics, ..
-    } = parse_macro_input!(input);
+    let name_str_value = match opts.event_name {
+        Some(name_from_attr) => name_from_attr,
+        None => ident.to_string().to_kebab_case(),
+    };
+    let name_lit = LitStr::new(&name_str_value, ident.span());
 
-    let name = ident.to_string().to_kebab_case();
-    let bounds = generics_with_ident_and_bounds_only(&generics);
-    let type_args = generics_with_ident_only(&generics);
-    let where_bound = add_type_to_where_clause(&generics);
+    let bounds = generics_with_ident_and_bounds_only(generics);
+    let type_args = generics_with_ident_only(generics);
+    let where_bound = add_type_to_where_clause(generics);
 
     quote! {
         #[automatically_derived]
         impl #bounds #crate_ref::Event for #ident #type_args #where_bound {
-            const NAME: &'static str = #name;
+            const NAME: &'static str = #name_lit;
         }
     }
     .into()
