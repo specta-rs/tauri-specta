@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io::Write,
     path::Path,
@@ -89,7 +89,7 @@ pub struct Builder<R: Runtime = tauri::Wry> {
     events: BTreeMap<&'static str, DataType>,
     event_sids: BTreeSet<SpectaID>,
     types: TypeMap,
-    constants: HashMap<Cow<'static, str>, serde_json::Value>,
+    constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
 }
 
 impl<R: Runtime> Default for Builder<R> {
@@ -102,7 +102,7 @@ impl<R: Runtime> Default for Builder<R> {
             events: Default::default(),
             event_sids: Default::default(),
             types: TypeMap::default(),
-            constants: HashMap::default(),
+            constants: BTreeMap::default(),
         }
     }
 }

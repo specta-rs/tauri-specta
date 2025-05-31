@@ -184,16 +184,11 @@
 )]
 
 use core::fmt;
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    path::Path,
-    sync::Arc,
-};
+use std::{borrow::Cow, collections::BTreeMap, path::Path, sync::Arc};
 
 use specta::{
     datatype::{self, DataType},
-    Language, SpectaID, TypeMap,
+    SpectaID, TypeMap,
 };
 
 use tauri::{ipc::Invoke, Runtime};
@@ -255,7 +250,7 @@ pub struct ExportContext {
     pub error_handling: ErrorHandlingMode,
     pub events: BTreeMap<&'static str, DataType>,
     pub type_map: TypeMap,
-    pub constants: HashMap<Cow<'static, str>, serde_json::Value>,
+    pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
 }
 
 /// Implemented for all languages which Tauri Specta supports exporting to.
