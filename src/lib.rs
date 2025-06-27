@@ -4,7 +4,7 @@
 //!
 //! <section class="warning">
 //!
-//! Tauri Specta v2 is still in beta, and requires using [Tauri v2](https://tauri.app) and [Specta v2](https://github.com/oscartbeaumont/specta) lands as stable.
+//! Tauri Specta v2 is still in beta, and requires using [Tauri v2](https://tauri.app) and [Specta v2](https://github.com/specta-rs/specta) lands as stable.
 //!
 //! It is really important you use `=` in your versions to ensure your project will not break after future updates!
 //!
@@ -174,13 +174,13 @@
 //!
 //! # Channel
 //!
-//! [Coming soon...](https://github.com/oscartbeaumont/tauri-specta/issues/111)
+//! [Coming soon...](https://github.com/specta-rs/tauri-specta/issues/111)
 //!
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
     // TODO: Tauri Specta logo
-    html_logo_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png",
-    html_favicon_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png"
+    html_logo_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png",
+    html_favicon_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png"
 )]
 
 use core::fmt;

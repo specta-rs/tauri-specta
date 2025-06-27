@@ -1,7 +1,7 @@
 #![doc(
     // TODO: Tauri Specta logo
-    html_logo_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png",
-    html_favicon_url = "https://github.com/oscartbeaumont/specta/raw/main/.github/logo-128.png"
+    html_logo_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png",
+    html_favicon_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png"
 )]
 
 use heck::ToKebabCase;
