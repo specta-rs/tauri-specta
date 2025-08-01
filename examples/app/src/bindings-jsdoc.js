@@ -130,7 +130,8 @@ import {
 } from "@tauri-apps/api/core";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";
 
-/** @typedef {typeof import("@tauri-apps/api/window").WebviewWindowHandle} __WebviewWindowHandle__ */
+/** @typedef {typeof import("@tauri-apps/api/webview").Webview} __Webview__ */
+/** @typedef {typeof import("@tauri-apps/api/window").Window} __Window__ */
 
 /**
  * @template T
@@ -157,7 +158,7 @@ import * as TAURI_API_EVENT from "@tauri-apps/api/event";
  * @param {Record<keyof T, string>} mappings
  * @returns {{
  * 	 [K in keyof T]: __EventObj__<T[K]> & {
- *	   (handle: __WebviewWindowHandle__): __EventObj__<T[K]>;
+ *	   (handle: __Webview__ | __Window__): __EventObj__<T[K]>;
  *   };
  * }}
  */
