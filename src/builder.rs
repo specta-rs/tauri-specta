@@ -26,7 +26,7 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 ///
 /// You can extend this example by calling other methods on the builder to configure your application further.
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use tauri_specta::{collect_commands, collect_events, Builder};
 /// use specta_typescript::Typescript;
 ///
@@ -54,7 +54,7 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 ///
 /// # Exporting using JSDoc
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use tauri_specta::{collect_commands,collect_events,Builder};
 /// use specta_jsdoc::JSDoc;
 ///
@@ -129,7 +129,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust,ignore-windows
     /// use tauri_specta::{Builder, collect_commands};
     ///
     /// #[tauri::command]
@@ -154,7 +154,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust,ignore-windows
     /// use serde::{Serialize, Deserialize};
     /// use specta::Type;
     /// use tauri_specta::{Builder, collect_events, Event};
@@ -200,7 +200,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust,ignore-windows
     /// use tauri_specta::Builder;
     /// use serde::{Serialize, Deserialize};
     /// use specta::Type;
@@ -224,7 +224,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust,ignore-windows
     /// use tauri_specta::Builder;
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().constant("CONSTANT_NAME","ANY_CONSTANT_VALUE");
@@ -260,7 +260,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use tauri_specta::{Builder, collect_events};
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![]);
@@ -268,7 +268,7 @@ impl<R: Runtime> Builder<R> {
     /// tauri::Builder::default()
     ///     .setup(move |app| {
     ///         builder.mount_events(app);
-    ///             
+    ///
     ///         Ok(())
     ///     })
     ///     // on an actual app, remove the string argument
@@ -294,7 +294,7 @@ impl<R: Runtime> Builder<R> {
     /// You should prefer to use [`Self::export`], unless you need explicit control over saving.
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore-windows
     /// use std::{
     ///     fs::File,
     ///     io::Write
@@ -326,7 +326,7 @@ impl<R: Runtime> Builder<R> {
     /// Export the bindings to a file.
     ///
     /// # Example
-    /// ```
+    /// ```rust,ignore-windows
     /// use tauri_specta::{Builder, collect_commands, collect_events};
     /// use specta_typescript::Typescript;
     ///

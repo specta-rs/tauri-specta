@@ -4,7 +4,7 @@
 /// returning a [`Commands`](crate::Commands) struct that can be passed to [`Builder::commands`](crate::Builder::commands).
 ///
 /// # Usage
-/// ```
+/// ```rust,ignore-windows
 /// use tauri_specta::{collect_commands,Builder};
 ///
 /// #[tauri::command]
@@ -35,7 +35,6 @@
 ///         hello::world,
 ///         // Unlike `tauri::generate_handler` you may need to specify generics.
 ///         generic_command::<tauri::Wry>
-///        
 ///     ]);
 /// ```
 ///
@@ -55,7 +54,7 @@ macro_rules! collect_commands {
 /// This returns a [`Events`](crate::Events) struct that can be passed to [`Builder::events`](crate::Builder::events).
 ///
 /// # Usage
-/// ```rust
+/// ```rust,ignore-windows
 /// use serde::{Serialize, Deserialize};
 /// use specta::Type;
 /// use tauri_specta::{Event, Builder, collect_events};
@@ -71,7 +70,7 @@ macro_rules! collect_commands {
 /// # use specta::Type;
 /// # use tauri_specta::{Event, Builder, collect_events};
 ///     use super::*;
-///     
+///
 ///     #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 ///     pub struct World(String);
 /// }
