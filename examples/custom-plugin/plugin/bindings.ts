@@ -37,7 +37,8 @@ import {
 	Channel as TAURI_CHANNEL,
 } from "@tauri-apps/api/core";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";
-import { type WebviewWindow as __WebviewWindow__ } from "@tauri-apps/api/webviewWindow";
+import { type Webview as __Webview__ } from "@tauri-apps/api/webview";
+import { type Window as __Window__ } from "@tauri-apps/api/window";
 
 type __EventObj__<T> = {
 	listen: (
@@ -61,7 +62,7 @@ function __makeEvents__<T extends Record<string, any>>(
 	return new Proxy(
 		{} as unknown as {
 			[K in keyof T]: __EventObj__<T[K]> & {
-				(handle: __WebviewWindow__): __EventObj__<T[K]>;
+				(handle: __Webview__ | __Window__): __EventObj__<T[K]>;
 			};
 		},
 		{
@@ -69,7 +70,7 @@ function __makeEvents__<T extends Record<string, any>>(
 				const name = mappings[event as keyof T];
 
 				return new Proxy((() => {}) as any, {
-					apply: (_, __, [window]: [__WebviewWindow__]) => ({
+					apply: (_, __, [window]: [__Webview__ | __Window__]) => ({
 						listen: (arg: any) => window.listen(name, arg),
 						once: (arg: any) => window.once(name, arg),
 						emit: (arg: any) => window.emit(name, arg),
