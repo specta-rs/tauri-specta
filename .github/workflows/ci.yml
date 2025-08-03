@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@v4
     - name: Setup
       if: matrix.os == 'ubuntu-latest'
-      run: sudo apt-get update && sudo apt-get install librust-atk-dev libwebkit2gtk-4.0-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+      run: sudo apt-get update && sudo apt-get install libgtk-3-dev webkit2gtk-4.1 libayatana-appindicator3-dev
     - name: Install Rust toolchain
       run: rustup toolchain install stable --profile minimal
     - name: Rust cache
@@ -29,13 +29,13 @@ jobs:
       run: cargo build --all-features
     - name: Run tests
       run: cargo test --all-features
-  
+
   clippy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Setup
-        run: sudo apt-get update && sudo apt-get install librust-atk-dev libwebkit2gtk-4.0-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+        run: sudo apt-get update && sudo apt-get install libgtk-3-dev webkit2gtk-4.1 libayatana-appindicator3-dev
       - name: Install Rust toolchain
         run: rustup toolchain install stable --profile minimal --component clippy
       - name: Rust cache

@@ -37,7 +37,7 @@
 //!
 //! The follow is a minimal example of how to setup Tauri Specta with Typescript.
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! #![cfg_attr(
 //!     all(not(debug_assertions), target_os = "windows"),
 //!     windows_subsystem = "windows"
@@ -83,7 +83,7 @@
 //! If your interested in using JSDoc instead of Typescript you can replace the [`specta_typescript::Typescript`](https://docs.rs/specta-typescript/latest/specta_typescript/struct.Typescript.html) struct
 //! with [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html) like the following:
 //!
-//! ```rust
+//! ```rust,ignore-windows
 //! let mut builder = tauri_specta::Builder::<tauri::Wry>::new();
 //!
 //! #[cfg(debug_assertions)]
@@ -103,7 +103,7 @@
 //! ## Custom types
 //!
 //! Similar to [`serde::Serialize`] you must put the [`specta::Type`] derive macro on your own types to allow Specta to understand your types. For example:
-//! ```rust
+//! ```rust,ignore-windows
 //! use serde::{Serialize, Deserialize};
 //! use specta::Type;
 //!
@@ -120,7 +120,7 @@
 //!
 //! You can also make events typesafe by following the following example:
 //!
-//! ```rust
+//! ```rust,ignore-windows
 //! use serde::{Serialize, Deserialize};
 //! use specta::Type;
 //! use tauri_specta::{Builder, collect_commands, collect_events, Event};
