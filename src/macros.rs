@@ -45,6 +45,7 @@ macro_rules! collect_commands {
         $crate::internal::command(
             ::tauri::generate_handler![$($b $($(::$p)? )* ),*],
             ::specta::function::collect_functions![$($b $($(::$p)? $(::<$($g),*>)? )* ),*],
+            vec![ $( stringify!($b $($(:: $p)? )* ) ),* ] // <--- this collects all the module paths as strings
         )
     };
 }

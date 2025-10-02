@@ -217,6 +217,7 @@ pub struct Commands<R: Runtime>(
     // Bounds copied from `tauri::Builder::invoke_handler`
     pub(crate) Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
     pub(crate) fn(&mut TypeMap) -> Vec<datatype::Function>,
+    pub(crate) Vec<&'static str>,
 );
 
 impl<R: Runtime> fmt::Debug for Commands<R> {
@@ -230,6 +231,7 @@ impl<R: Runtime> Default for Commands<R> {
         Self(
             Arc::new(tauri::generate_handler![]),
             ::specta::function::collect_functions![],
+            vec![],
         )
     }
 }
@@ -247,6 +249,7 @@ pub struct Events(BTreeMap<&'static str, fn(&mut TypeMap) -> (SpectaID, DataType
 pub struct ExportContext {
     pub plugin_name: Option<&'static str>,
     pub commands: Vec<datatype::Function>,
+    pub command_modules: Vec<&'static str>,
     pub error_handling: ErrorHandlingMode,
     pub events: BTreeMap<&'static str, DataType>,
     pub type_map: TypeMap,
@@ -321,11 +324,12 @@ pub mod internal {
     pub fn command<R: Runtime, F>(
         f: F,
         types: fn(&mut TypeMap) -> Vec<datatype::Function>,
+        module_paths: Vec<&'static str>,
     ) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
     {
-        Commands(Arc::new(f), types)
+        Commands(Arc::new(f), types, module_paths)
     }
 
     /// called by `collect_events` to register events to an `Events`

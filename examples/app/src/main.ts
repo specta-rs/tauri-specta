@@ -1,5 +1,5 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { commands, events } from "./bindings";
+import { commands, events } from "./bindings2";
 // import { commands, events } from "./bindings-jsdoc.js";
 
 const appWindow = getCurrentWebview();
@@ -10,6 +10,8 @@ let greetMsgEl: HTMLElement | null;
 async function greet() {
   if (greetMsgEl && greetInputEl) {
     greetMsgEl.textContent = await commands.helloWorld(greetInputEl.value);
+    commands.nested.someStruct().then(s => console.log(s));
+    commands.library_service.getLibrary().then(() => console.log("getLibrary done"));
 
     setTimeout(async () => console.log(await commands.goodbyeWorld()), 1000);
   }

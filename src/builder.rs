@@ -85,6 +85,7 @@ pub struct Builder<R: Runtime = tauri::Wry> {
     plugin_name: Option<&'static str>,
     commands: Commands<R>,
     command_types: Vec<Function>,
+    command_modules: Vec<&'static str>,
     error_handling: ErrorHandlingMode,
     events: BTreeMap<&'static str, DataType>,
     event_sids: BTreeSet<SpectaID>,
@@ -98,6 +99,7 @@ impl<R: Runtime> Default for Builder<R> {
             plugin_name: None,
             commands: Commands::default(),
             command_types: Default::default(),
+            command_modules: Default::default(),
             error_handling: Default::default(),
             events: Default::default(),
             event_sids: Default::default(),
@@ -143,6 +145,7 @@ impl<R: Runtime> Builder<R> {
     pub fn commands(mut self, commands: Commands<R>) -> Self {
         Self {
             command_types: (commands.1)(&mut self.types),
+            command_modules: commands.2.clone(),
             commands,
             ..self
         }
@@ -315,6 +318,7 @@ impl<R: Runtime> Builder<R> {
         language.render(&crate::ExportContext {
             // TODO: Don't clone stuff
             commands: self.command_types.clone(),
+            command_modules: self.command_modules.clone(),
             error_handling: self.error_handling,
             events: self.events.clone(),
             type_map: self.types.clone(),
@@ -355,4 +359,5 @@ impl<R: Runtime> Builder<R> {
 
         Ok(())
     }
+
 }

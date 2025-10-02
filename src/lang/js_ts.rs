@@ -92,12 +92,12 @@ fn return_as_result_tuple(expr: &str, as_any: bool) -> String {
     let as_any = as_any.then_some(" as any").unwrap_or_default();
 
     format!(
-        r#"try {{
-    return {{ status: "ok", data: {expr} }};
-}} catch (e) {{
-    if(e instanceof Error) throw e;
-    else return {{ status: "error", error: e {as_any} }};
-}}"#
+r#"try {{
+        return {{ status: "ok", data: {expr} }};
+    }} catch (e) {{
+        if(e instanceof Error) throw e;
+        else return {{ status: "error", error: e {as_any} }};
+    }}"#
     )
 }
 
@@ -132,7 +132,7 @@ pub fn function(
         .unwrap_or_default();
 
     format!(
-        r#"{docs}async {name}({args}) {return_type} {{
+        r#"{docs}export async function {name}({args}) {return_type} {{
     {body}
 }}"#
     )

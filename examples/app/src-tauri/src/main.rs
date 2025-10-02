@@ -8,6 +8,7 @@ use specta::Type;
 use specta_typescript::Typescript;
 use tauri_specta::*;
 use thiserror::Error;
+pub mod library_service;
 
 /// HELLO
 /// WORLD
@@ -127,6 +128,7 @@ fn main() {
             deprecated,
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
+            library_service::get_library,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .typ::<Custom>()
@@ -138,7 +140,7 @@ fn main() {
             Typescript::default()
                 .formatter(specta_typescript::formatter::prettier)
                 .header("/* eslint-disable */"),
-            "../src/bindings.ts",
+            "../src/bindings2.ts",
         )
         .expect("Failed to export typescript bindings");
 
@@ -148,7 +150,7 @@ fn main() {
             specta_jsdoc::JSDoc::default()
                 .formatter(specta_typescript::formatter::prettier)
                 .header("/* eslint-disable */"),
-            "../src/bindings-jsdoc.js",
+            "../src/bindings2-jsdoc.js",
         )
         .expect("Failed to export typescript bindings");
 
