@@ -25,32 +25,7 @@ pub fn render_all_parts<L: LanguageExt>(
     events: String,
     as_const: bool,
 ) -> Result<String, L::Error> {
-    let mut constants = cfg.constants.iter().collect::<Vec<_>>();
-    constants.sort_by(|(a, _), (b, _)| a.cmp(b));
-    let constants = constants
-        .into_iter()
-        .map(|(name, value)| {
-            let mut as_constt = None;
-            if as_const {
-                match &value {
-                    serde_json::Value::Null => {}
-                    serde_json::Value::Bool(_)
-                    | serde_json::Value::Number(_)
-                    | serde_json::Value::String(_)
-                    | serde_json::Value::Array(_)
-                    | serde_json::Value::Object(_) => as_constt = Some(" as const"),
-                }
-            }
-
-            format!(
-                "export const {name} = {}{};",
-                serde_json::to_string(&value)
-                    .expect("failed to serialize from `serde_json::Value`"),
-                as_constt.unwrap_or("")
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let constants = render_constants::<L>(cfg, as_const)?;
 
     Ok(format! {
         r#"{header}
@@ -78,6 +53,39 @@ pub fn render_all_parts<L: LanguageExt>(
     })
 }
 
+pub fn render_constants<L: LanguageExt>(
+    cfg: &ExportContext,
+    as_const: bool,
+) -> Result<String, L::Error> {
+    let mut constants = cfg.constants.iter().collect::<Vec<_>>();
+    constants.sort_by(|(a, _), (b, _)| a.cmp(b));
+    let constants = constants
+        .into_iter()
+        .map(|(name, value)| {
+            let mut as_constt = None;
+            if as_const {
+                match &value {
+                    serde_json::Value::Null => {}
+                    serde_json::Value::Bool(_)
+                    | serde_json::Value::Number(_)
+                    | serde_json::Value::String(_)
+                    | serde_json::Value::Array(_)
+                    | serde_json::Value::Object(_) => as_constt = Some(" as const"),
+                }
+            }
+
+            format!(
+                "export const {name} = {}{};",
+                serde_json::to_string(&value)
+                    .expect("failed to serialize from `serde_json::Value`"),
+                as_constt.unwrap_or("")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok(constants)
+}
+
 pub fn arg_names(args: &[(Cow<'static, str>, DataType)]) -> Vec<String> {
     args.iter()
         .map(|(name, _)| name.to_lower_camel_case())
@@ -92,7 +100,7 @@ fn return_as_result_tuple(expr: &str, as_any: bool) -> String {
     let as_any = as_any.then_some(" as any").unwrap_or_default();
 
     format!(
-r#"try {{
+        r#"try {{
         return {{ status: "ok", data: {expr} }};
     }} catch (e) {{
         if(e instanceof Error) throw e;
@@ -119,25 +127,6 @@ pub fn maybe_return_as_result_tuple(
     }
 }
 
-pub fn function(
-    docs: &str,
-    name: &str,
-    args: &[String],
-    return_type: Option<&str>,
-    body: &str,
-) -> String {
-    let args = args.join(", ");
-    let return_type = return_type
-        .map(|t| format!(": Promise<{}>", t))
-        .unwrap_or_default();
-
-    format!(
-        r#"{docs}export async function {name}({args}) {return_type} {{
-    {body}
-}}"#
-    )
-}
-
 fn tauri_invoke(name: &str, arg_usages: Option<String>) -> String {
     let arg_usages = arg_usages.map(|u| format!(", {u}")).unwrap_or_default();
 
@@ -146,25 +135,24 @@ fn tauri_invoke(name: &str, arg_usages: Option<String>) -> String {
 
 pub fn handle_result(
     function: &datatype::Function,
-    type_map: &TypeMap,
-    cfg: &Typescript,
-    error_handling: ErrorHandlingMode,
+    ts: &Typescript,
+    cfg: &ExportContext,
 ) -> Result<String, ExportError> {
     Ok(match &function.result() {
-        Some(FunctionResultVariant::Result(t, e)) => match error_handling {
+        Some(FunctionResultVariant::Result(t, e)) => match cfg.error_handling {
             ErrorHandlingMode::Result => {
                 format!(
                     "Result<{}, {}>",
-                    ts::datatype(cfg, &FunctionResultVariant::Value(t.clone()), type_map)?,
-                    ts::datatype(cfg, &FunctionResultVariant::Value(e.clone()), type_map)?
+                    ts::datatype(ts, &FunctionResultVariant::Value(t.clone()), &cfg.type_map)?,
+                    ts::datatype(ts, &FunctionResultVariant::Value(e.clone()), &cfg.type_map)?
                 )
             }
             ErrorHandlingMode::Throw => {
-                ts::datatype(cfg, &FunctionResultVariant::Value(t.clone()), type_map)?
+                ts::datatype(ts, &FunctionResultVariant::Value(t.clone()), &cfg.type_map)?
             }
         },
         Some(FunctionResultVariant::Value(t)) => {
-            ts::datatype(cfg, &FunctionResultVariant::Value(t.clone()), type_map)?
+            ts::datatype(ts, &FunctionResultVariant::Value(t.clone()), &cfg.type_map)?
         }
         None => "void".to_string(),
     })
@@ -198,7 +186,7 @@ pub fn command_body(
 pub fn events_map(
     events: &BTreeMap<&'static str, DataType>,
     plugin_name: &Option<&'static str>,
-) -> String {
+) -> Vec<String> {
     events
         .iter()
         .map(|(name, _)| {
@@ -208,10 +196,9 @@ pub fn events_map(
                 .unwrap_or_else(|| name.to_string());
             let name_camel = name.to_lower_camel_case();
 
-            format!(r#"{name_camel}: "{name_str}""#)
+            format!(r#"{}{name_camel}: "{name_str}""#, "\t")
         })
         .collect::<Vec<_>>()
-        .join(",\n")
 }
 
 pub fn events_types(
@@ -226,7 +213,7 @@ pub fn events_types(
 
             let typ = ts::datatype(cfg, &FunctionResultVariant::Value(typ.clone()), type_map)?;
 
-            Ok(format!(r#"{name_camel}: {typ}"#))
+            Ok(format!(r#"{}{name_camel}: {typ}"#, "\t"))
         })
         .collect()
 }
@@ -236,7 +223,7 @@ pub fn events_data(
     cfg: &Typescript,
     plugin_name: &Option<&'static str>,
     type_map: &TypeMap,
-) -> Result<(Vec<String>, String), ExportError> {
+) -> Result<(Vec<String>, Vec<String>), ExportError> {
     Ok((
         events_types(events, cfg, type_map)?,
         events_map(events, plugin_name),

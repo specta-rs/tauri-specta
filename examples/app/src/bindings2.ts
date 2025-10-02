@@ -4,16 +4,6 @@
 /** user-defined commands **/
 
 export namespace commands {
-	export namespace library_service  {
-		export async function getLibrary() : Promise<void> {
-		    await TAURI_INVOKE("get_library");
-		}
-	}
-	export namespace nested  {
-		export async function someStruct() : Promise<MyStruct> {
-		    return await TAURI_INVOKE("some_struct");
-		}
-	}
 	/**
 	 * HELLO
 	 * WORLD
@@ -58,17 +48,26 @@ export namespace commands {
 	        else return { status: "error", error: e  as any };
 	    }
 	}
+	export namespace library_service  {
+		export async function getLibrary() : Promise<void> {
+		    await TAURI_INVOKE("get_library");
+		}
+	}
+	export namespace nested  {
+		export async function someStruct() : Promise<MyStruct> {
+		    return await TAURI_INVOKE("some_struct");
+		}
+	}
 }
 
 /** user-defined events **/
 
-
 export const events = __makeEvents__<{
-emptyEvent: EmptyEvent,
-myDemoEvent: DemoEvent
+	emptyEvent: EmptyEvent,
+	myDemoEvent: DemoEvent
 }>({
-emptyEvent: "empty-event",
-myDemoEvent: "myDemoEvent"
+	emptyEvent: "empty-event",
+	myDemoEvent: "myDemoEvent"
 })
 
 /** user-defined constants **/

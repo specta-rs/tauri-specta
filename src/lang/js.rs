@@ -38,6 +38,10 @@ impl LanguageExt for specta_jsdoc::JSDoc {
         }
         Ok(())
     }
+    
+    fn render_per_file(&self, _cfg: &ExportContext) -> Result<crate::ExportFiles, Self::Error> {
+        todo!()
+    }
 }
 
 fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportError> {
@@ -47,7 +51,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
         .map(|function| {
             let jsdoc = {
                 let ret_type =
-                    js_ts::handle_result(function, &cfg.type_map, ts, cfg.error_handling)?;
+                    js_ts::handle_result(function, ts, cfg)?;
 
                 let mut builder = js_doc::Builder::default();
 
@@ -76,7 +80,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                 builder.build()
             };
 
-            Ok(js_ts::function(
+            Ok(crate::lang::js::function(
                 &jsdoc,
                 &function.name().to_lower_camel_case(),
                 // TODO: Don't `collect` the whole thing
@@ -89,12 +93,29 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
         .join(",\n");
 
     Ok(format!(
-        r#"export const commands = {{
-        {commands}
-    }}"#
-    ))
+            "export const commands = {{\n\t{}\n}}",
+            commands.replace("\n", "\n\t").replace("\r", "\r\t")
+        ))
 }
 
+fn function(
+    docs: &str,
+    name: &str,
+    args: &[String],
+    return_type: Option<&str>,
+    body: &str,
+) -> String {
+    let args = args.join(", ");
+    let return_type = return_type
+        .map(|t| format!(": Promise<{}>", t))
+        .unwrap_or_default();
+
+    format!(
+        r#"{docs}async {name}({args}) {return_type} {{
+    {body}
+}}"#
+    )
+}
 fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportError> {
     if cfg.events.is_empty() {
         return Ok(Default::default());
@@ -102,6 +123,8 @@ fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportE
 
     let (events_types, events_map) =
         js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.type_map)?;
+
+    let events_map = events_map.join(",\n");
 
     let events = {
         let mut builder = js_doc::Builder::default();
@@ -114,12 +137,11 @@ fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportE
     };
 
     Ok(format! {
-        r#"
-    {events}
-    const __typedMakeEvents__ = __makeEvents__;
+r#"{events}
+const __typedMakeEvents__ = __makeEvents__;
 
-    export const events = __typedMakeEvents__({{
-    {events_map}
-    }})"#
-    })
+export const events = __typedMakeEvents__({{
+{events_map}
+}})"#
+})
 }

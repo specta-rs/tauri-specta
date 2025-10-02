@@ -4,98 +4,97 @@
 /** user-defined commands **/
 
 export const commands = {
-        /**
- * HELLO
- * WORLD
- * !!!!
- * @param { string } myName
- * @returns { Promise<string> }
- */
-export async function helloWorld(myName)  {
-    return await TAURI_INVOKE("hello_world", { myName });
-},
-/**
- * @returns { Promise<string> }
- */
-export async function goodbyeWorld()  {
-    return await TAURI_INVOKE("goodbye_world");
-},
-/**
- * @returns { Promise<Result<string, number>> }
- */
-export async function hasError()  {
-    try {
-        return { status: "ok", data: await TAURI_INVOKE("has_error") };
-    } catch (e) {
-        if(e instanceof Error) throw e;
-        else return { status: "error", error: e  };
-    }
-},
-/**
- * @returns { Promise<MyStruct> }
- */
-export async function someStruct()  {
-    return await TAURI_INVOKE("some_struct");
-},
-/**
- * @returns { Promise<void> }
- */
-export async function generic()  {
-    await TAURI_INVOKE("generic");
-},
-/**
- * @deprecated This is a deprecated function
- * @returns { Promise<void> }
- */
-export async function deprecated()  {
-    await TAURI_INVOKE("deprecated");
-},
-/**
- * @returns { Promise<Result<null, MyError>> }
- */
-export async function typesafeErrorsUsingThiserror()  {
-    try {
-        return { status: "ok", data: await TAURI_INVOKE("typesafe_errors_using_thiserror") };
-    } catch (e) {
-        if(e instanceof Error) throw e;
-        else return { status: "error", error: e  };
-    }
-},
-/**
- * @returns { Promise<Result<null, MyError2>> }
- */
-export async function typesafeErrorsUsingThiserrorWithValue()  {
-    try {
-        return { status: "ok", data: await TAURI_INVOKE("typesafe_errors_using_thiserror_with_value") };
-    } catch (e) {
-        if(e instanceof Error) throw e;
-        else return { status: "error", error: e  };
-    }
-},
-/**
- * @returns { Promise<void> }
- */
-export async function getLibrary()  {
-    await TAURI_INVOKE("get_library");
+	/**
+	 * HELLO
+	 * WORLD
+	 * !!!!
+	 * @param { string } myName
+	 * @returns { Promise<string> }
+	 */
+	async helloWorld(myName)  {
+	    return await TAURI_INVOKE("hello_world", { myName });
+	},
+	/**
+	 * @returns { Promise<string> }
+	 */
+	async goodbyeWorld()  {
+	    return await TAURI_INVOKE("goodbye_world");
+	},
+	/**
+	 * @returns { Promise<Result<string, number>> }
+	 */
+	async hasError()  {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("has_error") };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  };
+	    }
+	},
+	/**
+	 * @returns { Promise<MyStruct> }
+	 */
+	async someStruct()  {
+	    return await TAURI_INVOKE("some_struct");
+	},
+	/**
+	 * @returns { Promise<void> }
+	 */
+	async generic()  {
+	    await TAURI_INVOKE("generic");
+	},
+	/**
+	 * @deprecated This is a deprecated function
+	 * @returns { Promise<void> }
+	 */
+	async deprecated()  {
+	    await TAURI_INVOKE("deprecated");
+	},
+	/**
+	 * @returns { Promise<Result<null, MyError>> }
+	 */
+	async typesafeErrorsUsingThiserror()  {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("typesafe_errors_using_thiserror") };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  };
+	    }
+	},
+	/**
+	 * @returns { Promise<Result<null, MyError2>> }
+	 */
+	async typesafeErrorsUsingThiserrorWithValue()  {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("typesafe_errors_using_thiserror_with_value") };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  };
+	    }
+	},
+	/**
+	 * @returns { Promise<void> }
+	 */
+	async getLibrary()  {
+	    await TAURI_INVOKE("get_library");
+	}
 }
-    }
 
 /** user-defined events **/
 
-
-    /**
+/**
  * @type {typeof __makeEvents__<{
  * emptyEvent: EmptyEvent
  * myDemoEvent: DemoEvent
  * }>}
  */
 
-    const __typedMakeEvents__ = __makeEvents__;
+const __typedMakeEvents__ = __makeEvents__;
 
-    export const events = __typedMakeEvents__({
-    emptyEvent: "empty-event",
-myDemoEvent: "myDemoEvent"
-    })
+export const events = __typedMakeEvents__({
+	emptyEvent: "empty-event",
+	myDemoEvent: "myDemoEvent"
+})
 
 /** user-defined constants **/
 

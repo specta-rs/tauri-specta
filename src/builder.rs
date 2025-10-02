@@ -324,6 +324,7 @@ impl<R: Runtime> Builder<R> {
             type_map: self.types.clone(),
             constants: self.constants.clone(),
             plugin_name: self.plugin_name,
+            per_file: false,
         })
     }
 
@@ -360,4 +361,37 @@ impl<R: Runtime> Builder<R> {
         Ok(())
     }
 
+    /// Export the bindings to multiple files.
+    /// Path is a directory.
+    pub fn export_per_file<L: LanguageExt>(
+        &self,
+        language: L,
+        path: impl AsRef<Path>,
+    ) -> Result<(), L::Error> {
+
+        let cfg = &crate::ExportContext {
+            // TODO: Don't clone stuff
+            commands: self.command_types.clone(),
+            command_modules: self.command_modules.clone(),
+            error_handling: self.error_handling,
+            events: self.events.clone(),
+            type_map: self.types.clone(),
+            constants: self.constants.clone(),
+            plugin_name: self.plugin_name,
+            per_file: true,
+        };
+        let files = language.render_per_file(cfg)?.content_per_file;
+
+        let path = path.as_ref();
+        fs::create_dir_all(path)?;
+
+        for (file_name, content) in files {
+            let file_path = path.join(file_name);
+            let mut file = File::create(&file_path)?;
+            write!(file, "{content}")?;
+            language.format(&file_path).ok(); // TODO: Error handling
+        }
+        
+        Ok(())
+    }
 }

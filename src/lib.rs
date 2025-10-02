@@ -217,6 +217,7 @@ pub struct Commands<R: Runtime>(
     // Bounds copied from `tauri::Builder::invoke_handler`
     pub(crate) Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
     pub(crate) fn(&mut TypeMap) -> Vec<datatype::Function>,
+    /// Module path for each command
     pub(crate) Vec<&'static str>,
 );
 
@@ -254,6 +255,42 @@ pub struct ExportContext {
     pub events: BTreeMap<&'static str, DataType>,
     pub type_map: TypeMap,
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
+    pub per_file: bool,
+}
+
+/// Exports files content
+#[derive(Default, Debug, Clone)]
+pub struct ExportFiles {
+    /// File content keyed by file name
+    pub content_per_file: BTreeMap<String, String>,
+}
+impl ExportFiles {
+    /// Creates a new instance of `ExportFiles`.
+    pub fn new() -> Self {
+        Self {
+            content_per_file: BTreeMap::new(),
+        }
+    }
+    /// Sets the constants file content
+    pub fn set_constants(&mut self, s: String) {
+        self.content_per_file.insert("constants.ts".to_string(), s);
+    }
+    /// Sets the types file content
+    pub fn set_types(&mut self, s: String) {
+        self.content_per_file.insert("types.ts".to_string(), s);
+    }
+    /// Sets the commands file content
+    pub fn set_commands(&mut self, s: String) {
+        self.content_per_file.insert("commands.ts".to_string(), s);
+    }
+    /// Sets the events file content
+    pub fn set_events(&mut self, s: String) {
+        self.content_per_file.insert("events.ts".to_string(), s);
+    }
+    /// Sets the globals file content
+    pub fn set_globals(&mut self, s: String) {
+        self.content_per_file.insert("globals.ts".to_string(), s);
+    }
 }
 
 /// Implemented for all languages which Tauri Specta supports exporting to.
@@ -270,6 +307,9 @@ pub trait LanguageExt {
 
     /// TODO
     fn format(&self, path: &Path) -> Result<(), Self::Error>;
+
+    /// render the bindings per file
+    fn render_per_file(&self, cfg: &ExportContext) -> Result<ExportFiles, Self::Error>;
 }
 
 impl<L: LanguageExt> LanguageExt for &L {
@@ -281,6 +321,10 @@ impl<L: LanguageExt> LanguageExt for &L {
 
     fn format(&self, path: &Path) -> Result<(), Self::Error> {
         (*self).format(path)
+    }
+    
+    fn render_per_file(&self, cfg: &ExportContext) -> Result<ExportFiles, Self::Error> {
+        (*self).render_per_file(cfg)
     }
 }
 
