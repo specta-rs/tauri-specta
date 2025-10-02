@@ -61,8 +61,8 @@ todo = { level = "warn", priority = -1 }
 panic_in_result_fn = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
-tauri = { version = "^2.1.1" }
-tauri-build = { version = "2.0" }
+tauri = { version = "2.8.5", features = ["devtools", "tray-icon"] }
+tauri-build = { version = "2.4.1", features = [] }
 tauri-plugin = { version = "2.0" }
 specta = { version = "=2.0.0-rc.22" }
 specta-typescript = { version = "0.0.9" }
