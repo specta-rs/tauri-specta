@@ -3,9 +3,12 @@
     windows_subsystem = "windows"
 )]
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use specta_typescript::Typescript;
+use tauri::{async_runtime::RwLock, AppHandle, Runtime, State, Manager};
 use tauri_specta::*;
 use thiserror::Error;
 pub mod library_service;
@@ -30,10 +33,6 @@ fn goodbye_world() -> impl Serialize + specta::Type {
 fn has_error() -> Result<&'static str, i32> {
     Err(32)
 }
-
-#[tauri::command]
-#[specta::specta]
-fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
 
 #[deprecated = "This is a deprecated function"]
 #[tauri::command]
@@ -117,6 +116,12 @@ pub struct Testing {
     a: String,
 }
 
+
+#[tauri::command]
+#[specta::specta]
+fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
+
+
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
         .commands(tauri_specta::collect_commands![
@@ -129,6 +134,10 @@ fn main() {
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
             library_service::get_library,
+            library_service::hello_app::<tauri::Wry>,
+            library_service::add_db,
+            library_service::get_db,
+            // library_service::hello_generic::<String>,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .typ::<Custom>()
@@ -168,6 +177,8 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
+            app.manage(library_service::DbInstances::default());
+
             builder.mount_events(app);
 
             DemoEvent::listen(app, |event| {

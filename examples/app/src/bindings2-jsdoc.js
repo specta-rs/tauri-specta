@@ -77,6 +77,43 @@ export const commands = {
 	 */
 	async getLibrary()  {
 	    await TAURI_INVOKE("get_library");
+	},
+	/**
+	 * @returns { Promise<Result<string, string>> }
+	 */
+	async helloApp()  {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("hello_app") };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  };
+	    }
+	},
+	/**
+	 * Execute a command against the database
+	 * @param { string } db
+	 * @returns { Promise<Result<string, string>> }
+	 */
+	async addDb(db)  {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("add_db", { db }) };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  };
+	    }
+	},
+	/**
+	 * Execute a command against the database
+	 * @param { string } db
+	 * @returns { Promise<Result<string, string>> }
+	 */
+	async getDb(db)  {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("get_db", { db }) };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  };
+	    }
 	}
 }
 

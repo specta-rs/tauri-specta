@@ -61,4 +61,34 @@ export namespace library_service  {
 	export async function getLibrary() : Promise<void> {
 	    await TAURI_INVOKE("get_library");
 	}
+	export async function helloApp() : Promise<Result<string, string>> {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("hello_app") };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  as any };
+	    }
+	}
+	/**
+	 * Execute a command against the database
+	 */
+	export async function addDb(db: string) : Promise<Result<string, string>> {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("add_db", { db }) };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  as any };
+	    }
+	}
+	/**
+	 * Execute a command against the database
+	 */
+	export async function getDb(db: string) : Promise<Result<string, string>> {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("get_db", { db }) };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  as any };
+	    }
+	}
 }

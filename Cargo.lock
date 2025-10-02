@@ -3523,6 +3523,7 @@ dependencies = [
  "tauri-plugin-os",
  "tauri-specta",
  "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]

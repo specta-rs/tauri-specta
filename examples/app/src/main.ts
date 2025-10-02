@@ -13,6 +13,13 @@ async function greet() {
     commands.nested.someStruct().then(s => console.log(s));
     commands.library_service.getLibrary().then(() => console.log("getLibrary done"));
 
+    await commands.library_service.helloApp().then(res => console.log("helloApp", res));
+    await commands.library_service.getDb("mydb").then(res => console.log("getDb", res));
+    await commands.library_service.addDb("mydb").then(res => console.log("addDb", res));
+    await commands.library_service.getDb("mydb").then(res => console.log("getDb", res));
+    await commands.library_service.addDb("mydb").then(res => console.log("addDb", res));
+    await commands.hasError().then(res => console.log("hasError", res));
+
     setTimeout(async () => console.log(await commands.goodbyeWorld()), 1000);
   }
 }

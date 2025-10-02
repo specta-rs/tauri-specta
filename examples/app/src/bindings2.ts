@@ -48,14 +48,44 @@ export namespace commands {
 	        else return { status: "error", error: e  as any };
 	    }
 	}
+	export namespace nested  {
+		export async function someStruct() : Promise<MyStruct> {
+		    return await TAURI_INVOKE("some_struct");
+		}
+	}
 	export namespace library_service  {
 		export async function getLibrary() : Promise<void> {
 		    await TAURI_INVOKE("get_library");
 		}
-	}
-	export namespace nested  {
-		export async function someStruct() : Promise<MyStruct> {
-		    return await TAURI_INVOKE("some_struct");
+		export async function helloApp() : Promise<Result<string, string>> {
+		    try {
+		        return { status: "ok", data: await TAURI_INVOKE("hello_app") };
+		    } catch (e) {
+		        if(e instanceof Error) throw e;
+		        else return { status: "error", error: e  as any };
+		    }
+		}
+		/**
+		 * Execute a command against the database
+		 */
+		export async function addDb(db: string) : Promise<Result<string, string>> {
+		    try {
+		        return { status: "ok", data: await TAURI_INVOKE("add_db", { db }) };
+		    } catch (e) {
+		        if(e instanceof Error) throw e;
+		        else return { status: "error", error: e  as any };
+		    }
+		}
+		/**
+		 * Execute a command against the database
+		 */
+		export async function getDb(db: string) : Promise<Result<string, string>> {
+		    try {
+		        return { status: "ok", data: await TAURI_INVOKE("get_db", { db }) };
+		    } catch (e) {
+		        if(e instanceof Error) throw e;
+		        else return { status: "error", error: e  as any };
+		    }
 		}
 	}
 }
