@@ -184,7 +184,7 @@
 )]
 
 use core::fmt;
-use std::{borrow::Cow, collections::BTreeMap, path::Path, sync::Arc};
+use std::{borrow::Cow, collections::{BTreeMap, HashSet}, path::Path, sync::Arc};
 
 use specta::{
     datatype::{self, DataType},
@@ -251,6 +251,7 @@ pub struct ExportContext {
     pub plugin_name: Option<&'static str>,
     pub commands: Vec<datatype::Function>,
     pub command_modules: Vec<&'static str>,
+    pub class_modules: HashSet<&'static str>,
     pub error_handling: ErrorHandlingMode,
     pub events: BTreeMap<&'static str, DataType>,
     pub type_map: TypeMap,

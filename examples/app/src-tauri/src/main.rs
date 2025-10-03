@@ -124,6 +124,7 @@ fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
 
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
+        .class(&["library_service::blue_struct_class"])
         .commands(souchy_tauri_specta::collect_commands![
             hello_world,
             goodbye_world,
@@ -139,6 +140,9 @@ fn main() {
             library_service::get_db,
             // library_service::hello_generic::<String>,
             // library_service::MyTrait::my_method,
+            library_service::blue_struct_class::blue_struct_class_instance,
+            library_service::blue_struct_class::blue_struct_class_my_method,
+            library_service::blue_struct_class::blue_struct_class_update,
         ])
         .events(souchy_tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .typ::<Custom>()

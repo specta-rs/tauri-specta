@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fs::{self, File},
     io::Write,
     path::Path,
@@ -86,6 +86,7 @@ pub struct Builder<R: Runtime = tauri::Wry> {
     commands: Commands<R>,
     command_types: Vec<Function>,
     command_modules: Vec<&'static str>,
+    class_modules: HashSet<&'static str>,
     error_handling: ErrorHandlingMode,
     events: BTreeMap<&'static str, DataType>,
     event_sids: BTreeSet<SpectaID>,
@@ -100,6 +101,7 @@ impl<R: Runtime> Default for Builder<R> {
             commands: Commands::default(),
             command_types: Default::default(),
             command_modules: Default::default(),
+            class_modules: Default::default(),
             error_handling: Default::default(),
             events: Default::default(),
             event_sids: Default::default(),
@@ -149,6 +151,14 @@ impl<R: Runtime> Builder<R> {
             commands,
             ..self
         }
+    }
+
+    /// Register class names with the builder.
+    pub fn class(mut self, class_modules: &[&'static str]) -> Self {
+        for module in class_modules {
+            self.class_modules.insert(*module);
+        }
+        self
     }
 
     /// Register events with the builder.
@@ -319,6 +329,7 @@ impl<R: Runtime> Builder<R> {
             // TODO: Don't clone stuff
             commands: self.command_types.clone(),
             command_modules: self.command_modules.clone(),
+            class_modules: self.class_modules.clone(),
             error_handling: self.error_handling,
             events: self.events.clone(),
             type_map: self.types.clone(),
@@ -373,6 +384,7 @@ impl<R: Runtime> Builder<R> {
             // TODO: Don't clone stuff
             commands: self.command_types.clone(),
             command_modules: self.command_modules.clone(),
+            class_modules: self.class_modules.clone(),
             error_handling: self.error_handling,
             events: self.events.clone(),
             type_map: self.types.clone(),

@@ -4,6 +4,7 @@
 export type Custom = string
 export type DemoEvent = string
 export type EmptyEvent = null
+export type Id = string
 export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string }
 export type MyError2 = { type: "IoError"; data: string }
 export type MyStruct = { some_field: string }

@@ -114,6 +114,46 @@ export const commands = {
 	        if(e instanceof Error) throw e;
 	        else return { status: "error", error: e  };
 	    }
+	},
+	/**
+	 * `constructor` or `new`
+	 * Actually should be static method that returns an instance and make the ctor private, so call it instance.
+	 * 
+	 * We can either pass the BlueStruct instance around, or use a State to store instances.
+	 * If we use multiple instances in State, we need a way to identify/key them.
+	 * Dont really want to mix both, because that's 2 sources of truth for the struct's data.
+	 * Issue with passing instance, is doing stuff here in rust doesnt affect the instance in TS.
+	 * So State it is.
+	 * Some classes may be singletons, other will have keys.
+	 * The constructor can return the key when needed.
+	 * And generate getters/setters for the other fields.
+	 * @param { string } someField
+	 * @returns { Promise<Id> }
+	 */
+	async blueStructClassInstance(someField)  {
+	    return await TAURI_INVOKE("blue_struct_class_instance", { someField });
+	},
+	/**
+	 * Now we can ignore State and Id parameters in the TS function.
+	 * The class will hold the Id and pass it to the .invoke().
+	 * @param { Id } structId
+	 * @returns { Promise<string> }
+	 */
+	async blueStructClassMyMethod(structId)  {
+	    return await TAURI_INVOKE("blue_struct_class_my_method", { structId });
+	},
+	/**
+	 * @param { Id } structId
+	 * @param { string } newField
+	 * @returns { Promise<Result<string, string>> }
+	 */
+	async blueStructClassUpdate(structId, newField)  {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("blue_struct_class_update", { structId, newField }) };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  };
+	    }
 	}
 }
 
@@ -149,6 +189,10 @@ export const universalConstant = 42;
 
 /**
  * @typedef { null } EmptyEvent
+ */
+
+/**
+ * @typedef { string } Id
  */
 
 /**

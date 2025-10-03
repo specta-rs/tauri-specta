@@ -30,10 +30,10 @@ pub fn hello_app<T: Runtime>(app: AppHandle<T>) -> Result<String, String> {
 // #[tauri::command]
 // #[specta::specta]
 pub fn hello_generic<T>(opt: Option<T>) -> Result<String, String> {
-	match opt {
-		Some(opt) => Ok("Got opt".to_string()),
-		None => Err("No opt provided".to_string()),
-	}
+    match opt {
+        Some(opt) => Ok("Got opt".to_string()),
+        None => Err("No opt provided".to_string()),
+    }
 }
 
 /// Execute a command against the database
@@ -70,5 +70,113 @@ pub trait MyTrait {
     // #[specta::specta]
     fn my_method(&self) -> String {
         "Hello from MyTrait!".into()
+    }
+}
+
+pub struct MyStruct {
+    pub field: String,
+}
+
+impl MyStruct {
+    pub fn new(field: String) -> Self {
+        Self { field }
+    }
+    /// On both attributes:
+    /// 	macro definition is not supported in `trait`s or `impl`s
+    /// 	consider moving the macro definition out to a nearby module scope
+    /// 	`use` import is not supported in `trait`s or `impl`s
+    /// 	consider moving the `use` import out to a nearby module scope
+    // #[tauri::command]
+    // #[specta::specta]
+    fn my_method(this: &MyStruct) -> String {
+        "Hello from MyStruct!".into()
+    }
+}
+
+// #[souchy::class]
+pub mod blue_struct_class {
+    use super::*;
+
+    #[derive(Clone, Eq, Hash, PartialEq, Deserialize, Serialize, Type, Debug)]
+	pub struct Id(String);
+    #[derive(Default)]
+    pub struct BlueStructInstances(pub RwLock<HashMap<Id, BlueStructData>>);
+    #[derive(Clone, Default)]
+    pub struct BlueStructData {
+        pub some_field: String,
+        some_private_field: String,
+    }
+    #[derive(Clone, Default)]
+    pub struct BlueStruct {
+		pub id: String
+    }
+
+    /// `constructor` or `new`
+	/// Actually should be static method that returns an instance and make the ctor private, so call it instance.
+	/// 
+    /// We can either pass the BlueStruct instance around, or use a State to store instances.
+    /// If we use multiple instances in State, we need a way to identify/key them.
+    /// Dont really want to mix both, because that's 2 sources of truth for the struct's data.
+    /// Issue with passing instance, is doing stuff here in rust doesnt affect the instance in TS.
+    /// So State it is.
+    /// Some classes may be singletons, other will have keys.
+    /// The constructor can return the key when needed.
+    /// And generate getters/setters for the other fields.
+    #[tauri::command]
+    #[specta::specta]
+    pub fn blue_struct_class_instance(
+        blue_instances: State<'_, BlueStructInstances>,
+        some_field: String,
+    ) -> Id {
+		let id = Id("uuid::Uuid::new_v4()".to_string());
+        let blue = BlueStructData { 
+			some_field,
+			some_private_field: "default".into()
+		};
+        blue_instances
+            .0
+            .blocking_write()
+            .insert(id.clone(), blue.clone());
+        id
+    }
+
+	/// Now we can ignore State and Id parameters in the TS function.
+	/// The class will hold the Id and pass it to the .invoke().
+    #[tauri::command]
+    #[specta::specta]
+    pub fn blue_struct_class_my_method(
+        blue_instances: State<'_, BlueStructInstances>,
+        struct_id: Id,
+    ) -> String {
+        "Hello from BlueStruct!".into()
+    }
+
+    #[tauri::command]
+    #[specta::specta]
+    pub async fn blue_struct_class_update(
+        blue_instances: State<'_, BlueStructInstances>,
+        struct_id: Id,
+        new_field: String,
+    ) -> Result<String, String> {
+        let mut instances = blue_instances.0.write().await;
+        if let Some(instance) = instances.get_mut(&struct_id) {
+            instance.some_field = new_field;
+            Ok("Updated BlueStruct!".into())
+        } else {
+            Err("BlueStruct not found!".into())
+        }
+    }
+
+    #[tauri::command]
+    #[specta::specta]
+    pub async fn blue_struct_class_get_struct(
+        blue_instances: State<'_, BlueStructInstances>,
+        struct_id: Id,
+    ) -> Result<BlueStructData, String> {
+        let instances = blue_instances.0.read().await;
+        match instances.get(&struct_id) {
+            Some(db) => Ok(db.clone()),
+            None => Err("Db not loaded".to_string()),
+        }
     }
 }

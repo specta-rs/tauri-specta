@@ -56,12 +56,12 @@ impl LanguageExt for specta_typescript::Typescript {
         header += &self.framework_header;
 
         let events = format!(
-"import {{ __makeEvents__ }} from './globals';
+            "import {{ __makeEvents__ }} from './globals';
 import {{ {type_names} }} from './types';\n
 {events}"
         );
         let commands = format!(
-"import {{
+            "import {{
   invoke as TAURI_INVOKE,
   Channel as TAURI_CHANNEL,
 }} from \"@tauri-apps/api/core\";
@@ -111,29 +111,46 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
             } else {
                 "".to_string()
             };
-            map.entry(ns.replace("::", "_")).or_default().push(function);
+            map.entry(ns.replace(" ", "")).or_default().push(function);
             map
         });
 
     let all_commands = commands_by_module
         .iter()
         .map(|(module_path, functions)| {
+
+            let is_class = cfg.class_modules.contains(module_path.as_str());
+            let has_namespace = !module_path.is_empty();
+            let mut parts: Vec<&str> = module_path.split("::").collect();
+            let mut class_name = "";
+            // remove the class name from the namespace if it's a class and there's at least `mod::class`
+            if is_class && parts.len() >= 2 {
+                class_name = parts.pop().unwrap();
+            }
+            let namespace = parts.join("_");
+
             // Render each function in the module
             let functions_str = functions
                 .iter()
-                .map(|function| render_command(function, ts, cfg))
+                .map(|function| render_command(function, ts, cfg, is_class))
                 .collect::<Result<Vec<_>, ExportError>>()?
                 .join("\n");
-            // Wrap module in a namespace if needed
-            let str = if !module_path.is_empty() {
-                format!(
-                    "export namespace {} {{\n\t{}\n}}",
-                    module_path,
-                    functions_str.replace("\n", "\n\t").replace("\r", "\r\t")
+
+            let mut str = functions_str;
+            if is_class {
+                str = format!(
+                    "export class {} {{\n\t{}\n}}",
+                    class_name,
+                    str.replace("\n", "\n\t").replace("\r", "\r\t")
                 )
-            } else {
-                functions_str
-            };
+            }
+            if has_namespace {
+                str = format!(
+                    "export namespace {} {{\n\t{}\n}}",
+                    namespace,
+                    str.replace("\n", "\n\t").replace("\r", "\r\t")
+                )
+            } 
             Ok(str)
         })
         .collect::<Result<Vec<_>, ExportError>>()?
@@ -153,6 +170,7 @@ fn render_command(
     function: &Function,
     ts: &Typescript,
     cfg: &ExportContext,
+    is_class: bool,
 ) -> Result<String, ExportError> {
     let arg_defs = function
         .args()
@@ -187,6 +205,7 @@ fn render_command(
         &arg_defs,
         Some(&ret_type),
         &js_ts::command_body(&cfg.plugin_name, function, true, cfg.error_handling),
+        is_class
     );
     Ok(str)
 }
@@ -197,14 +216,22 @@ fn function(
     args: &[String],
     return_type: Option<&str>,
     body: &str,
+    is_class: bool
 ) -> String {
-    let args = args.join(", ");
     let return_type = return_type
         .map(|t| format!(": Promise<{}>", t))
         .unwrap_or_default();
-
+    let export = if is_class { "" } else { "export" };
+    let function = if is_class { "" } else { "function" };
+    let mut args_str = args.join(", ");
+    if is_class {
+        args_str = args.iter().filter(|a| !a.ends_with(": Id")).cloned().collect::<Vec<_>>().join(", ");
+        if name == "constructor" {
+            args_str = format!("{}: Id", args_str);
+        }
+    }
     format!(
-        r#"{docs}export async function {name}({args}) {return_type} {{
+        r#"{docs}{export} async {function} {name}({args_str}) {return_type} {{
     {body}
 }}"#
     )
