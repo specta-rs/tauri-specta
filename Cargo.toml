@@ -1,5 +1,5 @@
 [package]
-name = "tauri-specta"
+name = "souchy-tauri-specta"
 description = "Completely typesafe Tauri commands"
 version = "2.0.0-rc.21"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
@@ -19,7 +19,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
-derive = ["dep:tauri-specta-macros"]
+derive = ["dep:souchy-tauri-specta-macros"]
 javascript = ["dep:specta-jsdoc"]
 typescript = ["dep:specta-typescript"]
 
@@ -31,7 +31,7 @@ workspace = true
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
 specta-jsdoc = { workspace = true, optional = true }
-tauri-specta-macros = { version = "=2.0.0-rc.16", optional = true, path = "./macros" }
+souchy-tauri-specta-macros = { version = "=2.0.0-rc.16", optional = true, path = "./macros" }
 serde = "1"
 serde_json = "1"
 thiserror = "2"

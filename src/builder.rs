@@ -27,7 +27,7 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 /// You can extend this example by calling other methods on the builder to configure your application further.
 ///
 /// ```rust,ignore
-/// use tauri_specta::{collect_commands, collect_events, Builder};
+/// use souchy_tauri_specta::{collect_commands, collect_events, Builder};
 /// use specta_typescript::Typescript;
 ///
 ///
@@ -55,7 +55,7 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 /// # Exporting using JSDoc
 ///
 /// ```rust,ignore
-/// use tauri_specta::{collect_commands,collect_events,Builder};
+/// use souchy_tauri_specta::{collect_commands,collect_events,Builder};
 /// use specta_jsdoc::JSDoc;
 ///
 ///
@@ -132,7 +132,7 @@ impl<R: Runtime> Builder<R> {
     /// # Example
     ///
     /// ```rust,ignore-windows
-    /// use tauri_specta::{Builder, collect_commands};
+    /// use souchy_tauri_specta::{Builder, collect_commands};
     ///
     /// #[tauri::command]
     /// #[specta::specta]
@@ -160,7 +160,7 @@ impl<R: Runtime> Builder<R> {
     /// ```rust,ignore-windows
     /// use serde::{Serialize, Deserialize};
     /// use specta::Type;
-    /// use tauri_specta::{Builder, collect_events, Event};
+    /// use souchy_tauri_specta::{Builder, collect_events, Event};
     ///
     /// #[derive(Serialize, Deserialize, Debug, Clone, Type, Event)]
     /// pub struct DemoEvent(String);
@@ -204,7 +204,7 @@ impl<R: Runtime> Builder<R> {
     /// # Example
     ///
     /// ```rust,ignore-windows
-    /// use tauri_specta::Builder;
+    /// use souchy_tauri_specta::Builder;
     /// use serde::{Serialize, Deserialize};
     /// use specta::Type;
     ///
@@ -228,7 +228,7 @@ impl<R: Runtime> Builder<R> {
     /// # Example
     ///
     /// ```rust,ignore-windows
-    /// use tauri_specta::Builder;
+    /// use souchy_tauri_specta::Builder;
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().constant("CONSTANT_NAME","ANY_CONSTANT_VALUE");
     /// ```
@@ -264,7 +264,7 @@ impl<R: Runtime> Builder<R> {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use tauri_specta::{Builder, collect_events};
+    /// use souchy_tauri_specta::{Builder, collect_events};
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![]);
     ///
@@ -306,7 +306,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// println!(
     ///     "{}",
-    ///     tauri_specta::Builder::<tauri::Wry>::new()
+    ///     souchy_tauri_specta::Builder::<tauri::Wry>::new()
     ///         .export_str(Typescript::new())
     ///         .unwrap()
     /// );
@@ -332,7 +332,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     /// ```rust,ignore-windows
-    /// use tauri_specta::{Builder, collect_commands, collect_events};
+    /// use souchy_tauri_specta::{Builder, collect_commands, collect_events};
     /// use specta_typescript::Typescript;
     ///
     /// let mut builder = Builder::<tauri::Wry>::new()

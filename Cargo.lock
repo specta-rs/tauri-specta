@@ -3028,6 +3028,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "souchy-tauri-specta"
+version = "2.0.0-rc.21"
+dependencies = [
+ "heck 0.5.0",
+ "serde",
+ "serde_json",
+ "souchy-tauri-specta-macros",
+ "specta",
+ "specta-jsdoc",
+ "specta-typescript",
+ "tauri",
+ "thiserror 2.0.10",
+]
+
+[[package]]
+name = "souchy-tauri-specta-example-app"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "souchy-tauri-specta",
+ "specta",
+ "specta-jsdoc",
+ "specta-typescript",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-os",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "souchy-tauri-specta-macros"
+version = "2.0.0-rc.16"
+dependencies = [
+ "darling",
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+]
+
+[[package]]
 name = "soup3"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3435,11 +3478,11 @@ version = "0.0.0"
 dependencies = [
  "rand 0.8.5",
  "serde",
+ "souchy-tauri-specta",
  "specta",
  "specta-typescript",
  "tauri",
  "tauri-plugin",
- "tauri-specta",
 ]
 
 [[package]]
@@ -3495,38 +3538,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-specta"
-version = "2.0.0-rc.21"
-dependencies = [
- "heck 0.5.0",
- "serde",
- "serde_json",
- "specta",
- "specta-jsdoc",
- "specta-typescript",
- "tauri",
- "tauri-specta-macros",
- "thiserror 2.0.10",
-]
-
-[[package]]
-name = "tauri-specta-example-app"
-version = "0.0.0"
-dependencies = [
- "serde",
- "serde_json",
- "specta",
- "specta-jsdoc",
- "specta-typescript",
- "tauri",
- "tauri-build",
- "tauri-plugin-os",
- "tauri-specta",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
 name = "tauri-specta-example-custom-plugin-app"
 version = "0.0.0"
 dependencies = [
@@ -3535,17 +3546,6 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-specta-example",
-]
-
-[[package]]
-name = "tauri-specta-macros"
-version = "2.0.0-rc.16"
-dependencies = [
- "darling",
- "heck 0.5.0",
- "proc-macro2",
- "quote",
- "syn 2.0.96",
 ]
 
 [[package]]

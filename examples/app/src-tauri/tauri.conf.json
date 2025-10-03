@@ -39,9 +39,9 @@
       }
     }
   },
-  "productName": "tauri-specta-example",
+  "productName": "souchy-tauri-specta-example",
   "version": "0.0.0",
-  "identifier": "com.otbeaumont.tauri-specta-example",
+  "identifier": "com.otbeaumont.souchy-tauri-specta-example",
   "plugins": {},
   "app": {
     "withGlobalTauri": true,
@@ -50,7 +50,7 @@
         "fullscreen": false,
         "height": 600,
         "resizable": true,
-        "title": "tauri-specta-example",
+        "title": "souchy-tauri-specta-example",
         "width": 800
       }
     ],

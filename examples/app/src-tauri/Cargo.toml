@@ -1,5 +1,5 @@
 [package]
-name = "tauri-specta-example-app"
+name = "souchy-tauri-specta-example-app"
 version = "0.0.0"
 description = "A Tauri App"
 authors = ["you"]
@@ -17,7 +17,7 @@ serde_json = "1.0"
 specta = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 tauri = { workspace = true, features = [] }
-tauri-specta = { path = "../../../", features = ["derive", "typescript", "javascript"] }
+souchy-tauri-specta = { path = "../../../", features = ["derive", "typescript", "javascript"] }
 specta-typescript = { workspace = true }
 specta-jsdoc = { workspace = true }
 tauri-plugin-os = "^2.0.0-alpha.2"

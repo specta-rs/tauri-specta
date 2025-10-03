@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+use souchy_tauri_specta::*;
 use specta::Type;
 use specta_typescript::Typescript;
 use tauri::{AppHandle, Runtime, State};
-use tauri_specta::*;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 

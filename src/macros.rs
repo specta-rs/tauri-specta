@@ -5,7 +5,7 @@
 ///
 /// # Usage
 /// ```rust,ignore-windows
-/// use tauri_specta::{collect_commands,Builder};
+/// use souchy_tauri_specta::{collect_commands,Builder};
 ///
 /// #[tauri::command]
 /// #[specta::specta] // < You must annotate your commands
@@ -58,7 +58,7 @@ macro_rules! collect_commands {
 /// ```rust,ignore-windows
 /// use serde::{Serialize, Deserialize};
 /// use specta::Type;
-/// use tauri_specta::{Event, Builder, collect_events};
+/// use souchy_tauri_specta::{Event, Builder, collect_events};
 ///
 /// #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 /// pub struct MyEvent(String);
@@ -69,7 +69,7 @@ macro_rules! collect_commands {
 /// mod hello {
 /// # use serde::{Serialize, Deserialize};
 /// # use specta::Type;
-/// # use tauri_specta::{Event, Builder, collect_events};
+/// # use souchy_tauri_specta::{Event, Builder, collect_events};
 ///     use super::*;
 ///
 ///     #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]

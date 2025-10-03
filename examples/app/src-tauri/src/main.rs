@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use specta_typescript::Typescript;
 use tauri::{async_runtime::RwLock, AppHandle, Runtime, State, Manager};
-use tauri_specta::*;
+use souchy_tauri_specta::*;
 use thiserror::Error;
 pub mod library_service;
 
@@ -101,11 +101,11 @@ fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
     Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!").into()) // We use `into` here to do the `From` conversion.
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
-#[tauri_specta(event_name = "myDemoEvent")] // Optionally rename event key (for JS/TS)
+#[derive(Serialize, Deserialize, Debug, Clone, specta::Type, souchy_tauri_specta::Event)]
+#[souchy_tauri_specta(event_name = "myDemoEvent")] // Optionally rename event key (for JS/TS)
 pub struct DemoEvent(String);
 
-#[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
+#[derive(Serialize, Deserialize, Debug, Clone, specta::Type, souchy_tauri_specta::Event)]
 pub struct EmptyEvent;
 
 #[derive(Type)]
@@ -124,7 +124,7 @@ fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
 
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
-        .commands(tauri_specta::collect_commands![
+        .commands(souchy_tauri_specta::collect_commands![
             hello_world,
             goodbye_world,
             has_error,
@@ -138,8 +138,9 @@ fn main() {
             library_service::add_db,
             library_service::get_db,
             // library_service::hello_generic::<String>,
+            // library_service::MyTrait::my_method,
         ])
-        .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
+        .events(souchy_tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .typ::<Custom>()
         .constant("universalConstant", 42);
 

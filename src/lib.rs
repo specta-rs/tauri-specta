@@ -45,7 +45,7 @@
 //!
 //! use serde::{Deserialize, Serialize};
 //! use specta_typescript::Typescript;
-//! use tauri_specta::{collect_commands, Builder};
+//! use souchy_tauri_specta::{collect_commands, Builder};
 //!
 //! #[tauri::command]
 //! #[specta::specta] // < You must annotate your commands
@@ -84,7 +84,7 @@
 //! with [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html) like the following:
 //!
 //! ```rust,ignore-windows
-//! let mut builder = tauri_specta::Builder::<tauri::Wry>::new();
+//! let mut builder = souchy_tauri_specta::Builder::<tauri::Wry>::new();
 //!
 //! #[cfg(debug_assertions)]
 //! builder
@@ -113,7 +113,7 @@
 //! }
 //!
 //! // Call `typ()` as much as you want.
-//! let mut builder = tauri_specta::Builder::<tauri::Wry>::new().typ::<MyStruct>();
+//! let mut builder = souchy_tauri_specta::Builder::<tauri::Wry>::new().typ::<MyStruct>();
 //! ```
 //!
 //! ## Events
@@ -123,9 +123,9 @@
 //! ```rust,ignore-windows
 //! use serde::{Serialize, Deserialize};
 //! use specta::Type;
-//! use tauri_specta::{Builder, collect_commands, collect_events, Event};
+//! use souchy_tauri_specta::{Builder, collect_commands, collect_events, Event};
 //!
-//! // Add `tauri_specta::Event` to your event
+//! // Add `souchy_tauri_specta::Event` to your event
 //! #[derive(Serialize, Deserialize, Debug, Clone, Type, Event)]
 //! pub struct DemoEvent(String);
 //!
@@ -198,7 +198,7 @@ use tauri::{ipc::Invoke, Runtime};
 ///
 #[cfg(feature = "derive")]
 #[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
-pub use tauri_specta_macros::Event;
+pub use souchy_tauri_specta_macros::Event;
 
 mod builder;
 mod event;

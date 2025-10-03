@@ -82,7 +82,7 @@ macro_rules! make_handler {
 /// ```rust
 /// use serde::{Serialize, Deserialize};
 /// use specta::Type;
-/// use tauri_specta::Event;
+/// use souchy_tauri_specta::Event;
 /// use tauri::AppHandle;
 ///
 /// #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]

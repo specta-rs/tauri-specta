@@ -1,5 +1,5 @@
 [package]
-name = "tauri-specta-macros"
+name = "souchy-tauri-specta-macros"
 description = "Completely typesafe Tauri commands"
 version = "2.0.0-rc.16"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]

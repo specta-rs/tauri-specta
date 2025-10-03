@@ -2,7 +2,7 @@ use tauri::{
     plugin::{Builder, TauriPlugin},
     Runtime,
 };
-use tauri_specta::*;
+use souchy_tauri_specta::*;
 
 /// Adds two numbers, returning the result.
 #[tauri::command]
@@ -16,8 +16,8 @@ struct RandomNumber(i32);
 
 const PLUGIN_NAME: &str = "specta-example";
 
-fn builder<R: Runtime>() -> tauri_specta::Builder<R> {
-    tauri_specta::Builder::new()
+fn builder<R: Runtime>() -> souchy_tauri_specta::Builder<R> {
+    souchy_tauri_specta::Builder::new()
         .plugin_name(PLUGIN_NAME)
         .commands(collect_commands![add_numbers])
         .events(collect_events![RandomNumber])

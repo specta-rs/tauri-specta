@@ -15,7 +15,7 @@ use syn::{
 use darling::FromDeriveInput;
 
 #[derive(Debug, FromDeriveInput)]
-#[darling(attributes(tauri_specta), supports(struct_any, enum_any))]
+#[darling(attributes(souchy_tauri_specta), supports(struct_any, enum_any))]
 struct EventOpts {
     ident: Ident,
     generics: Generics,
@@ -24,7 +24,7 @@ struct EventOpts {
     event_name: Option<String>,
 }
 
-#[proc_macro_derive(Event, attributes(tauri_specta))]
+#[proc_macro_derive(Event, attributes(souchy_tauri_specta))]
 pub fn derive_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let opts = match EventOpts::from_derive_input(&ast) {
@@ -34,7 +34,7 @@ pub fn derive_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
     };
 
-    let crate_ref = quote!(tauri_specta);
+    let crate_ref = quote!(souchy_tauri_specta);
     let ident = &opts.ident;
     let generics = &opts.generics;
 

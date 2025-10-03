@@ -3,7 +3,7 @@
 // use serde::Serialize;
 // use specta::{specta, Type};
 // use tauri::{State, Window};
-// use tauri_specta::collect_commands;
+// use souchy_tauri_specta::collect_commands;
 
 // // Test different combinations of results
 
