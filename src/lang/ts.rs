@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::format;
 use std::path::Path;
 
 use crate::lang::js_ts::render_constants;
@@ -106,40 +107,42 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
             // e.g. for "hello::world::foo", ns should be "hello::world"
             // otherwise, it should be "" (global namespace)
             // We replace :: with _ to make it a valid namespace in TS
+            let path = path.replace(" ", "");
             let ns = if let Some(pos) = path.rfind("::") {
                 path[..pos].to_string()
             } else {
                 "".to_string()
             };
-            map.entry(ns.replace(" ", "")).or_default().push(function);
+            map.entry(ns).or_default().push(function);
             map
         });
 
     let all_commands = commands_by_module
         .iter()
         .map(|(module_path, functions)| {
-
             let is_class = cfg.class_modules.contains(module_path.as_str());
             let has_namespace = !module_path.is_empty();
             let mut parts: Vec<&str> = module_path.split("::").collect();
-            let mut class_name = "";
+            let mut class_name = None;
             // remove the class name from the namespace if it's a class and there's at least `mod::class`
             if is_class && parts.len() >= 2 {
-                class_name = parts.pop().unwrap();
+                class_name = Some(parts.pop().unwrap());
             }
             let namespace = parts.join("_");
 
             // Render each function in the module
             let functions_str = functions
                 .iter()
-                .map(|function| render_command(function, ts, cfg, is_class))
+                .map(|function| render_command(function, ts, cfg, class_name))
                 .collect::<Result<Vec<_>, ExportError>>()?
                 .join("\n");
 
             let mut str = functions_str;
             if is_class {
                 str = format!(
-                    "export class {} {{\n\t{}\n}}",
+                    "export class {} {{
+                    \n\tprivate constructor(private readonly structId: string) {{}}
+                    \n\t{}\n}}",
                     class_name,
                     str.replace("\n", "\n\t").replace("\r", "\r\t")
                 )
@@ -150,7 +153,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                     namespace,
                     str.replace("\n", "\n\t").replace("\r", "\r\t")
                 )
-            } 
+            }
             Ok(str)
         })
         .collect::<Result<Vec<_>, ExportError>>()?
@@ -170,7 +173,7 @@ fn render_command(
     function: &Function,
     ts: &Typescript,
     cfg: &ExportContext,
-    is_class: bool,
+    class_name: Option<&str>,
 ) -> Result<String, ExportError> {
     let arg_defs = function
         .args()
@@ -201,11 +204,12 @@ fn render_command(
     };
     let str = crate::lang::ts::function(
         &docs,
-        &function.name().to_lower_camel_case(),
+        &function.name().replace(class_name.unwrap_or(""), "").to_lower_camel_case(),
         &arg_defs,
         Some(&ret_type),
-        &js_ts::command_body(&cfg.plugin_name, function, true, cfg.error_handling),
-        is_class
+        &js_ts::command_body(&cfg.plugin_name, function, true, cfg.error_handling)
+            .replace("structId", "structId: this.structId"),
+        class_name,
     );
     Ok(str)
 }
@@ -216,23 +220,34 @@ fn function(
     args: &[String],
     return_type: Option<&str>,
     body: &str,
-    is_class: bool
+    class_name: Option<&str>,
 ) -> String {
-    let return_type = return_type
+    let mut return_str = return_type
         .map(|t| format!(": Promise<{}>", t))
         .unwrap_or_default();
-    let export = if is_class { "" } else { "export" };
-    let function = if is_class { "" } else { "function" };
+    let mut export = "export ";
+    let mut function = "function ";
     let mut args_str = args.join(", ");
-    if is_class {
-        args_str = args.iter().filter(|a| !a.ends_with(": Id")).cloned().collect::<Vec<_>>().join(", ");
-        if name == "constructor" {
-            args_str = format!("{}: Id", args_str);
+    let mut body_str = body.to_string();
+    if class_name.is_some() {
+        export = "";
+        function = "";
+        args_str = args
+            .iter()
+            .filter(|a| !a.ends_with(": Id"))
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        if let Some(ret_type) = return_type {
+            //name == "instance" {
+            if ret_type == "Id" {
+                return_str = format!(": Promise<{}>", class_name.unwrap());
+            }
         }
     }
     format!(
-        r#"{docs}{export} async {function} {name}({args_str}) {return_type} {{
-    {body}
+        r#"{docs}{export}async {function}{name}({args_str}) {return_str} {{
+    {body_str}
 }}"#
     )
 }

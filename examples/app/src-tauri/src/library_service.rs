@@ -100,15 +100,11 @@ pub mod blue_struct_class {
     #[derive(Clone, Eq, Hash, PartialEq, Deserialize, Serialize, Type, Debug)]
 	pub struct Id(String);
     #[derive(Default)]
-    pub struct BlueStructInstances(pub RwLock<HashMap<Id, BlueStructData>>);
-    #[derive(Clone, Default)]
-    pub struct BlueStructData {
-        pub some_field: String,
-        some_private_field: String,
-    }
+    pub struct BlueStructInstances(pub RwLock<HashMap<Id, BlueStruct>>);
     #[derive(Clone, Default)]
     pub struct BlueStruct {
-		pub id: String
+        pub some_field: String,
+        some_private_field: String,
     }
 
     /// `constructor` or `new`
@@ -129,7 +125,7 @@ pub mod blue_struct_class {
         some_field: String,
     ) -> Id {
 		let id = Id("uuid::Uuid::new_v4()".to_string());
-        let blue = BlueStructData { 
+        let blue = BlueStruct { 
 			some_field,
 			some_private_field: "default".into()
 		};
@@ -167,16 +163,16 @@ pub mod blue_struct_class {
         }
     }
 
-    #[tauri::command]
-    #[specta::specta]
-    pub async fn blue_struct_class_get_struct(
-        blue_instances: State<'_, BlueStructInstances>,
-        struct_id: Id,
-    ) -> Result<BlueStructData, String> {
-        let instances = blue_instances.0.read().await;
-        match instances.get(&struct_id) {
-            Some(db) => Ok(db.clone()),
-            None => Err("Db not loaded".to_string()),
-        }
-    }
+    // #[tauri::command]
+    // #[specta::specta]
+    // pub async fn blue_struct_class_get_struct(
+    //     blue_instances: State<'_, BlueStructInstances>,
+    //     struct_id: Id,
+    // ) -> Result<BlueStruct, String> {
+    //     let instances = blue_instances.0.read().await;
+    //     match instances.get(&struct_id) {
+    //         Some(db) => Ok(db.clone()),
+    //         None => Err("Db not loaded".to_string()),
+    //     }
+    // }
 }
