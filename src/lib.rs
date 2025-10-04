@@ -292,6 +292,10 @@ impl ExportFiles {
     pub fn set_globals(&mut self, s: String) {
         self.content_per_file.insert("globals.ts".to_string(), s);
     }
+    /// Sets a module file content
+    pub fn set_module(&mut self, module: String, content: String) {
+        self.content_per_file.insert(format!("{}.ts", module), content);
+    }
 }
 
 /// Implemented for all languages which Tauri Specta supports exporting to.

@@ -1,10 +1,9 @@
-use std::collections::{BTreeMap, HashMap};
-use std::fmt::format;
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::lang::js_ts::render_constants;
 use crate::{lang::js_ts, ExportContext, LanguageExt};
-use heck::{ToLowerCamelCase, ToPascalCase, ToUpperCamelCase};
+use heck::{ToLowerCamelCase, ToPascalCase};
 use specta::datatype::{Function, FunctionResultVariant};
 use specta_typescript::{self as ts, Typescript};
 use specta_typescript::{js_doc, ExportError};
@@ -20,7 +19,7 @@ impl LanguageExt for specta_typescript::Typescript {
             &render_types(self, cfg)?,
             GLOBALS,
             &self.header,
-            render_commands(self, cfg)?,
+            render_commands(self, cfg)?.values().cloned().collect::<Vec<_>>().join("\n"),
             render_events(self, cfg)?,
             true,
         )
@@ -35,7 +34,7 @@ impl LanguageExt for specta_typescript::Typescript {
 
     fn render_per_file(&self, cfg: &ExportContext) -> Result<crate::ExportFiles, Self::Error> {
         let globals = GLOBALS.to_string();
-        let commands = render_commands(self, cfg)?;
+        let modules = render_commands(self, cfg)?;
         let events = render_events(self, cfg)?;
         let constants = render_constants::<Self>(cfg, true)?;
         let types = render_types(self, cfg)?;
@@ -61,22 +60,27 @@ impl LanguageExt for specta_typescript::Typescript {
 import {{ {type_names} }} from './types';\n
 {events}"
         );
-        let commands = format!(
-            "import {{
-  invoke as TAURI_INVOKE,
-  Channel as TAURI_CHANNEL,
-}} from \"@tauri-apps/api/core\";
-import {{ Result }} from './globals';
-import {{ {type_names} }} from './types';\n
-{commands}"
-        );
 
         let mut files = crate::ExportFiles::default();
-        files.set_commands(commands);
+        // files.set_commands(commands);
         files.set_events(events);
         files.set_types(types);
         files.set_constants(constants);
         files.set_globals(globals);
+        for (module, content) in modules.iter() {
+            files.set_module(
+                module.to_string(),
+                format!(
+                    "import {{
+  invoke as TAURI_INVOKE,
+  Channel as TAURI_CHANNEL,
+}} from \"@tauri-apps/api/core\";
+import {{ Result }} from '../globals';
+import {{ {type_names} }} from '../types';\n
+{content}"
+                ),
+            );
+        }
         // Add header to each file if specified
         if !header.is_empty() {
             for (_, content) in files.content_per_file.iter_mut() {
@@ -97,7 +101,10 @@ fn render_types(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportEr
     Ok(dependant_types)
 }
 
-fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportError> {
+fn render_commands(
+    ts: &Typescript,
+    cfg: &ExportContext,
+) -> Result<BTreeMap<String, String>, ExportError> {
     let commands_by_module: BTreeMap<String, Vec<&Function>> = cfg
         .commands
         .iter()
@@ -117,7 +124,8 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
             map
         });
 
-    let all_commands = commands_by_module
+    // For each module, render the functions inside it
+    let all_modules = commands_by_module
         .iter()
         .map(|(module_path, functions)| {
             let is_class = cfg.class_modules.contains(module_path.as_str());
@@ -128,7 +136,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
             if is_class && parts.len() >= 2 {
                 class_name = Some(parts.pop().clone().unwrap().to_pascal_case());
             }
-            let namespace = parts.join("_");
+            let namespace = if has_namespace { parts.join("_") } else { "commands".into() } ;
 
             // Render each function in the module
             let functions_str = functions
@@ -144,27 +152,17 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                     class_name.unwrap(),
                     str.replace("\n", "\n\t").replace("\r", "\r\t")
                 )
-            }
-            if has_namespace {
+            } else {
                 str = format!(
                     "export namespace {} {{\n\t{}\n}}\n",
                     namespace,
                     str.replace("\n", "\n\t").replace("\r", "\r\t")
-                )
+                );
             }
-            Ok(str)
+            Ok(("commands::".to_owned() + &module_path.to_string(), str))
         })
-        .collect::<Result<Vec<_>, ExportError>>()?
-        .join("\n");
-
-    // wrap all commands in a single export namespace commands if exporting to a single file
-    match cfg.per_file {
-        true => Ok(all_commands),
-        false => Ok(format!(
-            "export namespace commands {{\n\t{}\n}}",
-            all_commands.replace("\n", "\n\t").replace("\r", "\r\t")
-        )),
-    }
+        .collect::<Result<BTreeMap<_, _>, ExportError>>()?;
+    Ok(all_modules)
 }
 
 fn render_command(
@@ -224,9 +222,9 @@ fn function(
         .map(|t| format!(": Promise<{}>", t))
         .unwrap_or_default();
     let mut export = "export ";
-    let mut function = "function ";
-    let mut async_ = "async ";
     let mut static_ = "";
+    let async_ = "async ";
+    let mut function = "function ";
     let mut args_str = args.join(", ");
     let mut body_str = body.to_string();
     if class_name.is_some() {
@@ -239,7 +237,7 @@ fn function(
             .collect::<Vec<_>>()
             .join(", ");
         // Instantiator
-        if name == "instance" { 
+        if name == "instance" {
             // if can have multiple instances:
             // if let Some("Id") = return_type { }
             static_ = "static ";
@@ -248,7 +246,10 @@ fn function(
                 "return new {}(await TAURI_INVOKE(\"{}\", {{ {} }}));",
                 class_name.unwrap(),
                 name,
-                args.iter().map(|a| a.split(':').next().unwrap()).collect::<Vec<_>>().join(", ")
+                args.iter()
+                    .map(|a| a.split(':').next().unwrap())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
         }
     }

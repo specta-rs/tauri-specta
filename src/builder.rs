@@ -1,9 +1,5 @@
 use std::{
-    borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashSet},
-    fs::{self, File},
-    io::Write,
-    path::Path,
+    borrow::Cow, collections::{BTreeMap, BTreeSet, HashSet}, fmt::format, fs::{self, File}, io::Write, path::Path
 };
 
 use crate::{
@@ -398,7 +394,15 @@ impl<R: Runtime> Builder<R> {
         fs::create_dir_all(path)?;
 
         for (file_name, content) in files {
-            let file_path = path.join(file_name);
+            let mut parts = file_name.split("::").collect::<Vec<_>>();
+            let mut file_name = parts.pop().unwrap().to_string(); // remove last part (the file name)
+            if file_name == ".ts" || file_name == ".js" {
+                file_name = format!("index{}", file_name); // if no name, use index.ts/js
+            }
+            let folder_path = path.join(parts.iter().next().unwrap_or(&"".into())); //parts.join("/")); // create subdirectories for namespaces
+            fs::create_dir_all(&folder_path)?;
+
+            let file_path = folder_path.join(file_name);
             let mut file = File::create(&file_path)?;
             write!(file, "{content}")?;
             language.format(&file_path).ok(); // TODO: Error handling
