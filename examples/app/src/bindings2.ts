@@ -4,11 +4,6 @@
 /** user-defined commands **/
 
 export namespace commands {
-	export namespace nested {
-		export async function someStruct() : Promise<MyStruct> {
-		    return await TAURI_INVOKE("some_struct");
-		}
-	}
 	/**
 	 * HELLO
 	 * WORLD
@@ -88,11 +83,10 @@ export namespace commands {
 		    }
 		}
 	}
+	
 	export namespace library_service {
-		export class blue_struct_class {
-		                    
+		export class BlueStruct {
 			private constructor(private readonly structId: string) {}
-		                    
 			/**
 			 * `constructor` or `new`
 			 * Actually should be static method that returns an instance and make the ctor private, so call it instance.
@@ -106,19 +100,24 @@ export namespace commands {
 			 * The constructor can return the key when needed.
 			 * And generate getters/setters for the other fields.
 			 */
-			async blueStructClassInstance(someField: string) : Promise<Id> {
-			    return await TAURI_INVOKE("blue_struct_class_instance", { someField });
+			static async instance(someField: string) : Promise<BlueStruct> {
+			    return new BlueStruct(await TAURI_INVOKE("instance", { someField }));
 			}
 			/**
 			 * Now we can ignore State and Id parameters in the TS function.
 			 * The class will hold the Id and pass it to the .invoke().
 			 */
-			async blueStructClassMyMethod() : Promise<string> {
-			    return await TAURI_INVOKE("blue_struct_class_my_method", { structId: this.structId });
-			}
-			async blueStructClassUpdate(newField: string) : Promise<Result<string, string>> {
+			async getField() : Promise<Result<string, string>> {
 			    try {
-			        return { status: "ok", data: await TAURI_INVOKE("blue_struct_class_update", { structId: this.structId, newField }) };
+			        return { status: "ok", data: await TAURI_INVOKE("get_field", { structId: this.structId }) };
+			    } catch (e) {
+			        if(e instanceof Error) throw e;
+			        else return { status: "error", error: e  as any };
+			    }
+			}
+			async setField(value: string) : Promise<Result<string, string>> {
+			    try {
+			        return { status: "ok", data: await TAURI_INVOKE("set_field", { structId: this.structId, value }) };
 			    } catch (e) {
 			        if(e instanceof Error) throw e;
 			        else return { status: "error", error: e  as any };
@@ -126,6 +125,13 @@ export namespace commands {
 			}
 		}
 	}
+	
+	export namespace nested {
+		export async function someStruct() : Promise<MyStruct> {
+		    return await TAURI_INVOKE("some_struct");
+		}
+	}
+	
 }
 
 /** user-defined events **/

@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::format;
 use std::path::Path;
 
 use crate::lang::js_ts::render_constants;
 use crate::{lang::js_ts, ExportContext, LanguageExt};
-use heck::ToLowerCamelCase;
+use heck::{ToLowerCamelCase, ToPascalCase, ToUpperCamelCase};
 use specta::datatype::{Function, FunctionResultVariant};
 use specta_typescript::{self as ts, Typescript};
 use specta_typescript::{js_doc, ExportError};
@@ -98,11 +98,11 @@ fn render_types(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportEr
 }
 
 fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportError> {
-    let commands_by_module: HashMap<String, Vec<&Function>> = cfg
+    let commands_by_module: BTreeMap<String, Vec<&Function>> = cfg
         .commands
         .iter()
         .zip(cfg.command_modules.iter())
-        .fold(HashMap::new(), |mut map, (function, path)| {
+        .fold(BTreeMap::new(), |mut map, (function, path)| {
             // ns should be equal to the string before the last ::
             // e.g. for "hello::world::foo", ns should be "hello::world"
             // otherwise, it should be "" (global namespace)
@@ -123,33 +123,31 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
             let is_class = cfg.class_modules.contains(module_path.as_str());
             let has_namespace = !module_path.is_empty();
             let mut parts: Vec<&str> = module_path.split("::").collect();
-            let mut class_name = None;
+            let mut class_name: Option<String> = None;
             // remove the class name from the namespace if it's a class and there's at least `mod::class`
             if is_class && parts.len() >= 2 {
-                class_name = Some(parts.pop().unwrap());
+                class_name = Some(parts.pop().clone().unwrap().to_pascal_case());
             }
             let namespace = parts.join("_");
 
             // Render each function in the module
             let functions_str = functions
                 .iter()
-                .map(|function| render_command(function, ts, cfg, class_name))
+                .map(|function| render_command(function, ts, cfg, class_name.as_deref()))
                 .collect::<Result<Vec<_>, ExportError>>()?
                 .join("\n");
 
             let mut str = functions_str;
             if is_class {
                 str = format!(
-                    "export class {} {{
-                    \n\tprivate constructor(private readonly structId: string) {{}}
-                    \n\t{}\n}}",
-                    class_name,
+                    "export class {} {{\n\tprivate constructor(private readonly structId: string) {{}}\n\t{}\n}}",
+                    class_name.unwrap(),
                     str.replace("\n", "\n\t").replace("\r", "\r\t")
                 )
             }
             if has_namespace {
                 str = format!(
-                    "export namespace {} {{\n\t{}\n}}",
+                    "export namespace {} {{\n\t{}\n}}\n",
                     namespace,
                     str.replace("\n", "\n\t").replace("\r", "\r\t")
                 )
@@ -204,7 +202,7 @@ fn render_command(
     };
     let str = crate::lang::ts::function(
         &docs,
-        &function.name().replace(class_name.unwrap_or(""), "").to_lower_camel_case(),
+        &function.name().to_lower_camel_case(),
         &arg_defs,
         Some(&ret_type),
         &js_ts::command_body(&cfg.plugin_name, function, true, cfg.error_handling)
@@ -227,6 +225,8 @@ fn function(
         .unwrap_or_default();
     let mut export = "export ";
     let mut function = "function ";
+    let mut async_ = "async ";
+    let mut static_ = "";
     let mut args_str = args.join(", ");
     let mut body_str = body.to_string();
     if class_name.is_some() {
@@ -238,15 +238,22 @@ fn function(
             .cloned()
             .collect::<Vec<_>>()
             .join(", ");
-        if let Some(ret_type) = return_type {
-            //name == "instance" {
-            if ret_type == "Id" {
-                return_str = format!(": Promise<{}>", class_name.unwrap());
-            }
+        // Instantiator
+        if name == "instance" { 
+            // if can have multiple instances:
+            // if let Some("Id") = return_type { }
+            static_ = "static ";
+            return_str = format!(": Promise<{}>", class_name.unwrap());
+            body_str = format!(
+                "return new {}(await TAURI_INVOKE(\"{}\", {{ {} }}));",
+                class_name.unwrap(),
+                name,
+                args.iter().map(|a| a.split(':').next().unwrap()).collect::<Vec<_>>().join(", ")
+            );
         }
     }
     format!(
-        r#"{docs}{export}async {function}{name}({args_str}) {return_str} {{
+        r#"{docs}{export}{static_}{async_}{function}{name}({args_str}) {return_str} {{
     {body_str}
 }}"#
     )

@@ -1,5 +1,6 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { commands, events } from "./bindings2";
+import { library_service } from "./bindings3/commands";
 // import { commands, events } from "./bindings-jsdoc.js";
 
 const appWindow = getCurrentWebview();
@@ -19,6 +20,15 @@ async function greet() {
     await commands.library_service.getDb("mydb").then(res => console.log("getDb", res));
     await commands.library_service.addDb("mydb").then(res => console.log("addDb", res));
     await commands.hasError().then(res => console.log("hasError", res));
+
+    library_service.BlueStruct.instance("default value").then(b => {
+      console.log("BlueStruct", b);
+      b.getField().then(f => console.log("getField", f)).then(() => {
+        b.setField(greetInputEl?.value ?? "").then(res => console.log("setField done", res)).then(() => {
+          b.getField().then(f => console.log("getField", f));
+        });
+      });
+    });
 
     setTimeout(async () => console.log(await commands.goodbyeWorld()), 1000);
   }

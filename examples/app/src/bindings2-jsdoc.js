@@ -130,26 +130,31 @@ export const commands = {
 	 * @param { string } someField
 	 * @returns { Promise<Id> }
 	 */
-	async blueStructClassInstance(someField)  {
-	    return await TAURI_INVOKE("blue_struct_class_instance", { someField });
+	async instance(someField)  {
+	    return await TAURI_INVOKE("instance", { someField });
 	},
 	/**
 	 * Now we can ignore State and Id parameters in the TS function.
 	 * The class will hold the Id and pass it to the .invoke().
 	 * @param { Id } structId
-	 * @returns { Promise<string> }
+	 * @returns { Promise<Result<string, string>> }
 	 */
-	async blueStructClassMyMethod(structId)  {
-	    return await TAURI_INVOKE("blue_struct_class_my_method", { structId });
+	async getField(structId)  {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("get_field", { structId }) };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  };
+	    }
 	},
 	/**
 	 * @param { Id } structId
-	 * @param { string } newField
+	 * @param { string } value
 	 * @returns { Promise<Result<string, string>> }
 	 */
-	async blueStructClassUpdate(structId, newField)  {
+	async setField(structId, value)  {
 	    try {
-	        return { status: "ok", data: await TAURI_INVOKE("blue_struct_class_update", { structId, newField }) };
+	        return { status: "ok", data: await TAURI_INVOKE("set_field", { structId, value }) };
 	    } catch (e) {
 	        if(e instanceof Error) throw e;
 	        else return { status: "error", error: e  };

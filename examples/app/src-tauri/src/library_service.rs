@@ -94,11 +94,11 @@ impl MyStruct {
 }
 
 // #[souchy::class]
-pub mod blue_struct_class {
+pub mod blue_struct {
     use super::*;
 
     #[derive(Clone, Eq, Hash, PartialEq, Deserialize, Serialize, Type, Debug)]
-	pub struct Id(String);
+    pub struct Id(String);
     #[derive(Default)]
     pub struct BlueStructInstances(pub RwLock<HashMap<Id, BlueStruct>>);
     #[derive(Clone, Default)]
@@ -108,8 +108,8 @@ pub mod blue_struct_class {
     }
 
     /// `constructor` or `new`
-	/// Actually should be static method that returns an instance and make the ctor private, so call it instance.
-	/// 
+    /// Actually should be static method that returns an instance and make the ctor private, so call it instance.
+    ///
     /// We can either pass the BlueStruct instance around, or use a State to store instances.
     /// If we use multiple instances in State, we need a way to identify/key them.
     /// Dont really want to mix both, because that's 2 sources of truth for the struct's data.
@@ -120,15 +120,12 @@ pub mod blue_struct_class {
     /// And generate getters/setters for the other fields.
     #[tauri::command]
     #[specta::specta]
-    pub fn blue_struct_class_instance(
-        blue_instances: State<'_, BlueStructInstances>,
-        some_field: String,
-    ) -> Id {
-		let id = Id("uuid::Uuid::new_v4()".to_string());
-        let blue = BlueStruct { 
-			some_field,
-			some_private_field: "default".into()
-		};
+    pub fn instance(blue_instances: State<'_, BlueStructInstances>, some_field: String) -> Id {
+        let id = Id("uuid::Uuid::new_v4()".to_string());
+        let blue = BlueStruct {
+            some_field,
+            some_private_field: "default".into(),
+        };
         blue_instances
             .0
             .blocking_write()
@@ -136,36 +133,41 @@ pub mod blue_struct_class {
         id
     }
 
-	/// Now we can ignore State and Id parameters in the TS function.
-	/// The class will hold the Id and pass it to the .invoke().
+    /// Now we can ignore State and Id parameters in the TS function.
+    /// The class will hold the Id and pass it to the .invoke().
     #[tauri::command]
     #[specta::specta]
-    pub fn blue_struct_class_my_method(
+    pub async fn get_field(
         blue_instances: State<'_, BlueStructInstances>,
         struct_id: Id,
-    ) -> String {
-        "Hello from BlueStruct!".into()
+    ) -> Result<String, String> {
+        let instances = blue_instances.0.read().await;
+        match instances.get(&struct_id) {
+            Some(db) => Ok(db.some_field.clone()),
+            None => Err("BlueStruct not found!".into()),
+        }
     }
 
     #[tauri::command]
     #[specta::specta]
-    pub async fn blue_struct_class_update(
+    pub async fn set_field(
         blue_instances: State<'_, BlueStructInstances>,
         struct_id: Id,
-        new_field: String,
+        value: String,
     ) -> Result<String, String> {
         let mut instances = blue_instances.0.write().await;
-        if let Some(instance) = instances.get_mut(&struct_id) {
-            instance.some_field = new_field;
-            Ok("Updated BlueStruct!".into())
-        } else {
-            Err("BlueStruct not found!".into())
+        match instances.get_mut(&struct_id) {
+            Some(instance) => {
+                instance.some_field = value;
+                Ok("Updated BlueStruct!".into())
+            }
+            None => Err("BlueStruct not found!".into()),
         }
     }
 
     // #[tauri::command]
     // #[specta::specta]
-    // pub async fn blue_struct_class_get_struct(
+    // pub async fn blue_struct_get_struct(
     //     blue_instances: State<'_, BlueStructInstances>,
     //     struct_id: Id,
     // ) -> Result<BlueStruct, String> {

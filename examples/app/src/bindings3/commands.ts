@@ -8,79 +8,6 @@ import {
 import { Result } from './globals';
 import { Custom, DemoEvent, EmptyEvent, Id, MyError, MyError2, MyStruct } from './types';
 
-export namespace library_service {
-	export class blue_struct_class {
-	                    
-		private constructor(private readonly structId: string) {}
-	                    
-		/**
-		 * `constructor` or `new`
-		 * Actually should be static method that returns an instance and make the ctor private, so call it instance.
-		 * 
-		 * We can either pass the BlueStruct instance around, or use a State to store instances.
-		 * If we use multiple instances in State, we need a way to identify/key them.
-		 * Dont really want to mix both, because that's 2 sources of truth for the struct's data.
-		 * Issue with passing instance, is doing stuff here in rust doesnt affect the instance in TS.
-		 * So State it is.
-		 * Some classes may be singletons, other will have keys.
-		 * The constructor can return the key when needed.
-		 * And generate getters/setters for the other fields.
-		 */
-		async blueStructClassInstance(someField: string) : Promise<Id> {
-		    return await TAURI_INVOKE("blue_struct_class_instance", { someField });
-		}
-		/**
-		 * Now we can ignore State and Id parameters in the TS function.
-		 * The class will hold the Id and pass it to the .invoke().
-		 */
-		async blueStructClassMyMethod() : Promise<string> {
-		    return await TAURI_INVOKE("blue_struct_class_my_method", { structId: this.structId });
-		}
-		async blueStructClassUpdate(newField: string) : Promise<Result<string, string>> {
-		    try {
-		        return { status: "ok", data: await TAURI_INVOKE("blue_struct_class_update", { structId: this.structId, newField }) };
-		    } catch (e) {
-		        if(e instanceof Error) throw e;
-		        else return { status: "error", error: e  as any };
-		    }
-		}
-	}
-}
-export namespace library_service {
-	export async function getLibrary() : Promise<void> {
-	    await TAURI_INVOKE("get_library");
-	}
-	export async function helloApp() : Promise<Result<string, string>> {
-	    try {
-	        return { status: "ok", data: await TAURI_INVOKE("hello_app") };
-	    } catch (e) {
-	        if(e instanceof Error) throw e;
-	        else return { status: "error", error: e  as any };
-	    }
-	}
-	/**
-	 * Execute a command against the database
-	 */
-	export async function addDb(db: string) : Promise<Result<string, string>> {
-	    try {
-	        return { status: "ok", data: await TAURI_INVOKE("add_db", { db }) };
-	    } catch (e) {
-	        if(e instanceof Error) throw e;
-	        else return { status: "error", error: e  as any };
-	    }
-	}
-	/**
-	 * Execute a command against the database
-	 */
-	export async function getDb(db: string) : Promise<Result<string, string>> {
-	    try {
-	        return { status: "ok", data: await TAURI_INVOKE("get_db", { db }) };
-	    } catch (e) {
-	        if(e instanceof Error) throw e;
-	        else return { status: "error", error: e  as any };
-	    }
-	}
-}
 /**
  * HELLO
  * WORLD
@@ -125,6 +52,84 @@ export async function typesafeErrorsUsingThiserrorWithValue() : Promise<Result<n
         else return { status: "error", error: e  as any };
     }
 }
+export namespace library_service {
+	export async function getLibrary() : Promise<void> {
+	    await TAURI_INVOKE("get_library");
+	}
+	export async function helloApp() : Promise<Result<string, string>> {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("hello_app") };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  as any };
+	    }
+	}
+	/**
+	 * Execute a command against the database
+	 */
+	export async function addDb(db: string) : Promise<Result<string, string>> {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("add_db", { db }) };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  as any };
+	    }
+	}
+	/**
+	 * Execute a command against the database
+	 */
+	export async function getDb(db: string) : Promise<Result<string, string>> {
+	    try {
+	        return { status: "ok", data: await TAURI_INVOKE("get_db", { db }) };
+	    } catch (e) {
+	        if(e instanceof Error) throw e;
+	        else return { status: "error", error: e  as any };
+	    }
+	}
+}
+
+export namespace library_service {
+	export class BlueStruct {
+		private constructor(private readonly structId: string) {}
+		/**
+		 * `constructor` or `new`
+		 * Actually should be static method that returns an instance and make the ctor private, so call it instance.
+		 * 
+		 * We can either pass the BlueStruct instance around, or use a State to store instances.
+		 * If we use multiple instances in State, we need a way to identify/key them.
+		 * Dont really want to mix both, because that's 2 sources of truth for the struct's data.
+		 * Issue with passing instance, is doing stuff here in rust doesnt affect the instance in TS.
+		 * So State it is.
+		 * Some classes may be singletons, other will have keys.
+		 * The constructor can return the key when needed.
+		 * And generate getters/setters for the other fields.
+		 */
+		static async instance(someField: string) : Promise<BlueStruct> {
+		    return new BlueStruct(await TAURI_INVOKE("instance", { someField }));
+		}
+		/**
+		 * Now we can ignore State and Id parameters in the TS function.
+		 * The class will hold the Id and pass it to the .invoke().
+		 */
+		async getField() : Promise<Result<string, string>> {
+		    try {
+		        return { status: "ok", data: await TAURI_INVOKE("get_field", { structId: this.structId }) };
+		    } catch (e) {
+		        if(e instanceof Error) throw e;
+		        else return { status: "error", error: e  as any };
+		    }
+		}
+		async setField(value: string) : Promise<Result<string, string>> {
+		    try {
+		        return { status: "ok", data: await TAURI_INVOKE("set_field", { structId: this.structId, value }) };
+		    } catch (e) {
+		        if(e instanceof Error) throw e;
+		        else return { status: "error", error: e  as any };
+		    }
+		}
+	}
+}
+
 export namespace nested {
 	export async function someStruct() : Promise<MyStruct> {
 	    return await TAURI_INVOKE("some_struct");
