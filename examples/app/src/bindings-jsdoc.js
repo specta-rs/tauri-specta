@@ -21,6 +21,13 @@ async goodbyeWorld()  {
     return await TAURI_INVOKE("goodbye_world");
 },
 /**
+ * @param { string } myName
+ * @returns { Promise<string> }
+ */
+async asyncHelloWorld(myName)  {
+    return await TAURI_INVOKE("async_hello_world", { myName });
+},
+/**
  * @returns { Promise<Result<string, number>> }
  */
 async hasError()  {

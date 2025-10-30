@@ -26,6 +26,12 @@ fn goodbye_world() -> impl Serialize + specta::Type {
 
 #[tauri::command]
 #[specta::specta]
+async fn async_hello_world(my_name: String) -> String {
+    format!("Hello, {my_name}!")
+}
+
+#[tauri::command]
+#[specta::specta]
 fn has_error() -> Result<&'static str, i32> {
     Err(32)
 }
@@ -121,6 +127,7 @@ fn main() {
         .commands(tauri_specta::collect_commands![
             hello_world,
             goodbye_world,
+            async_hello_world,
             has_error,
             nested::some_struct,
             generic::<tauri::Wry>,

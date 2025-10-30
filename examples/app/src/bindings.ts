@@ -16,6 +16,9 @@ async helloWorld(myName: string) : Promise<string> {
 async goodbyeWorld() : Promise<string> {
     return await TAURI_INVOKE("goodbye_world");
 },
+async asyncHelloWorld(myName: string) : Promise<string> {
+    return await TAURI_INVOKE("async_hello_world", { myName });
+},
 async hasError() : Promise<Result<string, number>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("has_error") };
