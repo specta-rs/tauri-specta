@@ -141,8 +141,13 @@ impl<R: Runtime> Builder<R> {
     /// let mut builder = Builder::<tauri::Wry>::new().commands(collect_commands![hello_world]);
     /// ```
     pub fn commands(mut self, commands: Commands<R>) -> Self {
+        let command_types = (commands.1)(&mut self.types);
+
+        self.types
+            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
+
         Self {
-            command_types: (commands.1)(&mut self.types),
+            command_types,
             commands,
             ..self
         }
