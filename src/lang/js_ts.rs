@@ -6,11 +6,11 @@ use std::{borrow::Cow, collections::BTreeMap};
 
 use heck::ToLowerCamelCase;
 use specta::{
-    datatype::{self, DataType, FunctionResultVariant},
-    TypeMap,
+    datatype::{self, DataType, FunctionReturnType},
+    TypeCollection,
 };
+use specta_typescript::Typescript;
 use specta_typescript::{self as ts};
-use specta_typescript::{ExportError, Typescript};
 
 use crate::{apply_as_prefix, ErrorHandlingMode, ExportContext, ItemType, LanguageExt};
 
@@ -103,18 +103,18 @@ fn return_as_result_tuple(expr: &str, as_any: bool) -> String {
 
 pub fn maybe_return_as_result_tuple(
     expr: &str,
-    typ: Option<&FunctionResultVariant>,
+    typ: Option<&FunctionReturnType>,
     as_any: bool,
     error_handling: ErrorHandlingMode,
 ) -> String {
     match typ {
-        Some(FunctionResultVariant::Result(_, _)) => match error_handling {
+        Some(FunctionReturnType::Result(_, _)) => match error_handling {
             ErrorHandlingMode::Throw => {
                 format!("return {expr};")
             }
             ErrorHandlingMode::Result => return_as_result_tuple(expr, as_any),
         },
-        Some(FunctionResultVariant::Value(_)) => format!("return {expr};"),
+        Some(FunctionReturnType::Value(_)) => format!("return {expr};"),
         None => format!("{expr};"),
     }
 }
@@ -146,25 +146,25 @@ fn tauri_invoke(name: &str, arg_usages: Option<String>) -> String {
 
 pub fn handle_result(
     function: &datatype::Function,
-    type_map: &TypeMap,
+    types: &TypeCollection,
     cfg: &Typescript,
     error_handling: ErrorHandlingMode,
 ) -> Result<String, ExportError> {
     Ok(match &function.result() {
-        Some(FunctionResultVariant::Result(t, e)) => match error_handling {
+        Some(FunctionReturnType::Result(t, e)) => match error_handling {
             ErrorHandlingMode::Result => {
                 format!(
                     "Result<{}, {}>",
-                    ts::datatype(cfg, &FunctionResultVariant::Value(t.clone()), type_map)?,
-                    ts::datatype(cfg, &FunctionResultVariant::Value(e.clone()), type_map)?
+                    ts::datatype(cfg, &FunctionReturnType::Value(t.clone()), types)?,
+                    ts::datatype(cfg, &FunctionReturnType::Value(e.clone()), types)?
                 )
             }
             ErrorHandlingMode::Throw => {
-                ts::datatype(cfg, &FunctionResultVariant::Value(t.clone()), type_map)?
+                ts::datatype(cfg, &FunctionReturnType::Value(t.clone()), types)?
             }
         },
-        Some(FunctionResultVariant::Value(t)) => {
-            ts::datatype(cfg, &FunctionResultVariant::Value(t.clone()), type_map)?
+        Some(FunctionReturnType::Value(t)) => {
+            ts::datatype(cfg, &FunctionReturnType::Value(t.clone()), types)?
         }
         None => "void".to_string(),
     })
@@ -186,7 +186,7 @@ pub fn command_body(
             &name,
             arg_usages(&arg_names(
                 // TODO: Don't collect
-                &function.args().cloned().collect::<Vec<_>>(),
+                &function.args().into_iter().cloned().collect::<Vec<_>>(),
             )),
         ),
         function.result(),
@@ -217,14 +217,14 @@ pub fn events_map(
 pub fn events_types(
     events: &BTreeMap<&'static str, DataType>,
     cfg: &Typescript,
-    type_map: &TypeMap,
+    types: &TypeCollection,
 ) -> Result<Vec<String>, ExportError> {
     events
         .iter()
         .map(|(name, typ)| {
             let name_camel = name.to_lower_camel_case();
 
-            let typ = ts::datatype(cfg, &FunctionResultVariant::Value(typ.clone()), type_map)?;
+            let typ = ts::datatype(cfg, &FunctionReturnType::Value(typ.clone()), types)?;
 
             Ok(format!(r#"{name_camel}: {typ}"#))
         })
@@ -235,10 +235,10 @@ pub fn events_data(
     events: &BTreeMap<&'static str, DataType>,
     cfg: &Typescript,
     plugin_name: &Option<&'static str>,
-    type_map: &TypeMap,
+    types: &TypeCollection,
 ) -> Result<(Vec<String>, String), ExportError> {
     Ok((
-        events_types(events, cfg, type_map)?,
+        events_types(events, cfg, types)?,
         events_map(events, plugin_name),
     ))
 }

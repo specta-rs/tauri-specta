@@ -25,7 +25,7 @@ impl EventRegistry {
             "EventRegistry not found in Tauri state - Did you forget to call Builder::mount_events?",
         ).inner();
 
-        let sid = E::sid();
+        let sid = E::ID;
 
         let map = this.0.read().expect("Failed to read EventRegistry");
         let meta = map

@@ -20,7 +20,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 default = []
 derive = ["dep:tauri-specta-macros"]
-javascript = ["dep:specta-jsdoc"]
+javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
 
 [lints]
@@ -30,7 +30,6 @@ workspace = true
 # Public
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
-specta-jsdoc = { workspace = true, optional = true }
 tauri-specta-macros = { version = "=2.0.0-rc.16", optional = true, path = "./macros" }
 serde = "1"
 serde_json = "1"
@@ -61,13 +60,14 @@ todo = { level = "warn", priority = -1 }
 panic_in_result_fn = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
-tauri = { version = "^2.1.1" }
-tauri-build = { version = "2.0" }
-tauri-plugin = { version = "2.0" }
+tauri = { version = "^2.9.3" }
+tauri-build = { version = "2.5" }
+tauri-plugin = { version = "2.5" }
 specta = { version = "=2.0.0-rc.22" }
 specta-typescript = { version = "0.0.9" }
-specta-jsdoc = { version = "0.0.9" }
 
+# TODO: Remove this
 [patch.crates-io]
-# Waiting for release of https://github.com/tauri-apps/tauri/pull/12371
-tauri = { git = "https://github.com/tauri-apps/tauri", rev = "75d56e8364fb203387bb5a5235f316dd7dfa6acd" }
+specta = { path = "../specta/specta" }
+specta-serde = { path = "../specta/specta-serde" }
+specta-typescript = { path = "../specta/specta-typescript" }
