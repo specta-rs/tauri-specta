@@ -1,21 +1,18 @@
-use std::path::Path;
-
 use crate::{lang::js_ts, ExportContext, LanguageExt};
 use heck::ToLowerCamelCase;
-use specta::datatype::FunctionResultVariant;
+use specta::datatype::FunctionReturnType;
 use specta_typescript::{self as ts, Typescript};
-use specta_typescript::{js_doc, ExportError};
 
 const GLOBALS: &str = include_str!("./globals.ts");
 
 impl LanguageExt for specta_typescript::Typescript {
-    type Error = ExportError;
+    type Error = specta_typescript::Error;
 
-    fn render(&self, cfg: &ExportContext) -> Result<String, ExportError> {
+    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         let dependant_types = cfg
-            .type_map
-            .into_iter()
-            .map(|(_sid, ndt)| ts::export_named_datatype(&self, ndt, &cfg.type_map))
+            .types
+            .into_sorted_iter()
+            .map(|ndt| ts::export_named_datatype(&self, ndt, &cfg.types))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
@@ -29,13 +26,6 @@ impl LanguageExt for specta_typescript::Typescript {
             true,
         )
     }
-
-    fn format(&self, path: &Path) -> Result<(), Self::Error> {
-        if let Some(formatter) = self.formatter {
-            formatter(path)?;
-        }
-        Ok(())
-    }
 }
 
 fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportError> {
@@ -45,17 +35,14 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
         .map(|function| {
             let arg_defs = function
                 .args()
+                .into_iter()
                 .map(|(name, typ)| {
-                    ts::datatype(
-                        ts,
-                        &FunctionResultVariant::Value(typ.clone()),
-                        &cfg.type_map,
-                    )
-                    .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
+                    ts::datatype(ts, &FunctionReturnType::Value(typ.clone()), &cfg.types)
+                        .map(|ty| format!("{}: {}", name.to_lower_camel_case(), ty))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let ret_type = js_ts::handle_result(function, &cfg.type_map, ts, cfg.error_handling)?;
+            let ret_type = js_ts::handle_result(function, &cfg.types, ts, cfg.error_handling)?;
 
             let docs = {
                 let mut builder = js_doc::Builder::default();
@@ -78,7 +65,7 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                 &js_ts::command_body(&cfg.plugin_name, function, true, cfg.error_handling),
             ))
         })
-        .collect::<Result<Vec<_>, ExportError>>()?
+        .collect::<Result<Vec<_>, specta_typescript::Error>>()?
         .join(",\n");
 
     Ok(format! {
@@ -95,7 +82,7 @@ fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportE
     }
 
     let (events_types, events_map) =
-        js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.type_map)?;
+        js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.types)?;
 
     let events_types = events_types.join(",\n");
 

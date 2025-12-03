@@ -1,8 +1,6 @@
-use std::path::Path;
-
 use heck::ToLowerCamelCase;
-use specta::datatype::FunctionResultVariant;
-use specta_typescript::{js_doc, ExportError, Typescript};
+use specta::datatype::FunctionReturnType;
+use specta_typescript::Typescript;
 
 use crate::{ExportContext, LanguageExt};
 
@@ -10,14 +8,14 @@ use super::js_ts;
 
 const GLOBALS: &str = include_str!("./globals.js");
 
-impl LanguageExt for specta_jsdoc::JSDoc {
-    type Error = ExportError;
+impl LanguageExt for specta_typescript::JSDoc {
+    type Error = specta_typescript::Error;
 
     fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
         let dependant_types = cfg
-            .type_map
-            .into_iter()
-            .map(|(_sid, ndt)| js_doc::typedef_named_datatype(&self.0, ndt, &cfg.type_map))
+            .types
+            .into_sorted_iter()
+            .map(|ndt| js_doc::typedef_named_datatype(&self.0, ndt, &cfg.types))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
@@ -31,23 +29,18 @@ impl LanguageExt for specta_jsdoc::JSDoc {
             false,
         )
     }
-
-    fn format(&self, path: &Path) -> Result<(), Self::Error> {
-        if let Some(formatter) = self.0.formatter {
-            formatter(path)?;
-        }
-        Ok(())
-    }
 }
 
-fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportError> {
+fn render_commands(
+    ts: &Typescript,
+    cfg: &ExportContext,
+) -> Result<String, specta_typescript::Error> {
     let commands = cfg
         .commands
         .iter()
         .map(|function| {
             let jsdoc = {
-                let ret_type =
-                    js_ts::handle_result(function, &cfg.type_map, ts, cfg.error_handling)?;
+                let ret_type = js_ts::handle_result(function, &cfg.types, ts, cfg.error_handling)?;
 
                 let mut builder = js_doc::Builder::default();
 
@@ -59,11 +52,11 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                     builder.extend(function.docs().split("\n"));
                 }
 
-                builder.extend(function.args().flat_map(|(name, typ)| {
+                builder.extend(function.args().into_iter().flat_map(|(name, typ)| {
                     specta_typescript::datatype(
                         ts,
-                        &FunctionResultVariant::Value(typ.clone()),
-                        &cfg.type_map,
+                        &FunctionReturnType::Value(typ.clone()),
+                        &cfg.types,
                     )
                     .map(|typ| {
                         let name = name.to_lower_camel_case();
@@ -80,12 +73,12 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
                 &jsdoc,
                 &function.name().to_lower_camel_case(),
                 // TODO: Don't `collect` the whole thing
-                &js_ts::arg_names(&function.args().cloned().collect::<Vec<_>>()),
+                &js_ts::arg_names(&function.args().into_iter().cloned().collect::<Vec<_>>()),
                 None,
                 &js_ts::command_body(&cfg.plugin_name, &function, false, cfg.error_handling),
             ))
         })
-        .collect::<Result<Vec<_>, ExportError>>()?
+        .collect::<Result<Vec<_>, specta_typescript::Error>>()?
         .join(",\n");
 
     Ok(format!(
@@ -95,13 +88,13 @@ fn render_commands(ts: &Typescript, cfg: &ExportContext) -> Result<String, Expor
     ))
 }
 
-fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, ExportError> {
+fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, specta_typescript::Error> {
     if cfg.events.is_empty() {
         return Ok(Default::default());
     }
 
     let (events_types, events_map) =
-        js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.type_map)?;
+        js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.types)?;
 
     let events = {
         let mut builder = js_doc::Builder::default();
