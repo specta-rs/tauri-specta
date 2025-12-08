@@ -142,9 +142,7 @@ fn main() {
     #[cfg(debug_assertions)]
     builder
         .export(
-            Typescript::default()
-                .formatter(specta_typescript::formatter::prettier)
-                .header("/* eslint-disable */"),
+            Typescript::default().header("/* eslint-disable */"),
             "../src/bindings.ts",
         )
         .expect("Failed to export typescript bindings");
@@ -152,9 +150,7 @@ fn main() {
     #[cfg(debug_assertions)]
     builder
         .export(
-            specta_jsdoc::JSDoc::default()
-                .formatter(specta_typescript::formatter::prettier)
-                .header("/* eslint-disable */"),
+            specta_typescript::JSDoc::default().header("/* eslint-disable */"),
             "../src/bindings-jsdoc.js",
         )
         .expect("Failed to export typescript bindings");

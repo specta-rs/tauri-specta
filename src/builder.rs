@@ -7,14 +7,14 @@ use std::{
 };
 
 use crate::{
-    event::EventRegistryMeta, Commands, ErrorHandlingMode, EventRegistry, Events, LanguageExt,
+    Commands, ErrorHandlingMode, EventRegistry, Events, LanguageExt, event::EventRegistryMeta,
 };
 use serde::Serialize;
 use specta::{
+    NamedType, SpectaID, Type, TypeCollection,
     datatype::{DataType, Function},
-    NamedType, SpectaID, Type, TypeMap,
 };
-use tauri::{ipc::Invoke, Manager, Runtime};
+use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// Builder for configuring Tauri Specta in your application.
 ///
@@ -88,7 +88,7 @@ pub struct Builder<R: Runtime = tauri::Wry> {
     error_handling: ErrorHandlingMode,
     events: BTreeMap<&'static str, DataType>,
     event_sids: BTreeSet<SpectaID>,
-    types: TypeMap,
+    types: TypeCollection,
     constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
 }
 
@@ -101,7 +101,7 @@ impl<R: Runtime> Default for Builder<R> {
             error_handling: Default::default(),
             events: Default::default(),
             event_sids: Default::default(),
-            types: TypeMap::default(),
+            types: TypeCollection::default(),
             constants: BTreeMap::default(),
         }
     }
@@ -144,7 +144,7 @@ impl<R: Runtime> Builder<R> {
         let command_types = (commands.1)(&mut self.types);
 
         self.types
-            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
+            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::ID);
 
         Self {
             command_types,
@@ -182,21 +182,13 @@ impl<R: Runtime> Builder<R> {
             .collect();
 
         self.types
-            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
+            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::ID);
 
         Self {
             events,
             event_sids,
             ..self
         }
-    }
-
-    /// This method is deprecated. Please use [Self::typ].
-    #[deprecated(note = "Use `Self::typ` instead")]
-    pub fn ty<T: NamedType>(mut self) -> Self {
-        let dt = T::definition_named_data_type(&mut self.types);
-        self.types.insert(T::sid(), dt);
-        self
     }
 
     /// Export a new type with the frontend.
@@ -218,8 +210,7 @@ impl<R: Runtime> Builder<R> {
     /// let mut builder = Builder::<tauri::Wry>::new().typ::<MyStruct>();
     /// ```
     pub fn typ<T: NamedType>(mut self) -> Self {
-        let dt = T::definition_named_data_type(&mut self.types);
-        self.types.insert(T::sid(), dt);
+        self.types.register_mut::<T>();
         self
     }
 
@@ -286,7 +277,7 @@ impl<R: Runtime> Builder<R> {
 
         for sid in &self.event_sids {
             map.insert(
-                sid.clone(),
+                *sid,
                 EventRegistryMeta {
                     plugin_name: self.plugin_name,
                 },
@@ -318,12 +309,11 @@ impl<R: Runtime> Builder<R> {
         // TODO: Serde checking
 
         language.render(&crate::ExportContext {
-            // TODO: Don't clone stuff
-            commands: self.command_types.clone(),
+            commands: &self.command_types,
             error_handling: self.error_handling,
-            events: self.events.clone(),
-            type_map: self.types.clone(),
-            constants: self.constants.clone(),
+            events: &self.events,
+            types: &self.types,
+            constants: &self.constants,
             plugin_name: self.plugin_name,
         })
     }
@@ -354,9 +344,8 @@ impl<R: Runtime> Builder<R> {
             fs::create_dir_all(export_dir)?;
         }
 
-        let mut file = File::create(&path)?;
+        let mut file = File::create(path)?;
         write!(file, "{}", self.export_str(&language)?)?;
-        language.format(path).ok(); // TODO: Error handling
 
         Ok(())
     }

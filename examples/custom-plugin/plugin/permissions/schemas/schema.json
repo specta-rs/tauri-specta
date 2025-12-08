@@ -49,7 +49,7 @@
           "minimum": 1.0
         },
         "description": {
-          "description": "Human-readable description of what the permission does. Tauri convention is to use <h4> headings in markdown content for Tauri documentation generation purposes.",
+          "description": "Human-readable description of what the permission does. Tauri convention is to use `<h4>` headings in markdown content for Tauri documentation generation purposes.",
           "type": [
             "string",
             "null"
@@ -111,7 +111,7 @@
           "type": "string"
         },
         "description": {
-          "description": "Human-readable description of what the permission does. Tauri internal convention is to use <h4> headings in markdown content for Tauri documentation generation purposes.",
+          "description": "Human-readable description of what the permission does. Tauri internal convention is to use `<h4>` headings in markdown content for Tauri documentation generation purposes.",
           "type": [
             "string",
             "null"
@@ -297,12 +297,14 @@
         {
           "description": "Enables the add_numbers command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-add-numbers"
+          "const": "allow-add-numbers",
+          "markdownDescription": "Enables the add_numbers command without any pre-configured scope."
         },
         {
           "description": "Denies the add_numbers command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-add-numbers"
+          "const": "deny-add-numbers",
+          "markdownDescription": "Denies the add_numbers command without any pre-configured scope."
         }
       ]
     }
