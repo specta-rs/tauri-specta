@@ -1,5 +1,4 @@
 use heck::ToLowerCamelCase;
-use specta::datatype::FunctionReturnType;
 use specta_typescript::{Typescript, primitives};
 
 use crate::{ExportContext, LanguageExt};
@@ -96,7 +95,7 @@ fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, specta_
     }
 
     let (events_types, events_map) =
-        js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.types)?;
+        js_ts::events_data(cfg.events, ts, &cfg.plugin_name, cfg.types)?;
 
     let events = {
         // let mut builder = js_doc::Builder::default();

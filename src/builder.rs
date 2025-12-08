@@ -7,14 +7,14 @@ use std::{
 };
 
 use crate::{
-    event::EventRegistryMeta, Commands, ErrorHandlingMode, EventRegistry, Events, LanguageExt,
+    Commands, ErrorHandlingMode, EventRegistry, Events, LanguageExt, event::EventRegistryMeta,
 };
 use serde::Serialize;
 use specta::{
-    datatype::{DataType, Function},
     NamedType, SpectaID, Type, TypeCollection,
+    datatype::{DataType, Function},
 };
-use tauri::{ipc::Invoke, Manager, Runtime};
+use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// Builder for configuring Tauri Specta in your application.
 ///
@@ -277,7 +277,7 @@ impl<R: Runtime> Builder<R> {
 
         for sid in &self.event_sids {
             map.insert(
-                sid.clone(),
+                *sid,
                 EventRegistryMeta {
                     plugin_name: self.plugin_name,
                 },
@@ -344,7 +344,7 @@ impl<R: Runtime> Builder<R> {
             fs::create_dir_all(export_dir)?;
         }
 
-        let mut file = File::create(&path)?;
+        let mut file = File::create(path)?;
         write!(file, "{}", self.export_str(&language)?)?;
 
         Ok(())

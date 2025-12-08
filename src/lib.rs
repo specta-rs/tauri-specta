@@ -187,11 +187,11 @@ use core::fmt;
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
 use specta::{
-    datatype::{self, DataType},
     SpectaID, TypeCollection,
+    datatype::{self, DataType},
 };
 
-use tauri::{ipc::Invoke, Runtime};
+use tauri::{Runtime, ipc::Invoke};
 /// Implements the [`Event`](trait@crate::Event) trait for a struct.
 ///
 /// Refer to the [`Event`](trait@crate::Event) trait for more information.
@@ -293,7 +293,7 @@ pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -
 }
 
 /// The mode which the error handling is done in the bindings.
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub enum ErrorHandlingMode {
     /// Errors will be thrown
     Throw,
