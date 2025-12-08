@@ -1,6 +1,6 @@
 use heck::ToLowerCamelCase;
 use specta::datatype::FunctionReturnType;
-use specta_typescript::Typescript;
+use specta_typescript::{Typescript, primitives};
 
 use crate::{ExportContext, LanguageExt};
 
@@ -15,7 +15,7 @@ impl LanguageExt for specta_typescript::JSDoc {
         let dependant_types = cfg
             .types
             .into_sorted_iter()
-            .map(|ndt| js_doc::typedef_named_datatype(&self.0, ndt, &cfg.types))
+            .map(|ndt| primitives::typedef(self, &cfg.types, &ndt))
             .collect::<Result<Vec<_>, _>>()
             .map(|v| v.join("\n"))?;
 
@@ -23,9 +23,9 @@ impl LanguageExt for specta_typescript::JSDoc {
             cfg,
             &dependant_types,
             GLOBALS,
-            &self.0.header,
-            render_commands(&self.0, cfg)?,
-            render_events(&self.0, cfg)?,
+            &self.inner_ref().header,
+            render_commands(self.inner_ref(), cfg)?,
+            render_events(self.inner_ref(), cfg)?,
             false,
         )
     }
@@ -42,31 +42,33 @@ fn render_commands(
             let jsdoc = {
                 let ret_type = js_ts::handle_result(function, &cfg.types, ts, cfg.error_handling)?;
 
-                let mut builder = js_doc::Builder::default();
+                // let mut builder = js_doc::Builder::default();
 
-                if let Some(d) = function.deprecated() {
-                    builder.push_deprecated(d);
-                }
+                // if let Some(d) = function.deprecated() {
+                //     builder.push_deprecated(d);
+                // }
 
-                if !function.docs().is_empty() {
-                    builder.extend(function.docs().split("\n"));
-                }
+                // if !function.docs().is_empty() {
+                //     builder.extend(function.docs().split("\n"));
+                // }
 
-                builder.extend(function.args().into_iter().flat_map(|(name, typ)| {
-                    specta_typescript::datatype(
-                        ts,
-                        &FunctionReturnType::Value(typ.clone()),
-                        &cfg.types,
-                    )
-                    .map(|typ| {
-                        let name = name.to_lower_camel_case();
+                // builder.extend(function.args().into_iter().flat_map(|(name, typ)| {
+                //     specta_typescript::datatype(
+                //         ts,
+                //         &FunctionReturnType::Value(typ.clone()),
+                //         &cfg.types,
+                //     )
+                //     .map(|typ| {
+                //         let name = name.to_lower_camel_case();
 
-                        format!("@param {{ {typ} }} {name}")
-                    })
-                }));
-                builder.push(&format!("@returns {{ Promise<{ret_type}> }}"));
+                //         format!("@param {{ {typ} }} {name}")
+                //     })
+                // }));
+                // builder.push(&format!("@returns {{ Promise<{ret_type}> }}"));
 
-                builder.build()
+                // builder.build()
+
+                format!("") // TODO
             };
 
             Ok(js_ts::function(
@@ -97,13 +99,15 @@ fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, specta_
         js_ts::events_data(&cfg.events, ts, &cfg.plugin_name, &cfg.types)?;
 
     let events = {
-        let mut builder = js_doc::Builder::default();
+        // let mut builder = js_doc::Builder::default();
 
-        builder.push("@type {typeof __makeEvents__<{");
-        builder.extend(events_types);
-        builder.push("}>}");
+        // builder.push("@type {typeof __makeEvents__<{");
+        // builder.extend(events_types);
+        // builder.push("}>}");
 
-        builder.build()
+        // builder.build()
+
+        format!("") // TODO
     };
 
     Ok(format! {

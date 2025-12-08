@@ -22,7 +22,9 @@ async hasError() : Promise<Result<string, number>> {
     else return { status: "error", error: e  as any };
 }
 },
-async someStruct() : Promise<{ some_field: string }> {
+async someStruct() : Promise<{ 
+	some_field: string;
+}> {
     return await TAURI_INVOKE("some_struct");
 },
 async generic() : Promise<void> {
@@ -71,7 +73,9 @@ export type DemoEvent = string;
 export type EmptyEvent = null;
 export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
 export type MyError2 = { type: "IoError"; data: string };
-export type MyStruct = { some_field: string };
+export type MyStruct = { 
+		some_field: string;
+	};
 
 /** tauri-specta globals **/
 
