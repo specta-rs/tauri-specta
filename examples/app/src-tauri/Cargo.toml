@@ -6,7 +6,6 @@ authors = ["you"]
 license = ""
 repository = ""
 edition = "2024"
-rust-version = "1.57"
 publish = false
 
 [build-dependencies]

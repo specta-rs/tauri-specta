@@ -3,6 +3,7 @@ name = "tauri-plugin-specta-example"
 version = "0.0.0"
 edition = "2024"
 links = "tauri-plugin-specta-example"
+publish = false
 
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }

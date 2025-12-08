@@ -6,6 +6,7 @@ authors = ["you"]
 license = ""
 repository = ""
 edition = "2024"
+publish = false
 
 [build-dependencies]
 tauri-build = { workspace = true, features = [] }

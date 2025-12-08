@@ -5,11 +5,6 @@
 
 
 export const commands = {
-/**
- * HELLO
- * WORLD
- * !!!!
- */
 async helloWorld(myName: string) : Promise<string> {
     return await TAURI_INVOKE("hello_world", { myName });
 },
@@ -27,19 +22,16 @@ async hasError() : Promise<Result<string, number>> {
     else return { status: "error", error: e  as any };
 }
 },
-async someStruct() : Promise<MyStruct> {
+async someStruct() : Promise<{ some_field: string }> {
     return await TAURI_INVOKE("some_struct");
 },
 async generic() : Promise<void> {
     await TAURI_INVOKE("generic");
 },
-/**
- * @deprecated This is a deprecated function
- */
 async deprecated() : Promise<void> {
     await TAURI_INVOKE("deprecated");
 },
-async typesafeErrorsUsingThiserror() : Promise<Result<null, MyError>> {
+async typesafeErrorsUsingThiserror() : Promise<Result<null, { type: "IoError" } | { type: "AnotherError"; data: string }>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("typesafe_errors_using_thiserror") };
 } catch (e) {
@@ -47,7 +39,7 @@ async typesafeErrorsUsingThiserror() : Promise<Result<null, MyError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async typesafeErrorsUsingThiserrorWithValue() : Promise<Result<null, MyError2>> {
+async typesafeErrorsUsingThiserrorWithValue() : Promise<Result<null, { type: "IoError"; data: string }>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("typesafe_errors_using_thiserror_with_value") };
 } catch (e) {
@@ -61,8 +53,8 @@ async typesafeErrorsUsingThiserrorWithValue() : Promise<Result<null, MyError2>> 
 
 
 export const events = __makeEvents__<{
-emptyEvent: EmptyEvent,
-myDemoEvent: DemoEvent
+emptyEvent: null,
+myDemoEvent: string
 }>({
 emptyEvent: "empty-event",
 myDemoEvent: "myDemoEvent"
@@ -74,12 +66,12 @@ export const universalConstant = 42 as const;
 
 /** user-defined types **/
 
-export type Custom = string
-export type DemoEvent = string
-export type EmptyEvent = null
-export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string }
-export type MyError2 = { type: "IoError"; data: string }
-export type MyStruct = { some_field: string }
+export type Custom = string;
+export type DemoEvent = string;
+export type EmptyEvent = null;
+export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
+export type MyError2 = { type: "IoError"; data: string };
+export type MyStruct = { some_field: string };
 
 /** tauri-specta globals **/
 
