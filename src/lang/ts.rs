@@ -15,6 +15,10 @@ const AS_RESULT_IMPL: &str =
   return await result as any; // TODO
 }";
 
+const MAKE_EVENT_IMPL: &str = "function makeEvent<T>() {
+    return (e: T) => {}; // TODO
+}";
+
 impl LanguageExt for specta_typescript::Typescript {
     type Error = specta_typescript::Error;
 
@@ -49,62 +53,84 @@ impl LanguageExt for specta_typescript::Typescript {
         let mut result = ts.export(cfg.types)?;
 
         // Runtime
-        result.push('\n');
-        result.push_str(AS_RESULT_IMPL);
-        result.push('\n');
+        if !cfg.commands.is_empty() || !cfg.events.is_empty() {
+            result.push('\n');
+        }
+        if !cfg.commands.is_empty() {
+            result.push_str(AS_RESULT_IMPL);
+            result.push('\n');
+        }
+        if !cfg.events.is_empty() {
+            result.push_str(MAKE_EVENT_IMPL);
+            result.push('\n');
+        }
 
         // Commands
-        result.push_str("\nexport const commands = {");
-        for command in cfg.commands.iter() {
-            // TODO: Handle JSDoc comments + deprecated
-            // TODO: Maybe move this back into Specta as a primitive
+        if !cfg.commands.is_empty() {
+            result.push_str("\nexport const commands = {");
+            for command in cfg.commands.iter() {
+                // TODO: Handle JSDoc comments + deprecated
+                // TODO: Maybe move this back into Specta as a primitive
 
-            result.push_str("\n\t");
-            result.push_str(&command.name().to_lower_camel_case());
-            result.push_str(": (");
-            // TODO: Arguments
-            result.push_str(") => ");
+                result.push_str("\n\t");
+                result.push_str(&command.name().to_lower_camel_case());
+                result.push_str(": (");
+                // TODO: Arguments
+                result.push_str(") => ");
 
-            let command_raw_name = cfg
-                .plugin_name
-                .as_ref()
-                .map(|n| apply_as_prefix(n, command.name(), ItemType::Command))
-                .unwrap_or_else(|| command.name().to_string()); // TODO: Avoid allocs on this statement?
-            if cfg.error_handling == ErrorHandlingMode::Result
-                && let Some(r) = command.result()
-            {
-                // &
-                // TODO:
-                //  - Error/result type
-                //  - Command name
-                //  - Arguments
-                result.push_str("typedError<");
-                result.push_str(
-                    "any", // primitives::export(&ts, &types, command.result())?
-                          //     .as_ref()
-                          //     .map(|v| &*v)
-                          //     .unwrap_or("void"),
-                );
-                result.push_str(", ");
-                result.push_str("any"); // TODO
-                result.push_str(">(__TAURI_INVOKE(\"");
-                result.push_str(&command_raw_name); // TODO: Properly escape incase it contains `"`
-                result.push_str("\"))");
-            } else {
-                // TODO:
-                //  - Result type
-                //  - Command name
-                //  - Arguments
-                result.push_str("__TAURI_INVOKE<");
-                result.push_str("any"); // TODDO
-                result.push_str(">(\"");
-                result.push_str(&command_raw_name); // TODO: Properly escape incase it contains `"`
-                result.push_str("\")");
-            };
+                let command_raw_name = cfg
+                    .plugin_name
+                    .as_ref()
+                    .map(|n| apply_as_prefix(n, command.name(), ItemType::Command))
+                    .unwrap_or_else(|| command.name().to_string()); // TODO: Avoid allocs on this statement?
+                if cfg.error_handling == ErrorHandlingMode::Result
+                    && let Some(r) = command.result()
+                {
+                    // &
+                    // TODO:
+                    //  - Error/result type
+                    //  - Command name
+                    //  - Arguments
+                    result.push_str("typedError<");
+                    result.push_str(
+                        "any", // primitives::export(&ts, &types, command.result())?
+                              //     .as_ref()
+                              //     .map(|v| &*v)
+                              //     .unwrap_or("void"),
+                    );
+                    result.push_str(", ");
+                    result.push_str("any"); // TODO
+                    result.push_str(">(__TAURI_INVOKE(\"");
+                    result.push_str(&command_raw_name); // TODO: Properly escape incase it contains `"`
+                    result.push_str("\"))");
+                } else {
+                    // TODO:
+                    //  - Result type
+                    //  - Command name
+                    //  - Arguments
+                    result.push_str("__TAURI_INVOKE<");
+                    result.push_str("any"); // TODDO
+                    result.push_str(">(\"");
+                    result.push_str(&command_raw_name); // TODO: Properly escape incase it contains `"`
+                    result.push_str("\")");
+                };
 
-            result.push(',');
+                result.push(',');
+            }
+            result.push_str("\n}\n");
         }
-        result.push_str("\n}");
+
+        if !cfg.events.is_empty() {
+            result.push_str("\nexport const events = {");
+            for (name, event) in cfg.events.iter() {
+                result.push_str("\n\t");
+                result.push_str(&name.to_lower_camel_case());
+                result.push_str(": makeEvent<");
+                result.push_str("any"); // TODO
+                result.push_str(">(),");
+            }
+            result.push_str("\n}");
+        }
 
         // TODO: Commands
         // TODO: Events
