@@ -184,14 +184,14 @@
 )]
 
 use core::fmt;
-use std::{borrow::Cow, collections::BTreeMap, path::Path, sync::Arc};
+use std::{any::TypeId, borrow::Cow, collections::BTreeMap, sync::Arc};
 
 use specta::{
+    TypeCollection,
     datatype::{self, DataType},
-    SpectaID, TypeMap,
 };
 
-use tauri::{ipc::Invoke, Runtime};
+use tauri::{Runtime, ipc::Invoke};
 /// Implements the [`Event`](trait@crate::Event) trait for a struct.
 ///
 /// Refer to the [`Event`](trait@crate::Event) trait for more information.
@@ -216,7 +216,7 @@ pub use event::{Event, TypedEvent};
 pub struct Commands<R: Runtime>(
     // Bounds copied from `tauri::Builder::invoke_handler`
     pub(crate) Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
-    pub(crate) fn(&mut TypeMap) -> Vec<datatype::Function>,
+    pub(crate) fn(&mut TypeCollection) -> Vec<datatype::Function>,
 );
 
 impl<R: Runtime> fmt::Debug for Commands<R> {
@@ -238,19 +238,19 @@ impl<R: Runtime> Default for Commands<R> {
 ///
 /// This acts to seal the implementation details of the macro.
 #[derive(Default)]
-pub struct Events(BTreeMap<&'static str, fn(&mut TypeMap) -> (SpectaID, DataType)>);
+pub struct Events(BTreeMap<&'static str, fn(&mut TypeCollection) -> (TypeId, DataType)>);
 
 /// The context of what needs to be exported. Used when implementing [`LanguageExt`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[non_exhaustive]
 #[allow(missing_docs)]
-pub struct ExportContext {
+pub struct ExportContext<'a> {
     pub plugin_name: Option<&'static str>,
-    pub commands: Vec<datatype::Function>,
+    pub commands: &'a Vec<datatype::Function>,
     pub error_handling: ErrorHandlingMode,
-    pub events: BTreeMap<&'static str, DataType>,
-    pub type_map: TypeMap,
-    pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
+    pub events: &'a BTreeMap<&'static str, (TypeId, DataType)>,
+    pub types: &'a TypeCollection,
+    pub constants: &'a BTreeMap<Cow<'static, str>, serde_json::Value>,
 }
 
 /// Implemented for all languages which Tauri Specta supports exporting to.
@@ -263,21 +263,14 @@ pub trait LanguageExt {
     type Error: std::error::Error + From<std::io::Error>;
 
     /// render the bindings file
-    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
-
-    /// TODO
-    fn format(&self, path: &Path) -> Result<(), Self::Error>;
+    fn render(&mut self, cfg: &ExportContext) -> Result<String, Self::Error>;
 }
 
-impl<L: LanguageExt> LanguageExt for &L {
+impl<L: LanguageExt> LanguageExt for &mut L {
     type Error = L::Error;
 
-    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
+    fn render(&mut self, cfg: &ExportContext) -> Result<String, Self::Error> {
         (*self).render(cfg)
-    }
-
-    fn format(&self, path: &Path) -> Result<(), Self::Error> {
-        (*self).format(path)
     }
 }
 
@@ -300,7 +293,7 @@ pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -
 }
 
 /// The mode which the error handling is done in the bindings.
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub enum ErrorHandlingMode {
     /// Errors will be thrown
     Throw,
@@ -315,12 +308,14 @@ pub mod internal {
     //! Nothing in this module has to conform to semver so it should not be used outside of this crate.
     //! It has to be public so macro's can access it.
 
+    use std::any::TypeId;
+
     use super::*;
 
     /// called by `collect_commands` to construct `Commands`
     pub fn command<R: Runtime, F>(
         f: F,
-        types: fn(&mut TypeMap) -> Vec<datatype::Function>,
+        types: fn(&mut TypeCollection) -> Vec<datatype::Function>,
     ) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
@@ -331,9 +326,7 @@ pub mod internal {
     /// called by `collect_events` to register events to an `Events`
     pub fn register_event<E: Event>(Events(events): &mut Events) {
         if events
-            .insert(E::NAME, |type_map| {
-                (E::sid(), E::reference(type_map, &[]).inner)
-            })
+            .insert(E::NAME, |types| (TypeId::of::<E>(), E::definition(types)))
             .is_some()
         {
             panic!("Another event with name {} is already registered!", E::NAME)

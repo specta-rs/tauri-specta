@@ -1,4 +1,5 @@
 use std::{
+    any::TypeId,
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     fs::{self, File},
@@ -7,14 +8,14 @@ use std::{
 };
 
 use crate::{
-    event::EventRegistryMeta, Commands, ErrorHandlingMode, EventRegistry, Events, LanguageExt,
+    Commands, ErrorHandlingMode, EventRegistry, Events, LanguageExt, event::EventRegistryMeta,
 };
 use serde::Serialize;
 use specta::{
+    Type, TypeCollection,
     datatype::{DataType, Function},
-    NamedType, SpectaID, Type, TypeMap,
 };
-use tauri::{ipc::Invoke, Manager, Runtime};
+use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// Builder for configuring Tauri Specta in your application.
 ///
@@ -86,9 +87,8 @@ pub struct Builder<R: Runtime = tauri::Wry> {
     commands: Commands<R>,
     command_types: Vec<Function>,
     error_handling: ErrorHandlingMode,
-    events: BTreeMap<&'static str, DataType>,
-    event_sids: BTreeSet<SpectaID>,
-    types: TypeMap,
+    events: BTreeMap<&'static str, (TypeId, DataType)>,
+    types: TypeCollection,
     constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
 }
 
@@ -100,8 +100,8 @@ impl<R: Runtime> Default for Builder<R> {
             command_types: Default::default(),
             error_handling: Default::default(),
             events: Default::default(),
-            event_sids: Default::default(),
-            types: TypeMap::default(),
+            // event_sids: Default::default(),
+            types: TypeCollection::default(),
             constants: BTreeMap::default(),
         }
     }
@@ -143,8 +143,9 @@ impl<R: Runtime> Builder<R> {
     pub fn commands(mut self, commands: Commands<R>) -> Self {
         let command_types = (commands.1)(&mut self.types);
 
-        self.types
-            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
+        // TODO
+        // self.types
+        //     .remove(<tauri::ipc::Channel<()> as specta::NamedType>::ID);
 
         Self {
             command_types,
@@ -170,33 +171,17 @@ impl<R: Runtime> Builder<R> {
     /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![DemoEvent]);
     /// ```
     pub fn events(mut self, events: Events) -> Self {
-        let mut event_sids = BTreeSet::new();
         let events = events
             .0
             .iter()
-            .map(|(k, build)| {
-                let (sid, dt) = build(&mut self.types);
-                event_sids.insert(sid);
-                (*k, dt)
-            })
+            .map(|(k, build)| (*k, build(&mut self.types)))
             .collect();
 
-        self.types
-            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
+        // TODO
+        // self.types
+        //     .remove(<tauri::ipc::Channel<()> as specta::NamedType>::ID);
 
-        Self {
-            events,
-            event_sids,
-            ..self
-        }
-    }
-
-    /// This method is deprecated. Please use [Self::typ].
-    #[deprecated(note = "Use `Self::typ` instead")]
-    pub fn ty<T: NamedType>(mut self) -> Self {
-        let dt = T::definition_named_data_type(&mut self.types);
-        self.types.insert(T::sid(), dt);
-        self
+        Self { events, ..self }
     }
 
     /// Export a new type with the frontend.
@@ -217,9 +202,8 @@ impl<R: Runtime> Builder<R> {
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().typ::<MyStruct>();
     /// ```
-    pub fn typ<T: NamedType>(mut self) -> Self {
-        let dt = T::definition_named_data_type(&mut self.types);
-        self.types.insert(T::sid(), dt);
+    pub fn typ<T: Type>(mut self) -> Self {
+        self.types.register_mut::<T>();
         self
     }
 
@@ -284,9 +268,9 @@ impl<R: Runtime> Builder<R> {
         let registry = EventRegistry::get_or_manage(handle);
         let mut map = registry.0.write().expect("Failed to lock EventRegistry");
 
-        for sid in &self.event_sids {
+        for (_, (tid, _)) in &self.events {
             map.insert(
-                sid.clone(),
+                *tid,
                 EventRegistryMeta {
                     plugin_name: self.plugin_name,
                 },
@@ -313,17 +297,16 @@ impl<R: Runtime> Builder<R> {
     ///         .unwrap()
     /// );
     /// ```
-    pub fn export_str<L: LanguageExt>(&self, language: L) -> Result<String, L::Error> {
+    pub fn export_str<L: LanguageExt>(&self, mut language: L) -> Result<String, L::Error> {
         // TODO: Handle duplicate type names
         // TODO: Serde checking
 
         language.render(&crate::ExportContext {
-            // TODO: Don't clone stuff
-            commands: self.command_types.clone(),
+            commands: &self.command_types,
             error_handling: self.error_handling,
-            events: self.events.clone(),
-            type_map: self.types.clone(),
-            constants: self.constants.clone(),
+            events: &self.events,
+            types: &self.types,
+            constants: &self.constants,
             plugin_name: self.plugin_name,
         })
     }
@@ -346,7 +329,7 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn export<L: LanguageExt>(
         &self,
-        language: L,
+        mut language: L,
         path: impl AsRef<Path>,
     ) -> Result<(), L::Error> {
         let path = path.as_ref();
@@ -354,9 +337,8 @@ impl<R: Runtime> Builder<R> {
             fs::create_dir_all(export_dir)?;
         }
 
-        let mut file = File::create(&path)?;
-        write!(file, "{}", self.export_str(&language)?)?;
-        language.format(path).ok(); // TODO: Error handling
+        let mut file = File::create(path)?;
+        write!(file, "{}", self.export_str(&mut language)?)?;
 
         Ok(())
     }
