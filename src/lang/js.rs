@@ -1,4 +1,7 @@
+use std::collections::BTreeMap;
+
 use heck::ToLowerCamelCase;
+use specta::datatype::DataType;
 use specta_typescript::{Typescript, primitives};
 
 use crate::{ExportContext, LanguageExt};
@@ -10,7 +13,7 @@ const GLOBALS: &str = include_str!("./globals.js");
 impl LanguageExt for specta_typescript::JSDoc {
     type Error = specta_typescript::Error;
 
-    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
+    fn render(&mut self, cfg: &ExportContext) -> Result<String, Self::Error> {
         let dependant_types = cfg
             .types
             .into_sorted_iter()
@@ -94,8 +97,16 @@ fn render_events(ts: &Typescript, cfg: &ExportContext) -> Result<String, specta_
         return Ok(Default::default());
     }
 
-    let (events_types, events_map) =
-        js_ts::events_data(cfg.events, ts, &cfg.plugin_name, cfg.types)?;
+    let (events_types, events_map) = js_ts::events_data(
+        // TODO: Don't do this non-required allocation
+        &cfg.events
+            .iter()
+            .map(|(name, (_, v))| (*name, v.clone()))
+            .collect(),
+        ts,
+        &cfg.plugin_name,
+        cfg.types,
+    )?;
 
     let events = {
         // let mut builder = js_doc::Builder::default();

@@ -1,4 +1,5 @@
 use std::{
+    any::TypeId,
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     fs::{self, File},
@@ -11,7 +12,7 @@ use crate::{
 };
 use serde::Serialize;
 use specta::{
-    NamedType, SpectaID, Type, TypeCollection,
+    Type, TypeCollection,
     datatype::{DataType, Function},
 };
 use tauri::{Manager, Runtime, ipc::Invoke};
@@ -86,8 +87,7 @@ pub struct Builder<R: Runtime = tauri::Wry> {
     commands: Commands<R>,
     command_types: Vec<Function>,
     error_handling: ErrorHandlingMode,
-    events: BTreeMap<&'static str, DataType>,
-    event_sids: BTreeSet<SpectaID>,
+    events: BTreeMap<&'static str, (TypeId, DataType)>,
     types: TypeCollection,
     constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
 }
@@ -100,7 +100,7 @@ impl<R: Runtime> Default for Builder<R> {
             command_types: Default::default(),
             error_handling: Default::default(),
             events: Default::default(),
-            event_sids: Default::default(),
+            // event_sids: Default::default(),
             types: TypeCollection::default(),
             constants: BTreeMap::default(),
         }
@@ -143,8 +143,9 @@ impl<R: Runtime> Builder<R> {
     pub fn commands(mut self, commands: Commands<R>) -> Self {
         let command_types = (commands.1)(&mut self.types);
 
-        self.types
-            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::ID);
+        // TODO
+        // self.types
+        //     .remove(<tauri::ipc::Channel<()> as specta::NamedType>::ID);
 
         Self {
             command_types,
@@ -170,25 +171,17 @@ impl<R: Runtime> Builder<R> {
     /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![DemoEvent]);
     /// ```
     pub fn events(mut self, events: Events) -> Self {
-        let mut event_sids = BTreeSet::new();
         let events = events
             .0
             .iter()
-            .map(|(k, build)| {
-                let (sid, dt) = build(&mut self.types);
-                event_sids.insert(sid);
-                (*k, dt)
-            })
+            .map(|(k, build)| (*k, build(&mut self.types)))
             .collect();
 
-        self.types
-            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::ID);
+        // TODO
+        // self.types
+        //     .remove(<tauri::ipc::Channel<()> as specta::NamedType>::ID);
 
-        Self {
-            events,
-            event_sids,
-            ..self
-        }
+        Self { events, ..self }
     }
 
     /// Export a new type with the frontend.
@@ -209,7 +202,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().typ::<MyStruct>();
     /// ```
-    pub fn typ<T: NamedType>(mut self) -> Self {
+    pub fn typ<T: Type>(mut self) -> Self {
         self.types.register_mut::<T>();
         self
     }
@@ -275,9 +268,9 @@ impl<R: Runtime> Builder<R> {
         let registry = EventRegistry::get_or_manage(handle);
         let mut map = registry.0.write().expect("Failed to lock EventRegistry");
 
-        for sid in &self.event_sids {
+        for (_, (tid, _)) in &self.events {
             map.insert(
-                *sid,
+                *tid,
                 EventRegistryMeta {
                     plugin_name: self.plugin_name,
                 },
@@ -304,7 +297,7 @@ impl<R: Runtime> Builder<R> {
     ///         .unwrap()
     /// );
     /// ```
-    pub fn export_str<L: LanguageExt>(&self, language: L) -> Result<String, L::Error> {
+    pub fn export_str<L: LanguageExt>(&self, mut language: L) -> Result<String, L::Error> {
         // TODO: Handle duplicate type names
         // TODO: Serde checking
 
@@ -336,7 +329,7 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn export<L: LanguageExt>(
         &self,
-        language: L,
+        mut language: L,
         path: impl AsRef<Path>,
     ) -> Result<(), L::Error> {
         let path = path.as_ref();
@@ -345,7 +338,7 @@ impl<R: Runtime> Builder<R> {
         }
 
         let mut file = File::create(path)?;
-        write!(file, "{}", self.export_str(&language)?)?;
+        write!(file, "{}", self.export_str(&mut language)?)?;
 
         Ok(())
     }

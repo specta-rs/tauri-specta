@@ -1,9 +1,9 @@
-use crate::{
-    ErrorHandlingMode, ExportContext, ItemType, LanguageExt, apply_as_prefix, lang::js_ts,
-};
+use std::borrow::Cow;
+
+use crate::{ErrorHandlingMode, ExportContext, ItemType, LanguageExt, apply_as_prefix};
 use heck::ToLowerCamelCase;
-use specta::datatype::{Function, FunctionReturnType};
-use specta_typescript::{self as ts, Typescript, primitives};
+use specta::datatype::{Field, Function, FunctionReturnType, Struct};
+use specta_typescript::{self as ts, JSDoc, Typescript, primitives};
 
 const GLOBALS: &str = include_str!("./globals.ts");
 
@@ -13,16 +13,16 @@ const FRAMEWORK_HEADER: &str =
 const AS_RESULT_IMPL: &str =
     "async function typedError<T, E>(result: Promise<T>): Promise<{ Ok: T } | { Error: E }> {
   return await result as any; // TODO
-}\n";
+}";
 
 const MAKE_EVENT_IMPL: &str = "function makeEvent<T>() {
     return (e: T) => {}; // TODO
-}\n";
+}";
 
 impl LanguageExt for specta_typescript::Typescript {
     type Error = specta_typescript::Error;
 
-    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
+    fn render(&mut self, cfg: &ExportContext) -> Result<String, Self::Error> {
         // let dependant_types = cfg
         //     .types
         //     .into_sorted_iter()
@@ -49,117 +49,141 @@ impl LanguageExt for specta_typescript::Typescript {
         let enabled_commands = !cfg.commands.is_empty();
         let enabled_events = !cfg.events.is_empty();
 
-        let mut header = FRAMEWORK_HEADER.to_string();
+        let prelude = {
+            let mut prelude = FRAMEWORK_HEADER.to_string();
 
-        if enabled_commands {
-            header.push_str("import { invoke as __TAURI_INVOKE } from '@tauri-apps/api/core';\n");
-        }
+            // TODO: Only include the `Channel` import if it's used
 
-        if enabled_commands {
-            header.push_str("\nexport const commands = {");
-            for command in cfg.commands.iter() {
-                // TODO: Handle JSDoc comments + deprecated
-                // TODO: Maybe move this back into Specta as a primitive
+            prelude
+        };
 
-                header.push_str("\n\t");
-                header.push_str(&command.name().to_lower_camel_case());
-                header.push_str(": (");
-                // TODO: Arguments
-                header.push_str(") => ");
-
-                let command_raw_name = cfg
-                    .plugin_name
-                    .as_ref()
-                    .map(|n| apply_as_prefix(n, command.name(), ItemType::Command))
-                    .unwrap_or_else(|| command.name().to_string()); // TODO: Avoid allocs on this statement?
-                if cfg.error_handling == ErrorHandlingMode::Result
-                    && let Some(r) = command.result()
-                {
-                    // &
-                    // TODO:
-                    //  - Error/result type
-                    //  - Command name
-                    //  - Arguments
-                    header.push_str("typedError<");
-                    header.push_str(
-                        "any", // primitives::export(&ts, &types, command.result())?
-                              //     .as_ref()
-                              //     .map(|v| &*v)
-                              //     .unwrap_or("void"),
-                    );
-                    header.push_str(", ");
-                    header.push_str("any"); // TODO
-                    header.push_str(">(__TAURI_INVOKE(\"");
-                    header.push_str(&command_raw_name); // TODO: Properly escape incase it contains `"`
-                    header.push_str("\"))");
-                } else {
-                    // TODO:
-                    //  - Result type
-                    //  - Command name
-                    //  - Arguments
-                    header.push_str("__TAURI_INVOKE<");
-                    header.push_str("any"); // TODDO
-                    header.push_str(">(\"");
-                    header.push_str(&command_raw_name); // TODO: Properly escape incase it contains `"`
-                    header.push_str("\")");
-                };
-
-                header.push(',');
-            }
-            header.push_str("\n}\n");
-        }
-
-        if enabled_events {
-            header.push_str("\nexport const events = {");
-            for (name, event) in cfg.events.iter() {
-                header.push_str("\n\t");
-                header.push_str(&name.to_lower_camel_case());
-                header.push_str(": makeEvent<");
-                header.push_str("any"); // TODO
-                header.push_str(">(),");
-            }
-            header.push_str("\n}\n");
-        }
-
-        for (key, value) in cfg.constants.iter() {
-            header.push_str("\nexport const ");
-            header.push_str(key); // TODO: Transform name???
-            header.push_str(" = ");
-            header.push_str(
-                &serde_json::to_string_pretty(&value)
-                    .expect("failed to serialize from `serde_json::Value`"),
-            );
-
-            // if as_const { // `if typescript_exporter`
-            match &value {
-                serde_json::Value::Null => {}
-                serde_json::Value::Bool(_)
-                | serde_json::Value::Number(_)
-                | serde_json::Value::String(_)
-                | serde_json::Value::Array(_)
-                | serde_json::Value::Object(_) => header.push_str(" as const"),
-            }
-
-            header.push(';');
-        }
-
-        let mut result = Typescript::new()
-            .framework_header(header)
-            .export(cfg.types)?;
-
-        // Runtime
-        if enabled_commands || enabled_events {
-            result.push_str("\n/* Tauri Specta runtime */\n");
+        let runtime = {
+            let mut runtime = String::new();
 
             if enabled_commands {
-                result.push_str(AS_RESULT_IMPL);
+                runtime
+                    .push_str("import { invoke as __TAURI_INVOKE } from '@tauri-apps/api/core';\n");
+                runtime.push('\n');
             }
-            if enabled_events {
-                result.push_str(MAKE_EVENT_IMPL);
-            }
-        }
 
-        Ok(result)
+            // Commands
+            if enabled_commands {
+                let mut s = Struct::named();
+                for command in cfg.commands {
+                    // TODO: Handle JSDoc comments + deprecated
+
+                    let command_raw_name = cfg
+                        .plugin_name
+                        .as_ref()
+                        .map(|n| apply_as_prefix(n, command.name(), ItemType::Command))
+                        .unwrap_or_else(|| command.name().to_string()); // TODO: Avoid allocs on this statement?
+
+                    // TODO: Handle command arguments
+                    let arguments = "";
+
+                    let body = if cfg.error_handling == ErrorHandlingMode::Result
+                        && let Some(FunctionReturnType::Result(dt_ok, dt_err)) = command.result()
+                    {
+                        format!(
+                            "typedError<{}, {}>(__TAURI_INVOKE(\"{}\", {}))",
+                            primitives::reference(self, cfg.types, dt_ok)?,
+                            primitives::reference(self, cfg.types, dt_err)?,
+                            command_raw_name, // TODO: Properly escape incase it contains `"`
+                            ""                // TODO: Proxy command args through
+                        )
+                    } else {
+                        format!(
+                            "__TAURI_INVOKE<{}>(\"{}\", {})",
+                            match command.result() {
+                                Some(
+                                    FunctionReturnType::Value(dt)
+                                    | FunctionReturnType::Result(dt, _),
+                                ) => Cow::Owned(primitives::reference(self, cfg.types, dt)?),
+                                None => Cow::Borrowed("void"),
+                            },
+                            command_raw_name, // TODO: Properly escape incase it contains `"`
+                            ""                // TODO: Proxy command args through
+                        )
+                    };
+
+                    s = s.field(
+                        command.name().to_lower_camel_case(),
+                        Field::new(self.define(format!("({arguments}) => {body}")).into()),
+                    );
+                }
+
+                runtime.push_str("export const commands = ");
+                runtime.push_str(&primitives::inline(self, cfg.types, &s.build())?); // TODO: JSDoc support
+            }
+
+            // Events
+            // TODO
+
+            // Constants
+            // TODO
+
+            // Runtime
+            if enabled_commands || enabled_events {
+                runtime.push_str("\n\n/* Tauri Specta runtime */\n");
+
+                if enabled_commands {
+                    runtime.push_str(AS_RESULT_IMPL);
+                    runtime.push_str("\n\n");
+                }
+                if enabled_events {
+                    runtime.push_str(MAKE_EVENT_IMPL);
+                }
+            }
+
+            runtime
+        };
+
+        // if enabled_events {
+        //     header.push_str("\nexport const events = {");
+        //     for (name, event) in cfg.events.iter() {
+        //         header.push_str("\n\t");
+        //         header.push_str(&name.to_lower_camel_case());
+        //         header.push_str(": makeEvent<");
+        //         header.push_str("any"); // TODO
+        //         header.push_str(">(),");
+        //     }
+        //     header.push_str("\n}\n");
+        // }
+
+        // for (key, value) in cfg.constants.iter() {
+        //     header.push_str("\nexport const ");
+        //     header.push_str(key); // TODO: Transform name???
+        //     header.push_str(" = ");
+        //     header.push_str(
+        //         &serde_json::to_string_pretty(&value)
+        //             .expect("failed to serialize from `serde_json::Value`"),
+        //     );
+
+        //     // if as_const { // `if typescript_exporter`
+        //     match &value {
+        //         serde_json::Value::Null => {}
+        //         serde_json::Value::Bool(_)
+        //         | serde_json::Value::Number(_)
+        //         | serde_json::Value::String(_)
+        //         | serde_json::Value::Array(_)
+        //         | serde_json::Value::Object(_) => header.push_str(" as const"),
+        //     }
+
+        //     header.push(';');
+        // }
+
+        Typescript::new()
+            .framework_prelude(prelude.clone())
+            .framework_runtime(runtime.clone())
+            // TODO: These would be configured in userspace
+            .layout(specta_typescript::Layout::Files)
+            .export_to("./testing", cfg.types)
+            .unwrap();
+
+        Typescript::new()
+            .framework_prelude(prelude)
+            .framework_runtime(runtime)
+            .export(cfg.types)
     }
 }
 
