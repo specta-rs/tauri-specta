@@ -20,7 +20,7 @@ First you will need to choose a version:
 |           | Tauri v1                             | Tauri v2                             |
 | --------- | ------------------------------------ | ------------------------------------ |
 | Specta v1 | Tauri Specta v1 [docs](https://docs.rs/tauri-specta/%5E1.0.2/tauri_specta/index.html) | Unsupported                          |
-| Specta v2 | Unsupported                          | Tauri Specta v2 [docs](https://docs.rs/tauri-specta/^2.0.0-rc.11/tauri_specta/index.html) |
+| Specta v2 | Unsupported                          | Tauri Specta v2 [docs](https://docs.rs/tauri-specta/^2.0.0-rc.21/tauri_specta/index.html) |
 
 Tauri Specta v2 also comes with support for generating types for events.
 
