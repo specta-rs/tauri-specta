@@ -34,7 +34,7 @@ tauri-specta-macros = { version = "=2.0.0-rc.16", optional = true, path = "./mac
 serde = "1"
 serde_json = "1"
 thiserror = "2"
-tauri = { workspace = true, features = ["specta"] }
+tauri = { workspace = true, features = [] } # TODO: BRING THIS BACK: "specta"
 
 # Private
 heck = "0.5.0"
@@ -63,7 +63,7 @@ panic_in_result_fn = { level = "warn", priority = -1 }
 tauri = { version = "^2.9.3" }
 tauri-build = { version = "2.5" }
 tauri-plugin = { version = "2.5" }
-specta = { version = "=2.0.0-rc.22" }
+specta = { version = "=2.0.0-rc.22", features = ["derive"] }
 specta-typescript = { version = "0.0.9" }
 
 # TODO: Remove this

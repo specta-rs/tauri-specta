@@ -1,10 +1,19 @@
-use std::{any::TypeId, borrow::Cow, collections::HashMap, sync::RwLock};
+use std::{
+    any::TypeId,
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    sync::RwLock,
+};
 
 use serde::{Serialize, de::DeserializeOwned};
-use specta::Type;
+use specta::{Type, TypeCollection, datatype::DataType};
 use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
-use crate::{ItemType, apply_as_prefix};
+/// A wrapper around the output of the `collect_commands` macro.
+///
+/// This acts to seal the implementation details of the macro.
+#[derive(Default)]
+pub struct Events(pub(crate) BTreeMap<&'static str, fn(&mut TypeCollection) -> (TypeId, DataType)>);
 
 #[derive(Default)]
 pub(crate) struct EventRegistryMeta {
@@ -28,7 +37,7 @@ impl EventRegistry {
             .unwrap_or_else(|| panic!("Event {} not found in registry!", E::NAME));
 
         meta.plugin_name
-            .map(|n| apply_as_prefix(n, E::NAME, ItemType::Event).into())
+            .map(|plugin_name| format!("plugin:{plugin_name}:{}", E::NAME).into())
             .unwrap_or_else(|| E::NAME.into())
     }
 
