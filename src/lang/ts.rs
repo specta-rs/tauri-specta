@@ -66,12 +66,23 @@ impl LanguageExt for specta_typescript::Typescript {
                 runtime.push('\n');
             }
 
+            for command in cfg.commands {
+                if let Some(result) = command.result() {
+                    match result {
+                        FunctionReturnType::Value(dt) => {
+                            // TODO: We need to make an import
+                        }
+                        FunctionReturnType::Result(dt_ok, dt_err) => {
+                            // TODO: We need to make an import
+                        }
+                    }
+                }
+            }
+
             // Commands
             if enabled_commands {
                 let mut s = Struct::named();
                 for command in cfg.commands {
-                    // TODO: Handle JSDoc comments + deprecated
-
                     let command_raw_name = cfg
                         .plugin_name
                         .as_ref()
@@ -106,10 +117,11 @@ impl LanguageExt for specta_typescript::Typescript {
                         )
                     };
 
-                    s = s.field(
-                        command.name().to_lower_camel_case(),
-                        Field::new(self.define(format!("({arguments}) => {body}")).into()),
-                    );
+                    let mut field =
+                        Field::new(self.define(format!("({arguments}) => {body}")).into());
+                    field.set_deprecated(command.deprecated().cloned());
+                    field.set_docs(command.docs().clone());
+                    s = s.field(command.name().to_lower_camel_case(), field);
                 }
 
                 runtime.push_str("export const commands = ");
@@ -177,7 +189,15 @@ impl LanguageExt for specta_typescript::Typescript {
             .framework_runtime(runtime.clone())
             // TODO: These would be configured in userspace
             .layout(specta_typescript::Layout::Files)
-            .export_to("./testing", cfg.types)
+            .export_to("../src/testing", cfg.types)
+            .unwrap();
+
+        Typescript::new()
+            .framework_prelude(prelude.clone())
+            .framework_runtime(runtime.clone())
+            // TODO: These would be configured in userspace
+            .layout(specta_typescript::Layout::Namespaces)
+            .export_to("../src/namespaces.ts", cfg.types)
             .unwrap();
 
         Typescript::new()
