@@ -36,9 +36,9 @@ fn has_error() -> Result<&'static str, i32> {
     Err(32)
 }
 
-#[tauri::command]
-#[specta::specta]
-fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
+// #[tauri::command]
+// #[specta::specta]
+// fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
 
 #[deprecated = "This is a deprecated function"]
 #[tauri::command]
@@ -62,18 +62,19 @@ mod nested {
     }
 }
 
-#[derive(Error, Debug, Serialize, Type)]
+// TODO: Fix this by adding `Error` back
+#[derive(Debug, Serialize, Type)]
 #[serde(tag = "type", content = "data")]
 pub enum MyError {
     // On the frontend this variant will be "IoError" with no data.
-    #[error("io error: {0}")]
+    // #[error("io error: {0}")]
     IoError(
         #[serde(skip)] // io::Error is not `Serialize` or `Type`
-        #[from]
+        // #[from] // TODO
         std::io::Error,
     ),
     // On the frontend this variant will be "AnotherError" with string data.
-    #[error("some other error: {0}")]
+    // #[error("some other error: {0}")]
     AnotherError(String),
 }
 
@@ -86,10 +87,11 @@ fn typesafe_errors_using_thiserror() -> Result<(), MyError> {
     )))
 }
 
-#[derive(Error, Debug, Serialize, Type)]
+// TODO: Error,
+#[derive(Debug, Serialize, Type)]
 #[serde(tag = "type", content = "data")]
 pub enum MyError2 {
-    #[error("io error: {0}")]
+    // #[error("io error: {0}")]
     IoError(String),
 }
 
@@ -129,46 +131,78 @@ fn main() {
             goodbye_world,
             async_hello_world,
             has_error,
-            nested::some_struct,
-            generic::<tauri::Wry>,
-            deprecated,
-            typesafe_errors_using_thiserror,
-            typesafe_errors_using_thiserror_with_value,
+            // nested::some_struct,
+            // // generic::<tauri::Wry>, // TODO: Fix this
+            // deprecated,
+            // typesafe_errors_using_thiserror,
+            // typesafe_errors_using_thiserror_with_value,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .typ::<Custom>()
-        .constant("universalConstant", 42);
+        .typ::<Testing>()
+        .constant("universalConstant", 42)
+        .constant("bruh", 42);
 
     #[cfg(debug_assertions)]
-    builder
-        .export(
-            Typescript::default().header("/* eslint-disable */"),
-            "../src/bindings.ts",
-        )
-        .expect("Failed to export typescript bindings");
+    {
+        use specta_typescript::{JSDoc, Layout};
+
+        builder
+            .export(
+                Typescript::default(),
+                // .header("/* eslint-disable */")
+                "../src/bindings.ts",
+            )
+            .expect("Failed to export typescript bindings");
+
+        builder
+            .export(JSDoc::default(), "../src/bindings-js.js")
+            .expect("Failed to export typescript bindings");
+
+        builder
+            .export(
+                Typescript::default().layout(Layout::Files),
+                "../src/bindings-ts-files",
+            )
+            .expect("Failed to export typescript bindings");
+
+        builder
+            .export(
+                JSDoc::default().layout(Layout::Files),
+                "../src/bindings-js-files",
+            )
+            .expect("Failed to export typescript bindings");
+
+        builder
+            .export(
+                Typescript::default().layout(Layout::Namespaces),
+                "../src/bindings-ts-namespaces.ts",
+            )
+            .expect("Failed to export typescript bindings");
+
+        builder
+            .export(
+                JSDoc::default().layout(Layout::Namespaces),
+                "../src/bindings-js-namespaces.ts",
+            )
+            .expect("Failed to export typescript bindings");
+    }
 
     #[cfg(debug_assertions)]
-    builder
-        .export(
-            specta_typescript::JSDoc::default().header("/* eslint-disable */"),
-            "../src/bindings-jsdoc.js",
-        )
-        .expect("Failed to export typescript bindings");
-
     tauri::Builder::default()
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
 
-            DemoEvent::listen(app, |event| {
-                dbg!(event.payload);
-            });
+            // DemoEvent::listen(app, |event| {
+            //     dbg!(event.payload);
+            // });
 
-            DemoEvent("Test".to_string()).emit(app).ok();
+            // DemoEvent("Test".to_string()).emit(app).ok();
 
-            EmptyEvent::listen(app, |_| {
-                println!("Got event from frontend!!");
-            });
+            // EmptyEvent::listen(app, |_| {
+            //     println!("Got event from frontend!!");
+            // });
 
             Ok(())
         })
