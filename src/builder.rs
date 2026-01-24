@@ -98,7 +98,7 @@ pub struct BuilderConfiguration {
     pub events: BTreeMap<&'static str, (TypeId, DataType)>,
     pub types: TypeCollection,
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
-    pub as_result_impl: Cow<'static, str>,
+    pub typed_error_impl: Cow<'static, str>,
 }
 
 impl<R: Runtime> Default for Builder<R> {
