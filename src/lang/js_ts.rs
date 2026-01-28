@@ -1,7 +1,8 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
-use specta::datatype::{Field, FunctionReturnType, Struct};
+use specta::TypeCollection;
+use specta::datatype::{DataType, Field, FunctionReturnType, Reference, Struct};
 use specta_typescript::{Error, Exporter, define, primitives};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
@@ -68,44 +69,36 @@ fn build(
     let source = {
         let mut source = String::new();
 
-        let is_channel_used = true;
-        // builder
-        //     .commands
-        //     .iter()
-        //     .flat_map(|v| {
-        //         [
-        //             v.args(),
-        //             match v.result() {
-        //                 Some(_) => todo!(),
-        //                 None => todo!(),
-        //             },
-        //         ]
-        //     })
-        //     .any(|(_, arg)| match arg {
-        //         DataType::Reference(Reference::Named(r)) => r
-        //             .get(&builder.types)
-        //             .map(|dt| {
-        //                 dt.name() == "TAURI_CHANNEL" && dt.module_path().starts_with("tauri::")
-        //             })
-        //             .unwrap_or_default(),
-        //         _ => false,
-        //     });
+        let is_channel_used = cfg.commands.iter().any(|command| {
+            // Check if any argument is a Channel
+            command.args().iter().any(|(_, dt)| is_channel_type(dt, &cfg.types))
+            // Check if result contains a Channel
+            || command.result().map_or(false, |result| match result {
+                FunctionReturnType::Value(dt) => is_channel_type(dt, &cfg.types),
+                FunctionReturnType::Result(ok, err) =>
+                    is_channel_type(ok, &cfg.types) || is_channel_type(err, &cfg.types),
+            })
+        });
+
+        // TODO: Apply rename to `TAURI_CHANNEl`.
+        // Will be hard cause of this not being `&mut`
+        // cfg.types = types.map(f);
 
         if enabled_commands || is_channel_used {
             source.push_str("import { ");
 
-            for (i, import) in [
+            let imports = [
                 enabled_commands.then_some("invoke as __TAURI_INVOKE"),
                 is_channel_used.then_some("Channel"),
-            ]
-            .iter()
-            .flatten()
-            .enumerate()
-            {
-                source.push_str(import);
-                if i < 1 {
+            ];
+
+            let mut first = true;
+            for import in imports.iter().flatten() {
+                if !first {
                     source.push_str(", ");
                 }
+                source.push_str(import);
+                first = false;
             }
 
             source.push_str(" } from '@tauri-apps/api/core';\n");
@@ -294,6 +287,16 @@ fn construct(prefix: &str, types: Cow<'static, str>, suffix: &str) -> Cow<'stati
     out.push_str(suffix);
 
     Cow::Owned(out)
+}
+
+fn is_channel_type(dt: &DataType, types: &TypeCollection) -> bool {
+    match dt {
+        DataType::Reference(Reference::Named(r)) => r
+            .get(types)
+            .map(|ndt| ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::"))
+            .unwrap_or(false),
+        _ => false,
+    }
 }
 
 const FRAMEWORK_HEADER: &str =

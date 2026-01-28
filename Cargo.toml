@@ -34,7 +34,7 @@ tauri-specta-macros = { version = "=2.0.0-rc.16", optional = true, path = "./mac
 serde = "1"
 serde_json = "1"
 thiserror = "2"
-tauri = { workspace = true, features = [] } # TODO: BRING THIS BACK: "specta"
+tauri = { workspace = true, features = ["specta"] }
 
 # Private
 heck = "0.5.0"
@@ -71,3 +71,5 @@ specta-typescript = { version = "0.0.9" }
 specta = { path = "../specta/specta" }
 specta-serde = { path = "../specta/specta-serde" }
 specta-typescript = { path = "../specta/specta-typescript" }
+# TODO: https://github.com/tauri-apps/tauri/pull/14812
+tauri  = { git = "https://github.com/tauri-apps/tauri", rev = "4d5d78daf636feaac20c5bc48a6071491c4291ee" }
