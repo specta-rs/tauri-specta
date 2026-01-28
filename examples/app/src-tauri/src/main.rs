@@ -36,14 +36,18 @@ fn has_error() -> Result<&'static str, i32> {
     Err(32)
 }
 
-// #[tauri::command]
-// #[specta::specta]
-// fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
+#[tauri::command]
+#[specta::specta]
+fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
 
 #[deprecated = "This is a deprecated function"]
 #[tauri::command]
 #[specta::specta]
 fn deprecated() {}
+
+#[tauri::command]
+#[specta::specta]
+fn with_channel(channel: Channel<i32>) {}
 
 mod nested {
     use super::*;
@@ -62,19 +66,18 @@ mod nested {
     }
 }
 
-// TODO: Fix this by adding `Error` back
-#[derive(Debug, Serialize, Type)]
+#[derive(Error, Debug, Serialize, Type)]
 #[serde(tag = "type", content = "data")]
 pub enum MyError {
     // On the frontend this variant will be "IoError" with no data.
-    // #[error("io error: {0}")]
+    #[error("io error: {0}")]
     IoError(
         #[serde(skip)] // io::Error is not `Serialize` or `Type`
-        // #[from] // TODO
+        #[from]
         std::io::Error,
     ),
     // On the frontend this variant will be "AnotherError" with string data.
-    // #[error("some other error: {0}")]
+    #[error("some other error: {0}")]
     AnotherError(String),
 }
 
@@ -87,11 +90,10 @@ fn typesafe_errors_using_thiserror() -> Result<(), MyError> {
     )))
 }
 
-// TODO: Error,
-#[derive(Debug, Serialize, Type)]
+#[derive(Error, Debug, Serialize, Type)]
 #[serde(tag = "type", content = "data")]
 pub enum MyError2 {
-    // #[error("io error: {0}")]
+    #[error("io error: {0}")]
     IoError(String),
 }
 
@@ -131,17 +133,17 @@ fn main() {
             goodbye_world,
             async_hello_world,
             has_error,
-            // nested::some_struct,
-            // // generic::<tauri::Wry>, // TODO: Fix this
-            // deprecated,
-            // typesafe_errors_using_thiserror,
-            // typesafe_errors_using_thiserror_with_value,
+            nested::some_struct,
+            generic::<tauri::Wry>,
+            deprecated,
+            with_channel,
+            typesafe_errors_using_thiserror,
+            typesafe_errors_using_thiserror_with_value,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .typ::<Custom>()
         .typ::<Testing>()
-        .constant("universalConstant", 42)
-        .constant("bruh", 42);
+        .constant("universalConstant", 42);
 
     #[cfg(debug_assertions)]
     {
