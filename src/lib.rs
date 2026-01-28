@@ -212,7 +212,10 @@ pub mod internal {
 
     use std::{any::TypeId, sync::Arc};
 
-    use specta::{TypeCollection, datatype};
+    use specta::{
+        TypeCollection,
+        datatype::{self, DataType},
+    };
     use tauri::{Runtime, ipc::Invoke};
 
     use super::*;
@@ -231,7 +234,15 @@ pub mod internal {
     /// called by `collect_events` to register events to an `Events`
     pub fn register_event<E: Event>(Events(events): &mut Events) {
         if events
-            .insert(E::NAME, |types| (TypeId::of::<E>(), E::definition(types)))
+            .insert(E::NAME, |types| {
+                (
+                    TypeId::of::<E>(),
+                    match E::definition(types) {
+                        DataType::Reference(r) => r,
+                        _ => panic!("Can't register event {} with non-reference type", E::NAME),
+                    },
+                )
+            })
             .is_some()
         {
             panic!("Another event with name {} is already registered!", E::NAME)
