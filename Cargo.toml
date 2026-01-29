@@ -37,7 +37,7 @@ thiserror = "2"
 tauri = { workspace = true, features = ["specta"] }
 
 # Private
-heck = "0.5.0"
+heck = "0.5"
 
 [workspace]
 members = [
@@ -60,9 +60,9 @@ todo = { level = "warn", priority = -1 }
 panic_in_result_fn = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
-tauri = { version = "^2.9.3" }
-tauri-build = { version = "2.5" }
-tauri-plugin = { version = "2.5" }
+tauri = { version = "2 }
+tauri-build = { version = "2" }
+tauri-plugin = { version = "2" }
 specta = { version = "=2.0.0-rc.22", features = ["derive"] }
 specta-typescript = { version = "0.0.9" }
 
