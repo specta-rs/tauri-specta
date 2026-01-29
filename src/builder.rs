@@ -6,6 +6,7 @@ use specta::{
     Type, TypeCollection,
     datatype::{DataType, Function, Reference},
 };
+use specta_typescript::define;
 use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// The mode which the error handling is done in the bindings.
@@ -152,7 +153,7 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn commands(mut self, commands: Commands<R>) -> Self {
         self.cfg.commands = (commands.1)(&mut self.cfg.types);
-
+        self.patch_channel_ty();
         Self {
             commands,
             cfg: self.cfg,
@@ -181,6 +182,7 @@ impl<R: Runtime> Builder<R> {
             .iter()
             .map(|(k, build)| (*k, build(&mut self.cfg.types)))
             .collect();
+        self.patch_channel_ty();
         self
     }
 
@@ -204,6 +206,25 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn typ<T: Type>(mut self) -> Self {
         self.cfg.types.register_mut::<T>();
+        self.patch_channel_ty();
+        self
+    }
+
+    /// Export a group of types to the frontend.
+    ///
+    /// This is useful if you want to export types that do not appear in any events or commands.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore-windows
+    /// use tauri_specta::Builder;
+    /// use specta::{Type, TypeCollection};
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().types(&TypeCollection::default());
+    /// ```
+    pub fn types(mut self, types: &TypeCollection) -> Self {
+        self.cfg.types.merge(types);
+        self.patch_channel_ty();
         self
     }
 
@@ -233,9 +254,26 @@ impl<R: Runtime> Builder<R> {
         self
     }
 
-    // TODO: Maybe method to merge in a `TypeCollection`
-
-    // TODO: Should we put a `.build` command here to ensure it's immutable from now on?
+    /// Replace the internal implementation of the `typedError` function.
+    /// This would allow integrating with Effect or any other result library.
+    ///
+    /// ```rust
+    /// const TYPED_ERROR_IMPL: &str = r#"async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
+    ///     try {
+    ///         return { status: "ok", data: await result };
+    ///     } catch (e) {
+    ///         if (e instanceof Error) throw e;
+    ///         return { status: "error", error: e as any };
+    ///     }
+    /// }"#;
+    ///
+    /// Builder::default()
+    ///  .typed_error_impl(TYPED_ERROR_IMPL);
+    /// ```
+    pub fn typed_error_impl(mut self, runtime: impl Into<Cow<'static, str>>) -> Self {
+        self.cfg.typed_error_impl = runtime.into();
+        self
+    }
 
     /// The Tauri invoke handler to trigger commands registered with the builder.
     pub fn invoke_handler(&self) -> impl Fn(Invoke<R>) -> bool + Send + Sync + 'static {
@@ -268,7 +306,7 @@ impl<R: Runtime> Builder<R> {
         let registry = EventRegistry::get_or_manage(handle);
         let mut map = registry.0.write().expect("Failed to lock EventRegistry");
 
-        for (_, (tid, _)) in &self.cfg.events {
+        for (tid, _) in self.cfg.events.values() {
             map.insert(
                 *tid,
                 EventRegistryMeta {
@@ -300,5 +338,13 @@ impl<R: Runtime> Builder<R> {
         path: impl AsRef<Path>,
     ) -> Result<(), L::Error> {
         language.export(&self.cfg, path.as_ref())
+    }
+
+    fn patch_channel_ty(&mut self) {
+        self.cfg.types.iter_mut(|ndt| {
+            if ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::") {
+                *ndt.ty_mut() = DataType::Reference(define("Channel"));
+            }
+        });
     }
 }

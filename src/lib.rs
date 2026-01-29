@@ -172,10 +172,6 @@
 //!
 //! Refer to [`Event`] for all the possible methods for listening and emitting events.
 //!
-//! # Channel
-//!
-//! [Coming soon...](https://github.com/specta-rs/tauri-specta/issues/111)
-//!
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
     // TODO: Tauri Specta logo
