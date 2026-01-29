@@ -19,7 +19,8 @@ impl LanguageExt for specta_typescript::Typescript {
                     runtime(
                         exporter,
                         &cfg,
-                        true,
+                        false,
+                        EVENT_IMPORTS_TS,
                         if !cfg.typed_error_impl.is_empty() {
                             &cfg.typed_error_impl
                         } else {
@@ -46,13 +47,14 @@ impl LanguageExt for specta_typescript::JSDoc {
                     runtime(
                         exporter,
                         &cfg,
-                        false,
+                        true,
+                        EVENT_IMPORTS_JS,
                         if !cfg.typed_error_impl.is_empty() {
                             &cfg.typed_error_impl
                         } else {
                             TYPED_ERROR_IMPL_JS
                         },
-                        TYPED_ERROR_ASSERTION_JS,
+                        "",
                         MAKE_EVENT_IMPL_JS,
                     )
                 }
@@ -64,7 +66,8 @@ impl LanguageExt for specta_typescript::JSDoc {
 fn runtime(
     mut exporter: FrameworkExporter,
     cfg: &BuilderConfiguration,
-    as_const: bool,
+    jsdoc: bool,
+    event_imports: &str,
     typed_error_impl: &str,
     typed_error_assertion: &str,
     make_event_impl: &str,
@@ -87,7 +90,15 @@ fn runtime(
 
     // TODO: Apply rename to `TAURI_CHANNEl`.
     // Will be hard cause of this not being `&mut`
-    // cfg.types = types.map(f);
+    // cfg.types = cfg.types.map(|mut ndt| {
+    //     if ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::") {
+    //         *ndt.name_mut() = Cow::Borrowed("__TAURI_CHANNEL__");
+    //         *ndt.generics_mut() = vec![Generic::new("T")];
+    //         *ndt.ty_mut() = DataType::Reference(reference.clone());
+    //     }
+
+    //     ndt
+    // });
 
     if enabled_commands || is_channel_used {
         out.push_str("import { ");
@@ -109,12 +120,7 @@ fn runtime(
         out.push_str(" } from '@tauri-apps/api/core';\n");
     }
     if enabled_events {
-        out.push_str(
-            r#"import * as __TAURI_EVENT from "@tauri-apps/api/event";
-    import type { Webview } from "@tauri-apps/api/webview";
-    import type { Window } from "@tauri-apps/api/window";
-    "#,
-        );
+        out.push_str(event_imports);
     }
 
     // Commands
@@ -132,16 +138,27 @@ fn runtime(
                 .args()
                 .iter()
                 .map(|(name, dt)| {
-                    Ok(format!(
-                        "{}: {}",
+                    Ok((
                         name.to_lower_camel_case(),
                         match &dt {
-                            DataType::Reference(r) => exporter.reference(&r)?,
+                            DataType::Reference(r) => exporter.reference(r)?,
                             dt => exporter.inline(dt)?,
-                        }
+                        },
                     ))
                 })
-                .collect::<Result<Vec<_>, Error>>()?
+                .collect::<Result<Vec<_>, Error>>()?;
+
+            let fn_arguments = arguments
+                .iter()
+                .map(|(name, dt)| {
+                    let mut arg = name.to_string();
+                    if !jsdoc {
+                        arg.push_str(": ");
+                        arg.push_str(dt);
+                    }
+                    arg
+                })
+                .collect::<Vec<_>>()
                 .join(", ");
 
             let arguments_invoke_obj = if command.args().is_empty() {
@@ -158,41 +175,72 @@ fn runtime(
                 )
             };
 
+            let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
+
             let body = if cfg.error_handling == ErrorHandlingMode::Result
                 && let Some(FunctionReturnType::Result(dt_ok, dt_err)) = command.result()
             {
-                format!(
-                    "typedError<{}, {}>(__TAURI_INVOKE({command_name_escaped}{arguments_invoke_obj}))",
-                    match &dt_ok {
-                        DataType::Reference(r) => exporter.reference(&r)?,
+                let mut invoke_ts = "typedError".to_string();
+                if !jsdoc {
+                    invoke_ts.push('<');
+                    invoke_ts.push_str(&match &dt_ok {
+                        DataType::Reference(r) => exporter.reference(r)?,
                         dt => exporter.inline(dt)?,
-                    },
-                    match &dt_err {
-                        DataType::Reference(r) => exporter.reference(&r)?,
+                    });
+                    invoke_ts.push_str(", ");
+                    invoke_ts.push_str(&match &dt_err {
+                        DataType::Reference(r) => exporter.reference(r)?,
                         dt => exporter.inline(dt)?,
-                    }
-                )
+                    });
+                    invoke_ts.push('>');
+                }
+                invoke_ts.push_str("(__TAURI_INVOKE");
+                invoke_ts.push_str(&invoke_args);
+                invoke_ts.push(')');
+                invoke_ts
             } else {
-                format!(
-                    "__TAURI_INVOKE<{}>({command_name_escaped}{arguments_invoke_obj})",
-                    match command.result() {
-                        Some(FunctionReturnType::Value(dt) | FunctionReturnType::Result(dt, _)) =>
+                let mut invoke_ts = "__TAURI_INVOKE".to_string();
+                if !jsdoc {
+                    invoke_ts.push('<');
+                    invoke_ts.push_str(&match command.result() {
+                        Some(FunctionReturnType::Value(dt) | FunctionReturnType::Result(dt, _)) => {
                             Cow::Owned(match dt {
                                 DataType::Reference(r) => exporter.reference(r)?,
                                 dt => exporter.inline(dt)?,
-                            }),
+                            })
+                        }
                         None => Cow::Borrowed("void"),
-                    },
-                )
+                    });
+                    invoke_ts.push('>');
+                }
+                invoke_ts.push_str(&invoke_args);
+                invoke_ts
             };
 
-            let mut field = Field::new(define(format!("({arguments}) => {body}")).into());
+            let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
             field.set_deprecated(command.deprecated().cloned());
-            field.set_docs(command.docs().clone());
+            field.set_docs({
+                let mut docs = command.docs().to_string();
+
+                if jsdoc {
+                    docs.push_str(
+                        &arguments
+                            .iter()
+                            .map(|(name, dt)| format!("@param {{{dt}}} {name}"))
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    );
+                }
+
+                // docs.push_str("@param {string} myName");
+                docs.push_str("@returns {string} myName");
+
+                docs.into()
+            });
             s = s.field(command.name().to_lower_camel_case(), field);
         }
 
-        out.push_str("\n/* Commands */");
+        out.push_str("\n/** Commands */");
         // TODO: JSDoc support
         out.push_str("\nexport const commands = ");
         out.push_str(&match &s.build() {
@@ -213,17 +261,28 @@ fn runtime(
             )
             .expect("failed to serialize string");
 
-            let field = Field::new(
-                define(format!(
-                    "makeEvent<{}>({event_name_escaped})",
+            let mut field_ts = "makeEvent".to_string();
+            if !jsdoc {
+                field_ts.push('<');
+                field_ts.push_str(&exporter.reference(r)?);
+                field_ts.push('>');
+            }
+            field_ts.push('(');
+            field_ts.push_str(&event_name_escaped);
+            field_ts.push(')');
+
+            let mut field = Field::new(define(field_ts).into());
+            field.set_docs(
+                format!(
+                    "@type {{ReturnType<typeof makeEvent<{}>>}}",
                     exporter.reference(r)?
-                ))
+                )
                 .into(),
             );
             s = s.field(name.to_lower_camel_case(), field);
         }
 
-        out.push_str("\n/* Events */");
+        out.push_str("\n/** Events */");
         out.push_str("\nexport const events = ");
         out.push_str(&exporter.inline(&s.build())?); // TODO: JSDoc support
         out.push_str(";\n");
@@ -238,7 +297,7 @@ fn runtime(
         for (name, value) in constants.iter() {
             let mut as_constt = None;
             // `as const` isn't supported in JS so are conditional on that.
-            if as_const {
+            if !jsdoc {
                 match &value {
                     serde_json::Value::Null => {}
                     serde_json::Value::Bool(_)
@@ -273,7 +332,10 @@ fn runtime(
         if enabled_commands {
             out.push_str(typed_error_impl);
             out.push('\n');
+            // We only include assertion for user-provided impl.
+            // It's assumed the internal one is correct.
             if !cfg.typed_error_impl.is_empty() {
+                out.push('\n');
                 out.push_str(typed_error_assertion);
                 out.push('\n');
             }
@@ -303,6 +365,14 @@ fn is_channel_type(dt: &DataType, types: &TypeCollection) -> bool {
 const FRAMEWORK_HEADER: &str =
     "// This file has been generated by Tauri Specta. Do not edit this file manually.";
 
+const EVENT_IMPORTS_TS: &str = r#"import * as __TAURI_EVENT from "@tauri-apps/api/event";
+import type { Webview } from "@tauri-apps/api/webview";
+import type { Window } from "@tauri-apps/api/window";
+"#;
+
+const EVENT_IMPORTS_JS: &str = r#"import * as __TAURI_EVENT from "@tauri-apps/api/event";
+"#;
+
 const TYPED_ERROR_IMPL_TS: &str = r#"async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
     try {
         return { status: "ok", data: await result };
@@ -312,8 +382,13 @@ const TYPED_ERROR_IMPL_TS: &str = r#"async function typedError<T, E>(result: Pro
     }
 }"#;
 
-// TODO: JSDoc types
-const TYPED_ERROR_IMPL_JS: &str = r#"async function typedError(result) {
+const TYPED_ERROR_IMPL_JS: &str = r#"/**
+  * @template T
+  * @template E
+  * @param {Promise<T>} result
+  * @returns {Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>}
+  */
+async function typedError(result) {
     try {
         return { status: "ok", data: await result };
     } catch (e) {
@@ -323,9 +398,6 @@ const TYPED_ERROR_IMPL_JS: &str = r#"async function typedError(result) {
 }"#;
 
 const TYPED_ERROR_ASSERTION_TS: &str = "const _assertTypedErrorFollowsContract: <T, E>(result: Promise<T>) => Promise<any> = typedError;";
-
-// TODO: JSDoc types
-const TYPED_ERROR_ASSERTION_JS: &str = "const _assertTypedErrorFollowsContract: <T, E>(result: Promise<T>) => Promise<any> = typedError;";
 
 const MAKE_EVENT_IMPL_TS: &str = r#"function makeEvent<T>(name: string) {
     const base = {
@@ -343,17 +415,27 @@ const MAKE_EVENT_IMPL_TS: &str = r#"function makeEvent<T>(name: string) {
     return Object.assign(fn, base);
 }"#;
 
-// TODO: JSDoc types
-const MAKE_EVENT_IMPL_JS: &str = r#"function makeEvent(name) {
+const MAKE_EVENT_IMPL_JS: &str = r#"/**
+ * @template T
+ * @param {string} name
+ */
+function makeEvent(name) {
     const base = {
+        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
         listen: (cb) => __TAURI_EVENT.listen(name, cb),
+        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
         once: (cb) => __TAURI_EVENT.once(name, cb),
+        /** @param {T} payload */
         emit: (payload) => __TAURI_EVENT.emit(name, payload),
     };
 
+    /** @param {import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window} target */
     const fn = (target) => ({
+        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
         listen: (cb) => target.listen(name, cb),
+        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
         once: (cb) => target.once(name, cb),
+        /** @param {T} payload */
         emit: (payload) => target.emit(name, payload),
     });
 

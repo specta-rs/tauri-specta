@@ -10,30 +10,47 @@ export const commands = {
 	helloWorld: (myName: string) => __TAURI_INVOKE<string>("hello_world", { myName }),
 	hasError: () => typedError<string, number>(__TAURI_INVOKE("has_error")),
 	deprecated: () => __TAURI_INVOKE<void>("deprecated"),
-	withChannel: (channel: TAURI_CHANNEL<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
+	withChannel: (channel: $s$.tauri.ipc.channel.TAURI_CHANNEL<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
 };
 
 /** Events */
 export const events = {
-	emptyEvent: makeEvent<EmptyEvent>("empty-event"),
-	myDemoEvent: makeEvent<DemoEvent>("myDemoEvent"),
+	emptyEvent: makeEvent<$s$.tauri_specta_example_app.EmptyEvent>("empty-event"),
+	myDemoEvent: makeEvent<$s$.tauri_specta_example_app.DemoEvent>("myDemoEvent"),
 };
 
 /* Constants */
 export const universalConstant = 42 as const;
 
 /* Types */
-export type Custom = string;
+namespace $s$ {
 
-export type DemoEvent = string;
+	export namespace tauri {
 
-export type EmptyEvent = null;
+		export namespace ipc {
 
-export type TAURI_CHANNEL<TSend> = null;
+			export namespace channel {
 
-export type Testing = {
+			export type TAURI_CHANNEL<TSend> = null;
+}
+}
+}
+
+	export namespace tauri_specta_example_app {
+
+	export type Custom = string;
+
+	export type DemoEvent = string;
+
+	export type EmptyEvent = null;
+
+	export type Testing = {
 		a: string,
 	};
+}
+}
+export import tauri = $s$.tauri;
+export import tauri_specta_example_app = $s$.tauri_specta_example_app;
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
