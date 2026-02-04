@@ -120,7 +120,7 @@ fn runtime(
             first = false;
         }
 
-        out.push_str(" } from '@tauri-apps/api/core';\n");
+        out.push_str(" } from \"@tauri-apps/api/core\";\n");
     }
     if enabled_events {
         out.push_str("import * as __TAURI_EVENT from \"@tauri-apps/api/event\";\n");
@@ -143,10 +143,7 @@ fn runtime(
                 .map(|(name, dt)| {
                     Ok((
                         name.to_lower_camel_case(),
-                        match &dt {
-                            DataType::Reference(r) => exporter.reference(r)?,
-                            dt => exporter.inline(dt)?,
-                        },
+                        render_reference_dt(dt, &exporter, &cfg.types)?,
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -186,15 +183,9 @@ fn runtime(
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
                     invoke_ts.push('<');
-                    invoke_ts.push_str(&match &dt_ok {
-                        DataType::Reference(r) => exporter.reference(r)?,
-                        dt => exporter.inline(dt)?,
-                    });
+                    invoke_ts.push_str(&render_reference_dt(dt_ok, &exporter, &cfg.types)?);
                     invoke_ts.push_str(", ");
-                    invoke_ts.push_str(&match &dt_err {
-                        DataType::Reference(r) => exporter.reference(r)?,
-                        dt => exporter.inline(dt)?,
-                    });
+                    invoke_ts.push_str(&render_reference_dt(dt_err, &exporter, &cfg.types)?);
                     invoke_ts.push('>');
                 }
                 invoke_ts.push_str("(__TAURI_INVOKE");
@@ -207,10 +198,7 @@ fn runtime(
                     invoke_ts.push('<');
                     invoke_ts.push_str(&match command.result() {
                         Some(FunctionReturnType::Value(dt) | FunctionReturnType::Result(dt, _)) => {
-                            Cow::Owned(match dt {
-                                DataType::Reference(r) => exporter.reference(r)?,
-                                dt => exporter.inline(dt)?,
-                            })
+                            Cow::Owned(render_reference_dt(dt, &exporter, &cfg.types)?)
                         }
                         None => Cow::Borrowed("void"),
                     });
@@ -363,6 +351,36 @@ fn is_channel_type(dt: &DataType, types: &TypeCollection) -> bool {
             .map(|ndt| ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::"))
             .unwrap_or(false),
         _ => false,
+    }
+}
+
+// Render a `DataType` as a reference (or fallback to inline).
+// Also handles Tauri channel references.
+fn render_reference_dt(
+    dt: &DataType,
+    exporter: &FrameworkExporter,
+    types: &TypeCollection,
+) -> Result<String, Error> {
+    if let DataType::Reference(Reference::Named(r)) = dt
+        && let Some(ndt) = r.get(types)
+        && ndt.name() == "TAURI_CHANNEL"
+        && ndt.module_path().starts_with("tauri::")
+    {
+        let generic = if let Some((_, dt)) = r.generics().first() {
+            match &dt {
+                DataType::Reference(r) => exporter.reference(r)?,
+                dt => exporter.inline(dt)?,
+            }
+            .into()
+        } else {
+            Cow::Borrowed("never")
+        };
+        Ok(format!("Channel<{generic}>"))
+    } else {
+        match &dt {
+            DataType::Reference(r) => exporter.reference(r),
+            dt => exporter.inline(dt),
+        }
     }
 }
 

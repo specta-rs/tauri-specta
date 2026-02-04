@@ -6,7 +6,6 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use specta_typescript::Typescript;
-use tauri::ipc::Channel;
 use tauri_specta::*;
 use thiserror::Error;
 
@@ -19,17 +18,17 @@ fn hello_world(my_name: String) -> String {
     format!("Hello, {my_name}! You've been greeted from Rust!")
 }
 
-// #[tauri::command]
-// #[specta::specta]
-// fn goodbye_world() -> impl Serialize + specta::Type {
-//     "Goodbye world :("
-// }
+#[tauri::command]
+#[specta::specta]
+fn goodbye_world() -> impl Serialize + specta::Type {
+    "Goodbye world :("
+}
 
-// #[tauri::command]
-// #[specta::specta]
-// async fn async_hello_world(my_name: String) -> String {
-//     format!("Hello, {my_name}!")
-// }
+#[tauri::command]
+#[specta::specta]
+async fn async_hello_world(my_name: String) -> String {
+    format!("Hello, {my_name}!")
+}
 
 #[tauri::command]
 #[specta::specta]
@@ -37,9 +36,9 @@ fn has_error() -> Result<&'static str, i32> {
     Err(32)
 }
 
-// #[tauri::command]
-// #[specta::specta]
-// fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
+#[tauri::command]
+#[specta::specta]
+fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
 
 #[deprecated = "This is a deprecated function"]
 #[tauri::command]
@@ -48,24 +47,24 @@ fn deprecated() {}
 
 #[tauri::command]
 #[specta::specta]
-fn with_channel(channel: Channel<i32>) {}
+fn with_channel(_channel: tauri::ipc::Channel<i32>) {}
 
-// mod nested {
-//     use super::*;
+mod nested {
+    use super::*;
 
-//     #[tauri::command]
-//     #[specta::specta]
-//     pub fn some_struct() -> MyStruct {
-//         MyStruct {
-//             some_field: "Hello World".into(),
-//         }
-//     }
+    #[tauri::command]
+    #[specta::specta]
+    pub fn some_struct() -> MyStruct {
+        MyStruct {
+            some_field: "Hello World".into(),
+        }
+    }
 
-//     #[derive(Serialize, specta::Type)] // For Specta support you must add the `specta::Type` derive macro.
-//     pub struct MyStruct {
-//         some_field: String,
-//     }
-// }
+    #[derive(Serialize, specta::Type)] // For Specta support you must add the `specta::Type` derive macro.
+    pub struct MyStruct {
+        some_field: String,
+    }
+}
 
 // #[derive(Error, Debug, Serialize, Type)]
 // #[serde(tag = "type", content = "data")]
@@ -131,11 +130,11 @@ fn main() {
     let builder = Builder::<tauri::Wry>::new()
         .commands(tauri_specta::collect_commands![
             hello_world,
-            // goodbye_world,
-            // async_hello_world,
+            goodbye_world,
+            async_hello_world,
             has_error,
-            // nested::some_struct,
-            // generic::<tauri::Wry>,
+            nested::some_struct,
+            generic::<tauri::Wry>,
             deprecated,
             with_channel,
             // typesafe_errors_using_thiserror,
@@ -180,13 +179,6 @@ fn main() {
             .export(
                 Typescript::default().layout(Layout::Namespaces),
                 "../src/bindings-ts-namespaces.ts",
-            )
-            .expect("Failed to export typescript bindings");
-
-        builder
-            .export(
-                JSDoc::default().layout(Layout::Namespaces),
-                "../src/bindings-js-namespaces.ts",
             )
             .expect("Failed to export typescript bindings");
     }

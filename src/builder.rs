@@ -4,9 +4,8 @@ use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMe
 use serde::Serialize;
 use specta::{
     Type, TypeCollection,
-    datatype::{DataType, Function, Reference},
+    datatype::{Function, Reference},
 };
-use specta_typescript::define;
 use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// The mode which the error handling is done in the bindings.
@@ -153,7 +152,6 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn commands(mut self, commands: Commands<R>) -> Self {
         self.cfg.commands = (commands.1)(&mut self.cfg.types);
-        self.patch_channel_ty();
         Self {
             commands,
             cfg: self.cfg,
@@ -182,7 +180,6 @@ impl<R: Runtime> Builder<R> {
             .iter()
             .map(|(k, build)| (*k, build(&mut self.cfg.types)))
             .collect();
-        self.patch_channel_ty();
         self
     }
 
@@ -206,7 +203,6 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn typ<T: Type>(mut self) -> Self {
         self.cfg.types.register_mut::<T>();
-        self.patch_channel_ty();
         self
     }
 
@@ -224,7 +220,6 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn types(mut self, types: &TypeCollection) -> Self {
         self.cfg.types.merge(types);
-        self.patch_channel_ty();
         self
     }
 
@@ -338,13 +333,5 @@ impl<R: Runtime> Builder<R> {
         path: impl AsRef<Path>,
     ) -> Result<(), L::Error> {
         language.export(&self.cfg, path.as_ref())
-    }
-
-    fn patch_channel_ty(&mut self) {
-        self.cfg.types.iter_mut(|ndt| {
-            if ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::") {
-                *ndt.ty_mut() = DataType::Reference(define("Channel"));
-            }
-        });
     }
 }
