@@ -425,13 +425,13 @@ const MAKE_EVENT_IMPL_TS: &str = r#"function makeEvent<T>(name: string) {
     const base = {
         listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, cb),
         once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, cb),
-        emit: (payload: T) => __TAURI_EVENT.emit(name, payload) as unknown as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
+        emit: ((payload: T) => __TAURI_EVENT.emit(name, payload) as unknown) as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
         listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, cb),
         once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, cb),
-        emit: (payload: T) => target.emit(name, payload) as unknown as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
+        emit: ((payload: T) => target.emit(name, payload) as unknown) as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
     });
 
     return Object.assign(fn, base);
