@@ -66,50 +66,47 @@ mod nested {
     }
 }
 
-// #[derive(Error, Debug, Serialize, Type)]
-// #[serde(tag = "type", content = "data")]
-// pub enum MyError {
-//     // On the frontend this variant will be "IoError" with no data.
-//     #[error("io error: {0}")]
-//     IoError(
-//         #[serde(skip)] // io::Error is not `Serialize` or `Type`
-//         #[from]
-//         std::io::Error,
-//     ),
-//     // On the frontend this variant will be "AnotherError" with string data.
-//     #[error("some other error: {0}")]
-//     AnotherError(String),
-// }
+#[derive(Error, Debug, Serialize, Type)]
+#[serde(tag = "type", content = "data")]
+pub enum MyError {
+    // On the frontend this variant will be "IoError" with no data.
+    #[error("io error: {0}")]
+    IoError(
+        #[serde(skip)] // io::Error is not `Serialize` or `Type`
+        #[from]
+        std::io::Error,
+    ),
+    // On the frontend this variant will be "AnotherError" with string data.
+    #[error("some other error: {0}")]
+    AnotherError(String),
+}
 
-// #[tauri::command]
-// #[specta::specta]
-// fn typesafe_errors_using_thiserror() -> Result<(), MyError> {
-//     Err(MyError::IoError(std::io::Error::new(
-//         std::io::ErrorKind::Other,
-//         "oh no!",
-//     )))
-// }
+#[tauri::command]
+#[specta::specta]
+fn typesafe_errors_using_thiserror() -> Result<(), MyError> {
+    Err(MyError::IoError(std::io::Error::other("oh no!")))
+}
 
-// #[derive(Error, Debug, Serialize, Type)]
-// #[serde(tag = "type", content = "data")]
-// pub enum MyError2 {
-//     #[error("io error: {0}")]
-//     IoError(String),
-// }
+#[derive(Error, Debug, Serialize, Type)]
+#[serde(tag = "type", content = "data")]
+pub enum MyError2 {
+    #[error("io error: {0}")]
+    IoError(String),
+}
 
-// impl From<std::io::Error> for MyError2 {
-//     fn from(error: std::io::Error) -> Self {
-//         Self::IoError(error.to_string())
-//     }
-// }
+impl From<std::io::Error> for MyError2 {
+    fn from(error: std::io::Error) -> Self {
+        Self::IoError(error.to_string())
+    }
+}
 
-// #[tauri::command]
-// #[specta::specta]
-// fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
-//     // some_method()?; // This will work because `?` does `From` conversion.
+#[tauri::command]
+#[specta::specta]
+fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
+    // some_method()?; // This will work because `?` does `From` conversion.
 
-//     Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!").into()) // We use `into` here to do the `From` conversion.
-// }
+    Err(std::io::Error::other("oh no!").into()) // We use `into` here to do the `From` conversion.
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
 #[tauri_specta(event_name = "myDemoEvent")] // Optionally rename event key (for JS/TS)
@@ -137,8 +134,8 @@ fn main() {
             generic::<tauri::Wry>,
             deprecated,
             with_channel,
-            // typesafe_errors_using_thiserror,
-            // typesafe_errors_using_thiserror_with_value,
+            typesafe_errors_using_thiserror,
+            typesafe_errors_using_thiserror_with_value,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .typ::<Custom>()

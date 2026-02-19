@@ -3,6 +3,6 @@
   "version": "0.0.0",
   "scripts": {},
   "dependencies": {
-    "@tauri-apps/api": "^2.9.1"
+    "@tauri-apps/api": "^2.10.1"
   }
 }

@@ -18,8 +18,8 @@ serde = { version = "1.0", features = ["derive"] }
 tauri = { workspace = true, features = [] }
 tauri-specta = { path = "../../../", features = ["derive", "typescript", "javascript"] }
 specta-typescript = { workspace = true }
-tauri-plugin-os = "^2.0.0-alpha.2"
-thiserror = "1"
+tauri-plugin-os = "^2.3.2"
+thiserror = "2"
 
 [features]
 default = ["custom-protocol"]

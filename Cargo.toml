@@ -71,5 +71,3 @@ specta-typescript = { version = "0.0.9" }
 specta = { path = "../specta/specta" }
 specta-serde = { path = "../specta/specta-serde" }
 specta-typescript = { path = "../specta/specta-typescript" }
-# TODO: https://github.com/tauri-apps/tauri/pull/14812
-tauri  = { git = "https://github.com/tauri-apps/tauri", rev = "4d5d78daf636feaac20c5bc48a6071491c4291ee" }
