@@ -45,6 +45,10 @@ fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
 #[specta::specta]
 fn deprecated() {}
 
+#[tauri::command]
+#[specta::specta]
+fn with_channel(_channel: tauri::ipc::Channel<i32>) {}
+
 mod nested {
     use super::*;
 
@@ -80,10 +84,7 @@ pub enum MyError {
 #[tauri::command]
 #[specta::specta]
 fn typesafe_errors_using_thiserror() -> Result<(), MyError> {
-    Err(MyError::IoError(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "oh no!",
-    )))
+    Err(MyError::IoError(std::io::Error::other("oh no!")))
 }
 
 #[derive(Error, Debug, Serialize, Type)]
@@ -104,7 +105,7 @@ impl From<std::io::Error> for MyError2 {
 fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
     // some_method()?; // This will work because `?` does `From` conversion.
 
-    Err(std::io::Error::new(std::io::ErrorKind::Other, "oh no!").into()) // We use `into` here to do the `From` conversion.
+    Err(std::io::Error::other("oh no!").into()) // We use `into` here to do the `From` conversion.
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
@@ -132,33 +133,54 @@ fn main() {
             nested::some_struct,
             generic::<tauri::Wry>,
             deprecated,
+            with_channel,
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .typ::<Custom>()
+        .typ::<Testing>()
         .constant("universalConstant", 42);
 
     #[cfg(debug_assertions)]
-    builder
-        .export(
-            Typescript::default()
-                .formatter(specta_typescript::formatter::prettier)
-                .header("/* eslint-disable */"),
-            "../src/bindings.ts",
-        )
-        .expect("Failed to export typescript bindings");
+    {
+        use specta_typescript::{JSDoc, Layout};
+
+        builder
+            .export(
+                Typescript::default(),
+                // .header("/* eslint-disable */")
+                "../src/bindings.ts",
+            )
+            .expect("Failed to export typescript bindings");
+
+        builder
+            .export(JSDoc::default(), "../src/bindings-js.js")
+            .expect("Failed to export typescript bindings");
+
+        builder
+            .export(
+                Typescript::default().layout(Layout::Files),
+                "../src/bindings-ts-files",
+            )
+            .expect("Failed to export typescript bindings");
+
+        builder
+            .export(
+                JSDoc::default().layout(Layout::Files),
+                "../src/bindings-js-files",
+            )
+            .expect("Failed to export typescript bindings");
+
+        builder
+            .export(
+                Typescript::default().layout(Layout::Namespaces),
+                "../src/bindings-ts-namespaces.ts",
+            )
+            .expect("Failed to export typescript bindings");
+    }
 
     #[cfg(debug_assertions)]
-    builder
-        .export(
-            specta_jsdoc::JSDoc::default()
-                .formatter(specta_typescript::formatter::prettier)
-                .header("/* eslint-disable */"),
-            "../src/bindings-jsdoc.js",
-        )
-        .expect("Failed to export typescript bindings");
-
     tauri::Builder::default()
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {

@@ -1,10 +1,21 @@
-use std::{borrow::Cow, collections::HashMap, sync::RwLock};
+use std::{
+    any::TypeId,
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    sync::RwLock,
+};
 
-use serde::{de::DeserializeOwned, Serialize};
-use specta::{NamedType, SpectaID};
+use serde::{Serialize, de::DeserializeOwned};
+use specta::{Type, TypeCollection, datatype::Reference};
 use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
-use crate::{apply_as_prefix, ItemType};
+/// A wrapper around the output of the `collect_commands` macro.
+///
+/// This acts to seal the implementation details of the macro.
+#[derive(Default)]
+pub struct Events(
+    pub(crate) BTreeMap<&'static str, fn(&mut TypeCollection) -> (TypeId, Reference)>,
+);
 
 #[derive(Default)]
 pub(crate) struct EventRegistryMeta {
@@ -13,28 +24,23 @@ pub(crate) struct EventRegistryMeta {
 
 /// A struct for managing events that is put into Tauri's state.
 #[derive(Default)]
-pub(crate) struct EventRegistry(pub(crate) RwLock<HashMap<SpectaID, EventRegistryMeta>>);
+pub(crate) struct EventRegistry(pub(crate) RwLock<HashMap<TypeId, EventRegistryMeta>>);
 
 impl EventRegistry {
     /// gets the name of the event (taking into account plugin prefixes) and ensuring it was correctly mounted to the current app.
-    pub fn get_event_name<E: Event, R: Runtime>(
-        handle: &impl Manager<R>,
-        name: &'static str,
-    ) -> Cow<'static, str> {
+    pub fn get_event_name<E: Event, R: Runtime>(handle: &impl Manager<R>) -> Cow<'static, str> {
         let this = handle.try_state::<EventRegistry>().expect(
             "EventRegistry not found in Tauri state - Did you forget to call Builder::mount_events?",
         ).inner();
 
-        let sid = E::sid();
-
         let map = this.0.read().expect("Failed to read EventRegistry");
         let meta = map
-            .get(&sid)
-            .unwrap_or_else(|| panic!("Event {name} not found in registry!"));
+            .get(&TypeId::of::<E>())
+            .unwrap_or_else(|| panic!("Event {} not found in registry!", E::NAME));
 
         meta.plugin_name
-            .map(|n| apply_as_prefix(n, name, ItemType::Event).into())
-            .unwrap_or_else(|| name.into())
+            .map(|plugin_name| format!("plugin:{plugin_name}:{}", E::NAME).into())
+            .unwrap_or_else(|| E::NAME.into())
     }
 
     pub fn get_or_manage<R: Runtime>(handle: &impl Manager<R>) -> tauri::State<'_, Self> {
@@ -96,7 +102,7 @@ macro_rules! make_handler {
 ///     MyEvent("Test".to_string()).emit(&app_handle).ok();
 /// }
 /// ```
-pub trait Event: NamedType {
+pub trait Event: Type + 'static {
     /// The unique name for this event. Derived from the struct's name via the [`Event`](macro@crate::Event) derive macro.
     const NAME: &'static str;
 
@@ -107,7 +113,7 @@ pub trait Event: NamedType {
         Self: DeserializeOwned,
     {
         handle.listen(
-            EventRegistry::get_event_name::<Self, _>(handle, Self::NAME),
+            EventRegistry::get_event_name::<Self, _>(handle),
             make_handler!(handler),
         )
     }
@@ -119,7 +125,7 @@ pub trait Event: NamedType {
         Self: DeserializeOwned,
     {
         handle.listen_any(
-            EventRegistry::get_event_name::<Self, _>(handle, Self::NAME),
+            EventRegistry::get_event_name::<Self, _>(handle),
             make_handler!(handler),
         )
     }
@@ -131,7 +137,7 @@ pub trait Event: NamedType {
         Self: DeserializeOwned,
     {
         handle.once(
-            EventRegistry::get_event_name::<Self, _>(handle, Self::NAME),
+            EventRegistry::get_event_name::<Self, _>(handle),
             make_handler!(handler),
         )
     }
@@ -145,7 +151,7 @@ pub trait Event: NamedType {
         Self: DeserializeOwned,
     {
         handle.once_any(
-            EventRegistry::get_event_name::<Self, _>(handle, Self::NAME),
+            EventRegistry::get_event_name::<Self, _>(handle),
             make_handler!(handler),
         )
     }
@@ -155,10 +161,7 @@ pub trait Event: NamedType {
     where
         Self: Serialize + Clone,
     {
-        handle.emit(
-            &EventRegistry::get_event_name::<Self, _>(handle, Self::NAME),
-            self,
-        )
+        handle.emit(&EventRegistry::get_event_name::<Self, _>(handle), self)
     }
 
     /// Emits an event to all [targets](EventTarget) matching the given target.
@@ -172,7 +175,7 @@ pub trait Event: NamedType {
     {
         handle.emit_to(
             target,
-            &EventRegistry::get_event_name::<Self, _>(handle, Self::NAME),
+            &EventRegistry::get_event_name::<Self, _>(handle),
             self,
         )
     }
@@ -188,7 +191,7 @@ pub trait Event: NamedType {
         Self: Serialize + Clone,
     {
         handle.emit_filter(
-            &EventRegistry::get_event_name::<Self, _>(handle, Self::NAME),
+            &EventRegistry::get_event_name::<Self, _>(handle),
             self,
             filter,
         )

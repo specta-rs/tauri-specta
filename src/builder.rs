@@ -1,20 +1,22 @@
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, BTreeSet},
-    fs::{self, File},
-    io::Write,
-    path::Path,
-};
+use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
 
-use crate::{
-    event::EventRegistryMeta, Commands, ErrorHandlingMode, EventRegistry, Events, LanguageExt,
-};
+use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
 use serde::Serialize;
 use specta::{
-    datatype::{DataType, Function},
-    NamedType, SpectaID, Type, TypeMap,
+    Type, TypeCollection,
+    datatype::{Function, Reference},
 };
-use tauri::{ipc::Invoke, Manager, Runtime};
+use tauri::{Manager, Runtime, ipc::Invoke};
+
+/// The mode which the error handling is done in the bindings.
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub enum ErrorHandlingMode {
+    /// Errors will be thrown
+    Throw,
+    /// Errors will be returned as a Result enum
+    #[default]
+    Result,
+}
 
 /// Builder for configuring Tauri Specta in your application.
 ///
@@ -80,29 +82,39 @@ use tauri::{ipc::Invoke, Manager, Runtime};
 ///     .run(tauri::generate_context!("tests/tauri.conf.json"))
 ///     .expect("error while running tauri application");
 /// ```
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct Builder<R: Runtime = tauri::Wry> {
-    // TODO: Can we just hold a `ExportContext` here to make it a bit neater???
-    plugin_name: Option<&'static str>,
     commands: Commands<R>,
-    command_types: Vec<Function>,
-    error_handling: ErrorHandlingMode,
-    events: BTreeMap<&'static str, DataType>,
-    event_sids: BTreeSet<SpectaID>,
-    types: TypeMap,
-    constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
+    cfg: BuilderConfiguration,
+}
+
+#[derive(Debug, Clone, Default)]
+#[non_exhaustive]
+pub struct BuilderConfiguration {
+    pub plugin_name: Option<&'static str>,
+    pub commands: Vec<Function>,
+    pub error_handling: ErrorHandlingMode,
+    pub events: BTreeMap<&'static str, (TypeId, Reference)>,
+    pub types: TypeCollection,
+    pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
+    pub typed_error_impl: Cow<'static, str>,
 }
 
 impl<R: Runtime> Default for Builder<R> {
     fn default() -> Self {
         Self {
-            plugin_name: None,
-            commands: Commands::default(),
-            command_types: Default::default(),
-            error_handling: Default::default(),
-            events: Default::default(),
-            event_sids: Default::default(),
-            types: TypeMap::default(),
-            constants: BTreeMap::default(),
+            commands: Default::default(),
+            cfg: Default::default(),
+        }
+    }
+}
+
+impl<R: Runtime> Clone for Builder<R> {
+    fn clone(&self) -> Self {
+        Self {
+            commands: self.commands.clone(),
+            cfg: self.cfg.clone(),
         }
     }
 }
@@ -116,11 +128,9 @@ impl<R: Runtime> Builder<R> {
     /// Set the name of the current plugin name.
     ///
     /// This is used to ensure the generated bindings correctly reference the plugin.
-    pub fn plugin_name(self, plugin_name: &'static str) -> Self {
-        Self {
-            plugin_name: Some(plugin_name),
-            ..self
-        }
+    pub fn plugin_name(mut self, plugin_name: &'static str) -> Self {
+        self.cfg.plugin_name = Some(plugin_name);
+        self
     }
 
     /// Register commands with the builder.
@@ -141,15 +151,10 @@ impl<R: Runtime> Builder<R> {
     /// let mut builder = Builder::<tauri::Wry>::new().commands(collect_commands![hello_world]);
     /// ```
     pub fn commands(mut self, commands: Commands<R>) -> Self {
-        let command_types = (commands.1)(&mut self.types);
-
-        self.types
-            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
-
+        self.cfg.commands = (commands.1)(&mut self.cfg.types);
         Self {
-            command_types,
             commands,
-            ..self
+            cfg: self.cfg,
         }
     }
 
@@ -170,32 +175,11 @@ impl<R: Runtime> Builder<R> {
     /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![DemoEvent]);
     /// ```
     pub fn events(mut self, events: Events) -> Self {
-        let mut event_sids = BTreeSet::new();
-        let events = events
+        self.cfg.events = events
             .0
             .iter()
-            .map(|(k, build)| {
-                let (sid, dt) = build(&mut self.types);
-                event_sids.insert(sid);
-                (*k, dt)
-            })
+            .map(|(k, build)| (*k, build(&mut self.cfg.types)))
             .collect();
-
-        self.types
-            .remove(<tauri::ipc::Channel<()> as specta::NamedType>::sid());
-
-        Self {
-            events,
-            event_sids,
-            ..self
-        }
-    }
-
-    /// This method is deprecated. Please use [Self::typ].
-    #[deprecated(note = "Use `Self::typ` instead")]
-    pub fn ty<T: NamedType>(mut self) -> Self {
-        let dt = T::definition_named_data_type(&mut self.types);
-        self.types.insert(T::sid(), dt);
         self
     }
 
@@ -217,9 +201,25 @@ impl<R: Runtime> Builder<R> {
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().typ::<MyStruct>();
     /// ```
-    pub fn typ<T: NamedType>(mut self) -> Self {
-        let dt = T::definition_named_data_type(&mut self.types);
-        self.types.insert(T::sid(), dt);
+    pub fn typ<T: Type>(mut self) -> Self {
+        self.cfg.types.register_mut::<T>();
+        self
+    }
+
+    /// Export a group of types to the frontend.
+    ///
+    /// This is useful if you want to export types that do not appear in any events or commands.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore-windows
+    /// use tauri_specta::Builder;
+    /// use specta::{Type, TypeCollection};
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().types(&TypeCollection::default());
+    /// ```
+    pub fn types(mut self, types: &TypeCollection) -> Self {
+        self.cfg.types.merge(types);
         self
     }
 
@@ -236,7 +236,7 @@ impl<R: Runtime> Builder<R> {
     /// ```
     #[track_caller]
     pub fn constant<T: Serialize + Type>(mut self, k: impl Into<Cow<'static, str>>, v: T) -> Self {
-        self.constants.insert(
+        self.cfg.constants.insert(
             k.into(),
             serde_json::to_value(v).expect("Tauri Specta failed to serialize constant"),
         );
@@ -245,13 +245,30 @@ impl<R: Runtime> Builder<R> {
 
     /// Set the error handling mode for the generated bindings.
     pub fn error_handling(mut self, error_handling: ErrorHandlingMode) -> Self {
-        self.error_handling = error_handling;
+        self.cfg.error_handling = error_handling;
         self
     }
 
-    // TODO: Maybe method to merge in a `TypeCollection`
-
-    // TODO: Should we put a `.build` command here to ensure it's immutable from now on?
+    /// Replace the internal implementation of the `typedError` function.
+    /// This would allow integrating with Effect or any other result library.
+    ///
+    /// ```rust
+    /// const TYPED_ERROR_IMPL: &str = r#"async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
+    ///     try {
+    ///         return { status: "ok", data: await result };
+    ///     } catch (e) {
+    ///         if (e instanceof Error) throw e;
+    ///         return { status: "error", error: e as any };
+    ///     }
+    /// }"#;
+    ///
+    /// Builder::default()
+    ///  .typed_error_impl(TYPED_ERROR_IMPL);
+    /// ```
+    pub fn typed_error_impl(mut self, runtime: impl Into<Cow<'static, str>>) -> Self {
+        self.cfg.typed_error_impl = runtime.into();
+        self
+    }
 
     /// The Tauri invoke handler to trigger commands registered with the builder.
     pub fn invoke_handler(&self) -> impl Fn(Invoke<R>) -> bool + Send + Sync + 'static {
@@ -284,51 +301,17 @@ impl<R: Runtime> Builder<R> {
         let registry = EventRegistry::get_or_manage(handle);
         let mut map = registry.0.write().expect("Failed to lock EventRegistry");
 
-        for sid in &self.event_sids {
+        for (tid, _) in self.cfg.events.values() {
             map.insert(
-                sid.clone(),
+                *tid,
                 EventRegistryMeta {
-                    plugin_name: self.plugin_name,
+                    plugin_name: self.cfg.plugin_name,
                 },
             );
         }
     }
 
-    /// Export the bindings to a string.
-    ///
-    /// You should prefer to use [`Self::export`], unless you need explicit control over saving.
-    ///
-    /// # Example
-    /// ```rust,ignore-windows
-    /// use std::{
-    ///     fs::File,
-    ///     io::Write
-    /// };
-    /// use specta_typescript::Typescript;
-    ///
-    /// println!(
-    ///     "{}",
-    ///     tauri_specta::Builder::<tauri::Wry>::new()
-    ///         .export_str(Typescript::new())
-    ///         .unwrap()
-    /// );
-    /// ```
-    pub fn export_str<L: LanguageExt>(&self, language: L) -> Result<String, L::Error> {
-        // TODO: Handle duplicate type names
-        // TODO: Serde checking
-
-        language.render(&crate::ExportContext {
-            // TODO: Don't clone stuff
-            commands: self.command_types.clone(),
-            error_handling: self.error_handling,
-            events: self.events.clone(),
-            type_map: self.types.clone(),
-            constants: self.constants.clone(),
-            plugin_name: self.plugin_name,
-        })
-    }
-
-    /// Export the bindings to a file.
+    /// Export the bindings to the filesystem using the provided exporter.
     ///
     /// # Example
     /// ```rust,ignore-windows
@@ -349,15 +332,6 @@ impl<R: Runtime> Builder<R> {
         language: L,
         path: impl AsRef<Path>,
     ) -> Result<(), L::Error> {
-        let path = path.as_ref();
-        if let Some(export_dir) = path.parent() {
-            fs::create_dir_all(export_dir)?;
-        }
-
-        let mut file = File::create(&path)?;
-        write!(file, "{}", self.export_str(&language)?)?;
-        language.format(path).ok(); // TODO: Error handling
-
-        Ok(())
+        language.export(&self.cfg, path.as_ref())
     }
 }

@@ -5,7 +5,8 @@ description = "A Tauri App"
 authors = ["you"]
 license = ""
 repository = ""
-edition = "2021"
+edition = "2024"
+publish = false
 
 [build-dependencies]
 tauri-build = { workspace = true, features = [] }

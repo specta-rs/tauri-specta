@@ -1,14 +1,15 @@
 [package]
 name = "tauri-plugin-specta-example"
 version = "0.0.0"
-edition = "2021"
+edition = "2024"
 links = "tauri-plugin-specta-example"
+publish = false
 
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }
 
 [dependencies]
-rand = "0.8.5"
+rand = "0.10.0"
 serde = "1"
 specta = { workspace = true }
 tauri = { workspace = true }

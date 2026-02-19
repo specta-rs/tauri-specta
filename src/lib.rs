@@ -172,10 +172,6 @@
 //!
 //! Refer to [`Event`] for all the possible methods for listening and emitting events.
 //!
-//! # Channel
-//!
-//! [Coming soon...](https://github.com/specta-rs/tauri-specta/issues/111)
-//!
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
     // TODO: Tauri Specta logo
@@ -183,15 +179,17 @@
     html_favicon_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png"
 )]
 
-use core::fmt;
-use std::{borrow::Cow, collections::BTreeMap, path::Path, sync::Arc};
+mod builder;
+mod commands;
+mod event;
+mod lang;
+mod macros;
 
-use specta::{
-    datatype::{self, DataType},
-    SpectaID, TypeMap,
-};
+pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
+pub use commands::Commands;
+pub use event::{Event, Events, TypedEvent};
+pub use lang::LanguageExt;
 
-use tauri::{ipc::Invoke, Runtime};
 /// Implements the [`Event`](trait@crate::Event) trait for a struct.
 ///
 /// Refer to the [`Event`](trait@crate::Event) trait for more information.
@@ -200,127 +198,28 @@ use tauri::{ipc::Invoke, Runtime};
 #[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
 pub use tauri_specta_macros::Event;
 
-mod builder;
-mod event;
-mod lang;
-mod macros;
-
-pub use builder::Builder;
 pub(crate) use event::EventRegistry;
-pub use event::{Event, TypedEvent};
-
-/// A wrapper around the output of the `collect_commands` macro.
-///
-/// This acts to seal the implementation details of the macro.
-#[derive(Clone)]
-pub struct Commands<R: Runtime>(
-    // Bounds copied from `tauri::Builder::invoke_handler`
-    pub(crate) Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
-    pub(crate) fn(&mut TypeMap) -> Vec<datatype::Function>,
-);
-
-impl<R: Runtime> fmt::Debug for Commands<R> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Commands").finish()
-    }
-}
-
-impl<R: Runtime> Default for Commands<R> {
-    fn default() -> Self {
-        Self(
-            Arc::new(tauri::generate_handler![]),
-            ::specta::function::collect_functions![],
-        )
-    }
-}
-
-/// A wrapper around the output of the `collect_commands` macro.
-///
-/// This acts to seal the implementation details of the macro.
-#[derive(Default)]
-pub struct Events(BTreeMap<&'static str, fn(&mut TypeMap) -> (SpectaID, DataType)>);
-
-/// The context of what needs to be exported. Used when implementing [`LanguageExt`].
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-#[allow(missing_docs)]
-pub struct ExportContext {
-    pub plugin_name: Option<&'static str>,
-    pub commands: Vec<datatype::Function>,
-    pub error_handling: ErrorHandlingMode,
-    pub events: BTreeMap<&'static str, DataType>,
-    pub type_map: TypeMap,
-    pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
-}
-
-/// Implemented for all languages which Tauri Specta supports exporting to.
-///
-/// Currently implemented for:
-///  - [`specta_typescript::Typescript`]
-///  - [`specta_jsdoc::JSDoc`]
-pub trait LanguageExt {
-    /// TODO
-    type Error: std::error::Error + From<std::io::Error>;
-
-    /// render the bindings file
-    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error>;
-
-    /// TODO
-    fn format(&self, path: &Path) -> Result<(), Self::Error>;
-}
-
-impl<L: LanguageExt> LanguageExt for &L {
-    type Error = L::Error;
-
-    fn render(&self, cfg: &ExportContext) -> Result<String, Self::Error> {
-        (*self).render(cfg)
-    }
-
-    fn format(&self, path: &Path) -> Result<(), Self::Error> {
-        (*self).format(path)
-    }
-}
-
-#[allow(unused)]
-pub(crate) enum ItemType {
-    Event,
-    Command,
-}
-
-pub(crate) fn apply_as_prefix(plugin_name: &str, s: &str, item_type: ItemType) -> String {
-    format!(
-        "plugin:{}{}{}",
-        plugin_name,
-        match item_type {
-            ItemType::Event => ":",
-            ItemType::Command => "|",
-        },
-        s,
-    )
-}
-
-/// The mode which the error handling is done in the bindings.
-#[derive(Debug, Default, Copy, Clone)]
-pub enum ErrorHandlingMode {
-    /// Errors will be thrown
-    Throw,
-    /// Errors will be returned as a Result enum
-    #[default]
-    Result,
-}
 
 #[doc(hidden)]
 pub mod internal {
     //! Internal logic for Tauri Specta.
     //! Nothing in this module has to conform to semver so it should not be used outside of this crate.
-    //! It has to be public so macro's can access it.
+    //! It has to be public so the macro's can access it.
+
+    use std::{any::TypeId, sync::Arc};
+
+    use specta::{
+        TypeCollection,
+        datatype::{self, DataType},
+    };
+    use tauri::{Runtime, ipc::Invoke};
 
     use super::*;
 
     /// called by `collect_commands` to construct `Commands`
     pub fn command<R: Runtime, F>(
         f: F,
-        types: fn(&mut TypeMap) -> Vec<datatype::Function>,
+        types: fn(&mut TypeCollection) -> Vec<datatype::Function>,
     ) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
@@ -331,8 +230,14 @@ pub mod internal {
     /// called by `collect_events` to register events to an `Events`
     pub fn register_event<E: Event>(Events(events): &mut Events) {
         if events
-            .insert(E::NAME, |type_map| {
-                (E::sid(), E::reference(type_map, &[]).inner)
+            .insert(E::NAME, |types| {
+                (
+                    TypeId::of::<E>(),
+                    match E::definition(types) {
+                        DataType::Reference(r) => r,
+                        _ => panic!("Can't register event {} with non-reference type", E::NAME),
+                    },
+                )
             })
             .is_some()
         {

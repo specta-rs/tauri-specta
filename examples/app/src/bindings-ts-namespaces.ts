@@ -14,50 +14,60 @@ export const commands = {
 	goodbyeWorld: () => __TAURI_INVOKE<string>("goodbye_world"),
 	asyncHelloWorld: (myName: string) => __TAURI_INVOKE<string>("async_hello_world", { myName }),
 	hasError: () => typedError<string, number>(__TAURI_INVOKE("has_error")),
-	someStruct: () => __TAURI_INVOKE<MyStruct>("some_struct"),
+	someStruct: () => __TAURI_INVOKE<$s$.tauri_specta_example_app.nested.MyStruct>("some_struct"),
 	generic: () => __TAURI_INVOKE<void>("generic"),
 	/**
 	 * @deprecated This is a deprecated function
 	 */
 	deprecated: () => __TAURI_INVOKE<void>("deprecated"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
-	typesafeErrorsUsingThiserror: () => typedError<null, MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
-	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
+	typesafeErrorsUsingThiserror: () => typedError<null, $s$.tauri_specta_example_app.MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
+	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, $s$.tauri_specta_example_app.MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 };
 
 /** Events */
 export const events = {
 	/**
-	 * @type {ReturnType<typeof makeEvent<EmptyEvent>>}
+	 * @type {ReturnType<typeof makeEvent<$s$.tauri_specta_example_app.EmptyEvent>>}
 	 */
-	emptyEvent: makeEvent<EmptyEvent>("empty-event"),
+	emptyEvent: makeEvent<$s$.tauri_specta_example_app.EmptyEvent>("empty-event"),
 	/**
-	 * @type {ReturnType<typeof makeEvent<DemoEvent>>}
+	 * @type {ReturnType<typeof makeEvent<$s$.tauri_specta_example_app.DemoEvent>>}
 	 */
-	myDemoEvent: makeEvent<DemoEvent>("myDemoEvent"),
+	myDemoEvent: makeEvent<$s$.tauri_specta_example_app.DemoEvent>("myDemoEvent"),
 };
 
 /* Constants */
 export const universalConstant = 42 as const;
 
 /* Types */
-export type Custom = string;
+namespace $s$ {
 
-export type DemoEvent = string;
+	export namespace tauri_specta_example_app {
 
-export type EmptyEvent = null;
+		export type Custom = string;
 
-export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
+		export type DemoEvent = string;
 
-export type MyError2 = { type: "IoError"; data: string };
+		export type EmptyEvent = null;
 
-export type MyStruct = {
-	some_field: string,
-};
+		export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
 
-export type Testing = {
-	a: string,
-};
+		export type MyError2 = { type: "IoError"; data: string };
+
+		export type Testing = {
+			a: string,
+		};
+
+		export namespace nested {
+
+			export type MyStruct = {
+				some_field: string,
+			};
+		}
+	}
+}
+export import tauri_specta_example_app = $s$.tauri_specta_example_app;
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

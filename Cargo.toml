@@ -3,7 +3,7 @@ name = "tauri-specta"
 description = "Completely typesafe Tauri commands"
 version = "2.0.0-rc.21"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
-edition = "2021"
+edition = "2024"
 license = "MIT"
 include = ["/src", "/README.md", "/LICENCE"]
 repository = "https://github.com/specta-rs/tauri-specta"
@@ -20,7 +20,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 default = []
 derive = ["dep:tauri-specta-macros"]
-javascript = ["dep:specta-jsdoc"]
+javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
 
 [lints]
@@ -30,7 +30,6 @@ workspace = true
 # Public
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
-specta-jsdoc = { workspace = true, optional = true }
 tauri-specta-macros = { version = "=2.0.0-rc.16", optional = true, path = "./macros" }
 serde = "1"
 serde_json = "1"
@@ -38,7 +37,7 @@ thiserror = "2"
 tauri = { workspace = true, features = ["specta"] }
 
 # Private
-heck = "0.5.0"
+heck = "0.5"
 
 [workspace]
 members = [
@@ -61,13 +60,14 @@ todo = { level = "warn", priority = -1 }
 panic_in_result_fn = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
-tauri = { version = "^2.1.1" }
-tauri-build = { version = "2.0" }
-tauri-plugin = { version = "2.0" }
-specta = { version = "=2.0.0-rc.22" }
+tauri = { version = "2" }
+tauri-build = { version = "2" }
+tauri-plugin = { version = "2" }
+specta = { version = "=2.0.0-rc.22", features = ["derive"] }
 specta-typescript = { version = "0.0.9" }
-specta-jsdoc = { version = "0.0.9" }
 
+# TODO: Remove this
 [patch.crates-io]
-# Waiting for release of https://github.com/tauri-apps/tauri/pull/12371
-tauri = { git = "https://github.com/tauri-apps/tauri", rev = "75d56e8364fb203387bb5a5235f316dd7dfa6acd" }
+specta = { git = "https://github.com/specta-rs/specta", rev = "7396d94ccbb7fd4ffff5f2d363ad0580faf6cc40" }
+specta-serde = { git = "https://github.com/specta-rs/specta", rev = "7396d94ccbb7fd4ffff5f2d363ad0580faf6cc40" }
+specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "7396d94ccbb7fd4ffff5f2d363ad0580faf6cc40" }

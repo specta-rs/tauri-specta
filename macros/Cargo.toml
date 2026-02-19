@@ -3,7 +3,7 @@ name = "tauri-specta-macros"
 description = "Completely typesafe Tauri commands"
 version = "2.0.0-rc.16"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
-edition = "2021"
+edition = "2024"
 license = "MIT"
 repository = "https://github.com/specta-rs/tauri-specta"
 documentation = "https://docs.rs/tauri-specta/latest/tauri-specta"
@@ -14,8 +14,8 @@ categories = ["web-programming", "asynchronous"]
 proc-macro = true
 
 [dependencies]
-heck = "0.5.0"
+heck = "0.5"
 proc-macro2 = "1"
 quote = "1"
 syn = "2"
-darling = "0.20"
+darling = "0.23"
