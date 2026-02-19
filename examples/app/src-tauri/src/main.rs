@@ -186,15 +186,15 @@ fn main() {
         .setup(move |app| {
             builder.mount_events(app);
 
-            // DemoEvent::listen(app, |event| {
-            //     dbg!(event.payload);
-            // });
+            DemoEvent::listen(app, |event| {
+                dbg!(event.payload);
+            });
 
-            // DemoEvent("Test".to_string()).emit(app).ok();
+            DemoEvent("Test".to_string()).emit(app).ok();
 
-            // EmptyEvent::listen(app, |_| {
-            //     println!("Got event from frontend!!");
-            // });
+            EmptyEvent::listen(app, |_| {
+                println!("Got event from frontend!!");
+            });
 
             Ok(())
         })
