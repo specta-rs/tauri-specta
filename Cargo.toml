@@ -68,6 +68,6 @@ specta-typescript = { version = "0.0.9" }
 
 # TODO: Remove this
 [patch.crates-io]
-specta = { path = "../specta/specta" }
-specta-serde = { path = "../specta/specta-serde" }
-specta-typescript = { path = "../specta/specta-typescript" }
+specta = { git = "https://github.com/specta-rs/specta", rev = "7396d94ccbb7fd4ffff5f2d363ad0580faf6cc40" }
+specta-serde = { git = "https://github.com/specta-rs/specta", rev = "7396d94ccbb7fd4ffff5f2d363ad0580faf6cc40" }
+specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "7396d94ccbb7fd4ffff5f2d363ad0580faf6cc40" }
