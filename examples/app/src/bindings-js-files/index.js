@@ -9,21 +9,64 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
+	/**
+	 *  HELLO
+	 *  WORLD
+	 *  !!!!
+	 * @param {string} myName
+	 * @returns {string} myName
+	 */
 	helloWorld: (myName) => __TAURI_INVOKE("hello_world", { myName }),
+	/**
+	 * @returns {string} myName
+	 */
 	goodbyeWorld: () => __TAURI_INVOKE("goodbye_world"),
+	/**
+	 * @param {string} myName
+	 * @returns {string} myName
+	 */
 	asyncHelloWorld: (myName) => __TAURI_INVOKE("async_hello_world", { myName }),
+	/**
+	 * @returns {string} myName
+	 */
 	hasError: () => typedError(__TAURI_INVOKE("has_error")),
+	/**
+	 * @returns {string} myName
+	 */
 	someStruct: () => __TAURI_INVOKE("some_struct"),
+	/**
+	 * @returns {string} myName
+	 */
 	generic: () => __TAURI_INVOKE("generic"),
+	/**
+	 * @returns {string} myName
+	 * @deprecated This is a deprecated function
+	 */
 	deprecated: () => __TAURI_INVOKE("deprecated"),
+	/**
+	 * @param {Channel<number>} channel
+	 * @returns {string} myName
+	 */
 	withChannel: (channel) => __TAURI_INVOKE("with_channel", { channel }),
+	/**
+	 * @returns {string} myName
+	 */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
+	/**
+	 * @returns {string} myName
+	 */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 };
 
 /** Events */
 export const events = {
+	/**
+	 * @type {ReturnType<typeof makeEvent<tauri_specta_example_app.EmptyEvent>>}
+	 */
 	emptyEvent: makeEvent("empty-event"),
+	/**
+	 * @type {ReturnType<typeof makeEvent<tauri_specta_example_app.DemoEvent>>}
+	 */
 	myDemoEvent: makeEvent("myDemoEvent"),
 };
 

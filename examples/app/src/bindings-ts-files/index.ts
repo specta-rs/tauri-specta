@@ -8,12 +8,20 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
+	/**
+	 *  HELLO
+	 *  WORLD
+	 *  !!!!
+	 */
 	helloWorld: (myName: string) => __TAURI_INVOKE<string>("hello_world", { myName }),
 	goodbyeWorld: () => __TAURI_INVOKE<string>("goodbye_world"),
 	asyncHelloWorld: (myName: string) => __TAURI_INVOKE<string>("async_hello_world", { myName }),
 	hasError: () => typedError<string, number>(__TAURI_INVOKE("has_error")),
 	someStruct: () => __TAURI_INVOKE<tauri_specta_example_app$nested.MyStruct>("some_struct"),
 	generic: () => __TAURI_INVOKE<void>("generic"),
+	/**
+	 * @deprecated This is a deprecated function
+	 */
 	deprecated: () => __TAURI_INVOKE<void>("deprecated"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
 	typesafeErrorsUsingThiserror: () => typedError<null, tauri_specta_example_app.MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
@@ -22,7 +30,13 @@ export const commands = {
 
 /** Events */
 export const events = {
+	/**
+	 * @type {ReturnType<typeof makeEvent<tauri_specta_example_app.EmptyEvent>>}
+	 */
 	emptyEvent: makeEvent<tauri_specta_example_app.EmptyEvent>("empty-event"),
+	/**
+	 * @type {ReturnType<typeof makeEvent<tauri_specta_example_app.DemoEvent>>}
+	 */
 	myDemoEvent: makeEvent<tauri_specta_example_app.DemoEvent>("myDemoEvent"),
 };
 

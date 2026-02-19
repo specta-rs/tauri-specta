@@ -2,8 +2,10 @@ use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
 use specta::TypeCollection;
-use specta::datatype::{DataType, Field, FunctionReturnType, Reference, Struct};
-use specta_typescript::{Error, Exporter, FrameworkExporter, define};
+use specta::datatype::{
+    DataType, Field, FunctionReturnType, NamedDataTypeBuilder, Reference, Struct,
+};
+use specta_typescript::{Error, Exporter, FrameworkExporter, define, primitives};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
@@ -214,6 +216,10 @@ fn runtime(
                 let mut docs = command.docs().to_string();
 
                 if jsdoc {
+                    if !docs.is_empty() {
+                        docs.push('\n');
+                    }
+
                     docs.push_str(
                         &arguments
                             .iter()
@@ -221,10 +227,13 @@ fn runtime(
                             .collect::<Vec<_>>()
                             .join("\n"),
                     );
-                }
 
-                // docs.push_str("@param {string} myName");
-                docs.push_str("@returns {string} myName");
+                    if !arguments.is_empty() {
+                        docs.push('\n');
+                    }
+
+                    docs.push_str("@returns {string} myName");
+                }
 
                 docs.into()
             });
