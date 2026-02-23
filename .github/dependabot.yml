@@ -1,6 +1,22 @@
 version: 2
+
+multi-ecosystem-groups:
+  tauri-specta-deps:
+    schedule:
+      interval: "weekly"
+
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "weekly"
+    multi-ecosystem-group: "tauri-specta-deps"
+    patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: "/"
+    multi-ecosystem-group: "tauri-specta-deps"
+    patterns: ["*"]
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    multi-ecosystem-group: "tauri-specta-deps"
+    patterns: ["*"]
