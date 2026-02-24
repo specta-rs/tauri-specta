@@ -145,7 +145,7 @@ fn runtime(
                 .map(|(name, dt)| {
                     Ok((
                         name.to_lower_camel_case(),
-                        render_reference_dt(dt, &exporter, &cfg.types)?,
+                        render_reference_dt(dt, &exporter)?,
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -185,9 +185,9 @@ fn runtime(
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
                     invoke_ts.push('<');
-                    invoke_ts.push_str(&render_reference_dt(dt_ok, &exporter, &cfg.types)?);
+                    invoke_ts.push_str(&render_reference_dt(dt_ok, &exporter)?);
                     invoke_ts.push_str(", ");
-                    invoke_ts.push_str(&render_reference_dt(dt_err, &exporter, &cfg.types)?);
+                    invoke_ts.push_str(&render_reference_dt(dt_err, &exporter)?);
                     invoke_ts.push('>');
                 }
                 invoke_ts.push_str("(__TAURI_INVOKE");
@@ -200,7 +200,7 @@ fn runtime(
                     invoke_ts.push('<');
                     invoke_ts.push_str(&match command.result() {
                         Some(FunctionReturnType::Value(dt) | FunctionReturnType::Result(dt, _)) => {
-                            Cow::Owned(render_reference_dt(dt, &exporter, &cfg.types)?)
+                            Cow::Owned(render_reference_dt(dt, &exporter)?)
                         }
                         None => Cow::Borrowed("void"),
                     });
@@ -365,13 +365,9 @@ fn is_channel_type(dt: &DataType, types: &TypeCollection) -> bool {
 
 // Render a `DataType` as a reference (or fallback to inline).
 // Also handles Tauri channel references.
-fn render_reference_dt(
-    dt: &DataType,
-    exporter: &FrameworkExporter,
-    types: &TypeCollection,
-) -> Result<String, Error> {
+fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt
-        && let Some(ndt) = r.get(types)
+        && let Some(ndt) = r.get(exporter.types)
         && ndt.name() == "TAURI_CHANNEL"
         && ndt.module_path().starts_with("tauri::")
     {
