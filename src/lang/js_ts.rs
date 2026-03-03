@@ -2,10 +2,8 @@ use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
 use specta::TypeCollection;
-use specta::datatype::{
-    DataType, Field, FunctionReturnType, NamedDataTypeBuilder, Reference, Struct,
-};
-use specta_typescript::{Error, Exporter, FrameworkExporter, define, primitives};
+use specta::datatype::{DataType, Field, FunctionReturnType, Reference, Struct};
+use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
@@ -81,11 +79,14 @@ fn runtime(
         .into_unsorted_iter()
         .find(|ndt| RESERVED_NDT_NAMES.contains(&&**ndt.name()))
     {
-        return Err(Error::Framework(format!(
-            "User defined type '{}' defined in {} must be renamed so it doesn't conflict with Tauri Specta runtime.",
-            ndt.name(),
-            ndt.location()
-        ).into()));
+        return Err(Error::framework(
+            "",
+            format!(
+                "User defined type '{}' defined in {} must be renamed so it doesn't conflict with Tauri Specta runtime.",
+                ndt.name(),
+                ndt.location()
+            ),
+        ));
     }
 
     let is_channel_used = cfg.commands.iter().any(|command| {
