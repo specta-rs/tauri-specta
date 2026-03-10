@@ -30,13 +30,7 @@ export const commands = {
 
 /** Events */
 export const events = {
-	/**
-	 * @type {ReturnType<typeof makeEvent<tauri_specta_example_app.EmptyEvent>>}
-	 */
 	emptyEvent: makeEvent<tauri_specta_example_app.EmptyEvent>("empty-event"),
-	/**
-	 * @type {ReturnType<typeof makeEvent<tauri_specta_example_app.DemoEvent>>}
-	 */
 	myDemoEvent: makeEvent<tauri_specta_example_app.DemoEvent>("myDemoEvent"),
 };
 

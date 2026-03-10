@@ -79,8 +79,8 @@ export const universalConstant = 42;
 	*
 	* @typedef {null} EmptyEvent
 	*
-	* @typedef {{ type: "IoError" } | { type: "AnotherError"; data: string }} MyError
-	* @property {{ type: "IoError" }} IoError
+	* @typedef {{ type: "IoError"; data: { type: "IoError" } } | { type: "AnotherError"; data: string }} MyError
+	* @property {{ type: "IoError"; data: { type: "IoError" } }} IoError
 	* @property {{ type: "AnotherError"; data: string }} AnotherError
 	*
 	* @typedef {{ type: "IoError"; data: string }} MyError2

@@ -27,13 +27,7 @@ export const commands = {
 
 /** Events */
 export const events = {
-	/**
-	 * @type {ReturnType<typeof makeEvent<EmptyEvent>>}
-	 */
 	emptyEvent: makeEvent<EmptyEvent>("empty-event"),
-	/**
-	 * @type {ReturnType<typeof makeEvent<DemoEvent>>}
-	 */
 	myDemoEvent: makeEvent<DemoEvent>("myDemoEvent"),
 };
 
@@ -47,7 +41,7 @@ export type DemoEvent = string;
 
 export type EmptyEvent = null;
 
-export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
+export type MyError = { type: "IoError"; data: { type: "IoError" } } | { type: "AnotherError"; data: string };
 
 export type MyError2 = { type: "IoError"; data: string };
 

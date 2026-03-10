@@ -334,6 +334,9 @@ fn runtime(
     let types = exporter.render_types()?;
     if !types.is_empty() {
         out.push_str("\n/* Types */");
+        if !types.starts_with('\n') {
+            out.push('\n');
+        }
         out.push_str(&types);
     }
 

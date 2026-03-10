@@ -27,13 +27,7 @@ export const commands = {
 
 /** Events */
 export const events = {
-	/**
-	 * @type {ReturnType<typeof makeEvent<$s$.tauri_specta_example_app.EmptyEvent>>}
-	 */
 	emptyEvent: makeEvent<$s$.tauri_specta_example_app.EmptyEvent>("empty-event"),
-	/**
-	 * @type {ReturnType<typeof makeEvent<$s$.tauri_specta_example_app.DemoEvent>>}
-	 */
 	myDemoEvent: makeEvent<$s$.tauri_specta_example_app.DemoEvent>("myDemoEvent"),
 };
 
@@ -44,14 +38,13 @@ export const universalConstant = 42 as const;
 namespace $s$ {
 
 	export namespace tauri_specta_example_app {
-
 		export type Custom = string;
 
 		export type DemoEvent = string;
 
 		export type EmptyEvent = null;
 
-		export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
+		export type MyError = { type: "IoError"; data: { type: "IoError" } } | { type: "AnotherError"; data: string };
 
 		export type MyError2 = { type: "IoError"; data: string };
 
@@ -60,7 +53,6 @@ namespace $s$ {
 		};
 
 		export namespace nested {
-
 			export type MyStruct = {
 				some_field: string,
 			};
