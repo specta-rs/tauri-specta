@@ -1,6 +1,6 @@
 use tauri::{
-    plugin::{Builder, TauriPlugin},
     Runtime,
+    plugin::{Builder, TauriPlugin},
 };
 use tauri_specta::*;
 
@@ -32,9 +32,11 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             builder.mount_events(app);
 
             let app = app.clone();
-            std::thread::spawn(move || loop {
-                RandomNumber(rand::random()).emit(&app).unwrap();
-                std::thread::sleep(std::time::Duration::from_secs(1));
+            std::thread::spawn(move || {
+                loop {
+                    RandomNumber(rand::random()).emit(&app).unwrap();
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
             });
 
             Ok(())

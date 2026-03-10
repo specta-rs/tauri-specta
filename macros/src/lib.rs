@@ -8,8 +8,8 @@ use heck::ToKebabCase;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-    parse_macro_input, parse_quote, ConstParam, DeriveInput, GenericParam, Generics, Ident,
-    LifetimeParam, LitStr, TypeParam, WhereClause,
+    ConstParam, DeriveInput, GenericParam, Generics, Ident, LifetimeParam, LitStr, TypeParam,
+    WhereClause, parse_macro_input, parse_quote,
 };
 
 use darling::FromDeriveInput;

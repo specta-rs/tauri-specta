@@ -2,7 +2,7 @@ use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
 use specta::TypeCollection;
-use specta::datatype::{DataType, Field, FunctionReturnType, Reference, Struct};
+use specta::datatype::{DataType, Field, Reference, Struct};
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
@@ -93,18 +93,22 @@ fn runtime(
         // Check if any argument is a Channel
         command.args().iter().any(|(_, dt)| is_channel_type(dt, &cfg.types))
             // Check if result contains a Channel
-            || command.result().is_none_or(|result| match result {
-                FunctionReturnType::Value(dt) => is_channel_type(dt, &cfg.types),
-                FunctionReturnType::Result(ok, err) =>
-                    is_channel_type(ok, &cfg.types) || is_channel_type(err, &cfg.types),
+            || command.result().is_some_and(|result| {
+                if let Some((ok, err)) = extract_std_result(result, &cfg.types) {
+                    is_channel_type(ok, &cfg.types) || is_channel_type(err, &cfg.types)
+                } else {
+                    is_channel_type(result, &cfg.types)
+                }
             })
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling == ErrorHandlingMode::Result
-        && cfg
-            .commands
-            .iter()
-            .any(|command| matches!(command.result(), Some(FunctionReturnType::Result(_, _))));
+        && cfg.commands.iter().any(|command| {
+            command
+                .result()
+                .and_then(|dt| extract_std_result(dt, &cfg.types))
+                .is_some()
+        });
 
     if enabled_commands || is_channel_used {
         out.push_str("import { ");
@@ -181,7 +185,8 @@ fn runtime(
             let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
 
             let body = if cfg.error_handling == ErrorHandlingMode::Result
-                && let Some(FunctionReturnType::Result(dt_ok, dt_err)) = command.result()
+                && let Some(result) = command.result()
+                && let Some((dt_ok, dt_err)) = extract_std_result(result, &cfg.types)
             {
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
@@ -200,9 +205,12 @@ fn runtime(
                 if !jsdoc {
                     invoke_ts.push('<');
                     invoke_ts.push_str(&match command.result() {
-                        Some(FunctionReturnType::Value(dt) | FunctionReturnType::Result(dt, _)) => {
-                            Cow::Owned(render_reference_dt(dt, &exporter)?)
-                        }
+                        Some(dt) => Cow::Owned(render_reference_dt(
+                            extract_std_result(dt, &cfg.types)
+                                .map(|(ok, _)| ok)
+                                .unwrap_or(dt),
+                            &exporter,
+                        )?),
                         None => Cow::Borrowed("void"),
                     });
                     invoke_ts.push('>');
@@ -352,6 +360,30 @@ fn runtime(
     }
 
     Ok(Cow::Owned(out))
+}
+
+fn extract_std_result<'a>(
+    dt: &'a DataType,
+    types: &'a TypeCollection,
+) -> Option<(&'a DataType, &'a DataType)> {
+    let DataType::Reference(Reference::Named(r)) = dt else {
+        return None;
+    };
+
+    let ndt = r.get(types)?;
+    if ndt.name() != "Result" {
+        return None;
+    }
+
+    let module_path = ndt.module_path();
+    if module_path != "std::result" && module_path != "core::result" {
+        return None;
+    }
+
+    let mut generics = r.generics().iter();
+    let (_, ok) = generics.next()?;
+    let (_, err) = generics.next()?;
+    Some((ok, err))
 }
 
 fn is_channel_type(dt: &DataType, types: &TypeCollection) -> bool {

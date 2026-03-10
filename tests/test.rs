@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use serde::Serialize;
-use specta::{specta, Type};
+use specta::{Type, specta};
 use tauri::{State, Window};
 
 // Test different combinations of results
