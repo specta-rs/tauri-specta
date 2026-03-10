@@ -773,6 +773,13 @@ function __TS_transform<T>(value: T, spec: __TS_TransformSpec): T {
         case "big_int":
             if (typeof rawValue === "bigint") return value;
             if (typeof rawValue === "number" && Number.isInteger(rawValue)) return BigInt(rawValue) as T;
+            if (typeof rawValue === "string") {
+                try {
+                    return BigInt(rawValue) as T;
+                } catch {
+                    return value;
+                }
+            }
             return value;
         case "date":
             return (typeof rawValue === "string" ? new Date(rawValue) : value) as T;
@@ -884,6 +891,13 @@ const TRANSFORM_IMPL_JS: &str = r#"function __TS_transform(value, spec) {
         case "big_int":
             if (typeof value === "bigint") return value;
             if (typeof value === "number" && Number.isInteger(value)) return BigInt(value);
+            if (typeof value === "string") {
+                try {
+                    return BigInt(value);
+                } catch {
+                    return value;
+                }
+            }
             return value;
         case "date":
             return typeof value === "string" ? new Date(value) : value;

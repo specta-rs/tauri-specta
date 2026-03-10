@@ -153,6 +153,13 @@ function __TS_transform(value, spec) {
         case "big_int":
             if (typeof value === "bigint") return value;
             if (typeof value === "number" && Number.isInteger(value)) return BigInt(value);
+            if (typeof value === "string") {
+                try {
+                    return BigInt(value);
+                } catch {
+                    return value;
+                }
+            }
             return value;
         case "date":
             return typeof value === "string" ? new Date(value) : value;
