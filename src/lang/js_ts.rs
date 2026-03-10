@@ -1,8 +1,12 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
+use serde::Serialize;
 use specta::TypeCollection;
-use specta::datatype::{DataType, Field, Reference, Struct};
+use specta::datatype::{
+    DataType, Field, Fields, GenericReference, NamedReference, Primitive, Reference, Struct,
+    TypeTag, skip_fields, skip_fields_named,
+};
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
@@ -109,6 +113,7 @@ fn runtime(
                 .and_then(|dt| extract_std_result(dt, &cfg.types))
                 .is_some()
         });
+    let mut has_type_tag_transforms = false;
 
     if enabled_commands || is_channel_used {
         out.push_str("import { ");
@@ -188,6 +193,9 @@ fn runtime(
                 && let Some(result) = command.result()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, &cfg.types)
             {
+                let ok_transform = analyze_transform(dt_ok, &cfg.types, &[]);
+                let err_transform = analyze_transform(dt_err, &cfg.types, &[]);
+
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
                     invoke_ts.push('<');
@@ -199,8 +207,31 @@ fn runtime(
                 invoke_ts.push_str("(__TAURI_INVOKE");
                 invoke_ts.push_str(&invoke_args);
                 invoke_ts.push(')');
-                invoke_ts
+
+                if !ok_transform.is_identity() || !err_transform.is_identity() {
+                    has_type_tag_transforms = true;
+                    format!(
+                        "__TS_transformResult({invoke_ts}, {}, {})",
+                        render_transform_spec(&ok_transform),
+                        render_transform_spec(&err_transform)
+                    )
+                } else {
+                    invoke_ts
+                }
             } else {
+                let result_transform = command
+                    .result()
+                    .map(|dt| {
+                        analyze_transform(
+                            extract_std_result(dt, &cfg.types)
+                                .map(|(ok, _)| ok)
+                                .unwrap_or(dt),
+                            &cfg.types,
+                            &[],
+                        )
+                    })
+                    .unwrap_or_default();
+
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
                 if !jsdoc {
                     invoke_ts.push('<');
@@ -216,7 +247,16 @@ fn runtime(
                     invoke_ts.push('>');
                 }
                 invoke_ts.push_str(&invoke_args);
-                invoke_ts
+
+                if !result_transform.is_identity() {
+                    has_type_tag_transforms = true;
+                    format!(
+                        "{invoke_ts}.then((v) => __TS_transform(v, {}))",
+                        render_transform_spec(&result_transform)
+                    )
+                } else {
+                    invoke_ts
+                }
             };
 
             let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
@@ -341,7 +381,7 @@ fn runtime(
     }
 
     // Runtime
-    if has_typed_error || enabled_events {
+    if has_typed_error || enabled_events || has_type_tag_transforms {
         out.push_str("\n/* Tauri Specta runtime */\n");
 
         if has_typed_error {
@@ -360,6 +400,13 @@ fn runtime(
         }
         if enabled_events {
             out.push_str(make_event_impl);
+            out.push('\n');
+        }
+        if has_type_tag_transforms {
+            if has_typed_error || enabled_events {
+                out.push('\n');
+            }
+            out.push_str(TRANSFORM_IMPL);
             out.push('\n');
         }
     }
@@ -431,9 +478,198 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "Channel",
     "__TAURI_EVENT",
     "__TAURI_INVOKE",
+    "__TS_transform",
+    "__TS_transformEnum",
+    "__TS_transformResult",
     "typedError",
     "makeEvent",
 ];
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(tag = "t", content = "v", rename_all = "snake_case")]
+enum TransformSpec {
+    #[default]
+    Identity,
+    BigInt,
+    Date,
+    Bytes,
+    Nullable(Box<TransformSpec>),
+    List(Box<TransformSpec>),
+    Tuple(Vec<TransformSpec>),
+    Object(Vec<(String, TransformSpec)>),
+    Map(Box<TransformSpec>),
+    Enum(Vec<EnumVariantTransformSpec>),
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct EnumVariantTransformSpec {
+    name: String,
+    kind: EnumVariantTransformKind,
+    spec: TransformSpec,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum EnumVariantTransformKind {
+    Unit,
+    Named,
+    Unnamed,
+}
+
+impl TransformSpec {
+    fn is_identity(&self) -> bool {
+        match self {
+            TransformSpec::Identity => true,
+            TransformSpec::Nullable(inner)
+            | TransformSpec::List(inner)
+            | TransformSpec::Map(inner) => inner.is_identity(),
+            TransformSpec::Tuple(items) => items.iter().all(TransformSpec::is_identity),
+            TransformSpec::Object(fields) => fields.iter().all(|(_, spec)| spec.is_identity()),
+            TransformSpec::Enum(variants) => {
+                variants.iter().all(|variant| variant.spec.is_identity())
+            }
+            TransformSpec::BigInt | TransformSpec::Date | TransformSpec::Bytes => false,
+        }
+    }
+}
+
+fn render_transform_spec(spec: &TransformSpec) -> String {
+    serde_json::to_string(spec).expect("failed to serialize transform spec")
+}
+
+fn analyze_transform(
+    dt: &DataType,
+    types: &TypeCollection,
+    generics: &[(GenericReference, DataType)],
+) -> TransformSpec {
+    analyze_transform_inner(dt, types, generics, &mut Vec::new())
+}
+
+fn analyze_transform_inner(
+    dt: &DataType,
+    types: &TypeCollection,
+    generics: &[(GenericReference, DataType)],
+    stack: &mut Vec<NamedReference>,
+) -> TransformSpec {
+    match dt {
+        DataType::Primitive(Primitive::i64)
+        | DataType::Primitive(Primitive::u64)
+        | DataType::Primitive(Primitive::i128)
+        | DataType::Primitive(Primitive::u128) => TransformSpec::BigInt,
+        DataType::Primitive(_) => TransformSpec::Identity,
+        DataType::List(list) => TransformSpec::List(Box::new(analyze_transform_inner(
+            list.ty(),
+            types,
+            generics,
+            stack,
+        ))),
+        DataType::Map(map) => TransformSpec::Map(Box::new(analyze_transform_inner(
+            map.value_ty(),
+            types,
+            generics,
+            stack,
+        ))),
+        DataType::Struct(st) => match st.fields() {
+            Fields::Unit => TransformSpec::Identity,
+            Fields::Unnamed(fields) => TransformSpec::Tuple(
+                skip_fields(fields.fields())
+                    .map(|(_, ty)| analyze_transform_inner(ty, types, generics, stack))
+                    .collect(),
+            ),
+            Fields::Named(fields) => TransformSpec::Object(
+                skip_fields_named(fields.fields())
+                    .map(|(name, (_, ty))| {
+                        (
+                            name.to_string(),
+                            analyze_transform_inner(ty, types, generics, stack),
+                        )
+                    })
+                    .collect(),
+            ),
+        },
+        DataType::Enum(e) => TransformSpec::Enum(
+            e.variants()
+                .iter()
+                .filter(|(_, variant)| !variant.skip())
+                .map(|(name, variant)| {
+                    let (kind, spec) = match variant.fields() {
+                        Fields::Unit => (EnumVariantTransformKind::Unit, TransformSpec::Identity),
+                        Fields::Unnamed(fields) => {
+                            let fields = skip_fields(fields.fields())
+                                .map(|(_, ty)| analyze_transform_inner(ty, types, generics, stack))
+                                .collect::<Vec<_>>();
+                            let spec = if fields.len() == 1 {
+                                fields.into_iter().next().unwrap_or_default()
+                            } else {
+                                TransformSpec::Tuple(fields)
+                            };
+                            (EnumVariantTransformKind::Unnamed, spec)
+                        }
+                        Fields::Named(fields) => {
+                            let spec = TransformSpec::Object(
+                                skip_fields_named(fields.fields())
+                                    .map(|(name, (_, ty))| {
+                                        (
+                                            name.to_string(),
+                                            analyze_transform_inner(ty, types, generics, stack),
+                                        )
+                                    })
+                                    .collect(),
+                            );
+                            (EnumVariantTransformKind::Named, spec)
+                        }
+                    };
+
+                    EnumVariantTransformSpec {
+                        name: name.to_string(),
+                        kind,
+                        spec,
+                    }
+                })
+                .collect(),
+        ),
+        DataType::Tuple(tuple) => TransformSpec::Tuple(
+            tuple
+                .elements()
+                .iter()
+                .map(|ty| analyze_transform_inner(ty, types, generics, stack))
+                .collect(),
+        ),
+        DataType::Nullable(inner) => TransformSpec::Nullable(Box::new(analyze_transform_inner(
+            inner, types, generics, stack,
+        ))),
+        DataType::Reference(Reference::Named(r)) => {
+            if let Some(ndt) = r.get(types) {
+                if ndt.tags().contains(&TypeTag::BigInt) {
+                    return TransformSpec::BigInt;
+                }
+                if ndt.tags().contains(&TypeTag::Date) {
+                    return TransformSpec::Date;
+                }
+                if ndt.tags().contains(&TypeTag::UInt8Array) {
+                    return TransformSpec::Bytes;
+                }
+
+                if stack.contains(r) {
+                    return TransformSpec::Identity;
+                }
+
+                stack.push(r.clone());
+                let spec = analyze_transform_inner(ndt.ty(), types, r.generics(), stack);
+                stack.pop();
+                spec
+            } else {
+                TransformSpec::Identity
+            }
+        }
+        DataType::Reference(Reference::Generic(generic)) => generics
+            .iter()
+            .find(|(key, _)| key == generic)
+            .map(|(_, dt)| analyze_transform_inner(dt, types, &[], stack))
+            .unwrap_or_default(),
+        DataType::Reference(Reference::Opaque(_)) => TransformSpec::Identity,
+    }
+}
 
 const FRAMEWORK_HEADER: &str =
     "// This file has been generated by Tauri Specta. Do not edit this file manually.";
@@ -505,4 +741,109 @@ function makeEvent(name) {
     });
 
     return Object.assign(fn, base);
+}"#;
+
+const TRANSFORM_IMPL: &str = r#"function __TS_transform(value, spec) {
+    if (!spec || spec.t === "identity") return value;
+
+    switch (spec.t) {
+        case "big_int":
+            if (typeof value === "bigint") return value;
+            if (typeof value === "number" && Number.isInteger(value)) return BigInt(value);
+            return value;
+        case "date":
+            return typeof value === "string" ? new Date(value) : value;
+        case "bytes":
+            return Array.isArray(value) && value.every((v) => typeof v === "number") ? Uint8Array.from(value) : value;
+        case "nullable":
+            return value == null ? value : __TS_transform(value, spec.v);
+        case "list":
+            return Array.isArray(value) ? value.map((item) => __TS_transform(item, spec.v)) : value;
+        case "tuple":
+            return Array.isArray(value)
+                ? value.map((item, index) => __TS_transform(item, spec.v[index] || { t: "identity" }))
+                : value;
+        case "object": {
+            if (value == null || typeof value !== "object" || Array.isArray(value)) return value;
+
+            let out = value;
+            for (const [key, nested] of spec.v) {
+                if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+                const next = __TS_transform(value[key], nested);
+                if (next !== value[key]) {
+                    if (out === value) out = { ...value };
+                    out[key] = next;
+                }
+            }
+            return out;
+        }
+        case "map": {
+            if (value == null || typeof value !== "object" || Array.isArray(value)) return value;
+
+            let out = value;
+            for (const key of Object.keys(value)) {
+                const next = __TS_transform(value[key], spec.v);
+                if (next !== value[key]) {
+                    if (out === value) out = { ...value };
+                    out[key] = next;
+                }
+            }
+            return out;
+        }
+        case "enum":
+            return __TS_transformEnum(value, spec.v);
+        default:
+            return value;
+    }
+}
+
+function __TS_transformEnum(value, variants) {
+    for (const variant of variants) {
+        const transformed = __TS_transformEnumVariant(value, variant);
+        if (transformed !== undefined) return transformed;
+    }
+    return value;
+}
+
+function __TS_transformEnumVariant(value, variant) {
+    if (variant.kind === "unit") return undefined;
+
+    if (value != null && typeof value === "object" && !Array.isArray(value)) {
+        if (Object.prototype.hasOwnProperty.call(value, variant.name)) {
+            const next = __TS_transform(value[variant.name], variant.spec);
+            if (next === value[variant.name]) return value;
+            return { ...value, [variant.name]: next };
+        }
+
+        if (value.type === variant.name && Object.prototype.hasOwnProperty.call(value, "data")) {
+            const next = __TS_transform(value.data, variant.spec);
+            if (next === value.data) return value;
+            return { ...value, data: next };
+        }
+
+        if (value.tag === variant.name && Object.prototype.hasOwnProperty.call(value, "content")) {
+            const next = __TS_transform(value.content, variant.spec);
+            if (next === value.content) return value;
+            return { ...value, content: next };
+        }
+    }
+
+    const direct = __TS_transform(value, variant.spec);
+    if (direct !== value) return direct;
+
+    return undefined;
+}
+
+function __TS_transformResult(result, okSpec, errSpec) {
+    return result.then((value) => {
+        if (value?.status === "ok") {
+            return { status: "ok", data: __TS_transform(value.data, okSpec) };
+        }
+
+        if (value?.status === "error") {
+            return { status: "error", error: __TS_transform(value.error, errSpec) };
+        }
+
+        return value;
+    });
 }"#;

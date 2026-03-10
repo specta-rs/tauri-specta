@@ -3169,7 +3169,6 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "2.0.0-rc.23"
-source = "git+https://github.com/oscartbeaumont/specta?rev=09878718731efefd74329b593b29305800906e60#09878718731efefd74329b593b29305800906e60"
 dependencies = [
  "paste",
  "rustc_version",
@@ -3179,7 +3178,6 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.23"
-source = "git+https://github.com/oscartbeaumont/specta?rev=09878718731efefd74329b593b29305800906e60#09878718731efefd74329b593b29305800906e60"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -3190,7 +3188,6 @@ dependencies = [
 [[package]]
 name = "specta-serde"
 version = "0.0.10"
-source = "git+https://github.com/oscartbeaumont/specta?rev=09878718731efefd74329b593b29305800906e60#09878718731efefd74329b593b29305800906e60"
 dependencies = [
  "specta",
 ]
@@ -3198,7 +3195,6 @@ dependencies = [
 [[package]]
 name = "specta-typescript"
 version = "0.0.10"
-source = "git+https://github.com/oscartbeaumont/specta?rev=09878718731efefd74329b593b29305800906e60#09878718731efefd74329b593b29305800906e60"
 dependencies = [
  "specta",
  "specta-serde",
