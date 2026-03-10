@@ -280,13 +280,15 @@ fn runtime(
             field_ts.push(')');
 
             let mut field = Field::new(define(field_ts).into());
-            field.set_docs(
-                format!(
-                    "@type {{ReturnType<typeof makeEvent<{}>>}}",
-                    exporter.reference(r)?
-                )
-                .into(),
-            );
+            if jsdoc {
+                field.set_docs(
+                    format!(
+                        "@type {{ReturnType<typeof makeEvent<{}>>}}",
+                        exporter.reference(r)?
+                    )
+                    .into(),
+                );
+            }
             s = s.field(name.to_lower_camel_case(), field);
         }
 
