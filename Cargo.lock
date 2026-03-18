@@ -3629,6 +3629,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-specta-example-react-query-app"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "specta",
+ "specta-typescript",
+ "tauri",
+ "tauri-build",
+ "tauri-specta",
+]
+
+[[package]]
 name = "tauri-specta-macros"
 version = "2.0.0-rc.23"
 dependencies = [

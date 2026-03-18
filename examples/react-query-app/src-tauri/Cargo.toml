@@ -1,0 +1,24 @@
+[package]
+name = "tauri-specta-example-react-query-app"
+version = "0.0.0"
+description = "A Tauri app using generated TanStack Query bindings"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2024"
+publish = false
+
+[build-dependencies]
+tauri-build = { workspace = true, features = [] }
+
+[dependencies]
+serde_json = "1.0"
+specta = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+tauri = { workspace = true, features = [] }
+tauri-specta = { path = "../../../", features = ["derive", "typescript", "javascript"] }
+specta-typescript = { workspace = true }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

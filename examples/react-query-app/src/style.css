@@ -1,0 +1,96 @@
+:root {
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  color: #1f2937;
+  background: radial-gradient(circle at top left, #eff6ff, #e2e8f0 65%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  padding: 2rem 1rem;
+}
+
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  display: grid;
+  gap: 1rem;
+}
+
+h1,
+h2,
+p,
+ul {
+  margin: 0;
+}
+
+.card {
+  background: #ffffffcc;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+input,
+button {
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.95rem;
+}
+
+input {
+  flex: 1;
+  min-width: 220px;
+}
+
+button {
+  cursor: pointer;
+  background: #0f172a;
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+ul {
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+code {
+  background: #e2e8f0;
+  border-radius: 6px;
+  padding: 0.1rem 0.35rem;
+}
+
+@media (max-width: 640px) {
+  #root {
+    padding: 1rem;
+  }
+
+  input,
+  button {
+    width: 100%;
+  }
+}
