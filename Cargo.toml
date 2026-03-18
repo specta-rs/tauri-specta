@@ -42,6 +42,7 @@ heck = "0.5"
 [workspace]
 members = [
     "examples/app/src-tauri",
+    "examples/react-query-app/src-tauri",
     "examples/custom-plugin/app/src-tauri",
     "examples/custom-plugin/plugin",
     "macros",

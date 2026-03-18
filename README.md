@@ -26,6 +26,37 @@ Tauri Specta v2 also comes with support for generating types for events.
 
 Follow the documentation links above for help getting started.
 
+## TanStack Query output
+
+You can generate command bindings as `queryOptions` helpers instead of plain invoke functions:
+
+```rust
+use tauri_specta::{Builder, CommandOutputTarget, collect_commands};
+
+let builder = Builder::<tauri::Wry>::new()
+    .commands(collect_commands![/* ... */])
+    .command_output_target(CommandOutputTarget::TanstackQuery);
+```
+
+Generated commands import `queryOptions` from `@tanstack/react-query` and return objects like:
+
+```ts
+commands.myCommand(argOne, argTwo)
+// -> queryOptions({ queryKey: ["my_command", { argOne, argTwo }] as const, queryFn: ... })
+```
+
+You can also mark specific commands as mutations:
+
+```rust
+let builder = Builder::<tauri::Wry>::new()
+    .commands(collect_commands![create_user, list_users])
+    .command_output_target(CommandOutputTarget::TanstackQuery)
+    .mutation_commands(["create_user"]);
+```
+
+`create_user` will generate `mutationOptions({ mutationKey, mutationFn })` while `list_users`
+will still generate `queryOptions({ queryKey, queryFn })`.
+
 ## Development
 
 Run the example:

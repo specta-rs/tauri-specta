@@ -5,7 +5,7 @@ use specta::TypeCollection;
 use specta::datatype::{DataType, Field, Reference, Struct};
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
-use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
+use crate::{BuilderConfiguration, CommandOutputTarget, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
     type Error = specta_typescript::Error;
@@ -71,6 +71,17 @@ fn runtime(
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
+    let tanstack_query_output = cfg.command_output_target == CommandOutputTarget::TanstackQuery;
+    let has_tanstack_queries = tanstack_query_output
+        && cfg
+            .commands
+            .iter()
+            .any(|command| !cfg.mutation_commands.contains(command.name()));
+    let has_tanstack_mutations = tanstack_query_output
+        && cfg
+            .commands
+            .iter()
+            .any(|command| cfg.mutation_commands.contains(command.name()));
 
     let mut out = String::new();
 
@@ -132,6 +143,21 @@ fn runtime(
     if enabled_events {
         out.push_str("import * as __TAURI_EVENT from \"@tauri-apps/api/event\";\n");
     }
+    if enabled_commands && tanstack_query_output {
+        out.push_str("import { ");
+        let mut first = true;
+        if has_tanstack_queries {
+            out.push_str("queryOptions as __TANSTACK_QUERY_OPTIONS");
+            first = false;
+        }
+        if has_tanstack_mutations {
+            if !first {
+                out.push_str(", ");
+            }
+            out.push_str("mutationOptions as __TANSTACK_MUTATION_OPTIONS");
+        }
+        out.push_str(" } from \"@tanstack/react-query\";\n");
+    }
 
     // Commands
     if enabled_commands {
@@ -184,7 +210,7 @@ fn runtime(
 
             let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
 
-            let body = if cfg.error_handling == ErrorHandlingMode::Result
+            let invoke_ts = if cfg.error_handling == ErrorHandlingMode::Result
                 && let Some(result) = command.result()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, &cfg.types)
             {
@@ -216,6 +242,41 @@ fn runtime(
                     invoke_ts.push('>');
                 }
                 invoke_ts.push_str(&invoke_args);
+                invoke_ts
+            };
+
+            let body = if tanstack_query_output {
+                let is_mutation = cfg.mutation_commands.contains(command.name());
+                let key = if command.args().is_empty() {
+                    if jsdoc {
+                        format!("[{command_name_escaped}]")
+                    } else {
+                        format!("[{command_name_escaped}] as const")
+                    }
+                } else {
+                    let args_obj = command
+                        .args()
+                        .iter()
+                        .map(|(name, _)| name.to_lower_camel_case())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    if jsdoc {
+                        format!("[{command_name_escaped}, {{ {args_obj} }}]")
+                    } else {
+                        format!("[{command_name_escaped}, {{ {args_obj} }}] as const")
+                    }
+                };
+
+                if is_mutation {
+                    format!(
+                        "__TANSTACK_MUTATION_OPTIONS({{ mutationKey: {key}, mutationFn: () => {invoke_ts} }})"
+                    )
+                } else {
+                    format!(
+                        "__TANSTACK_QUERY_OPTIONS({{ queryKey: {key}, queryFn: () => {invoke_ts} }})"
+                    )
+                }
+            } else {
                 invoke_ts
             };
 
@@ -431,6 +492,8 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "Channel",
     "__TAURI_EVENT",
     "__TAURI_INVOKE",
+    "__TANSTACK_QUERY_OPTIONS",
+    "__TANSTACK_MUTATION_OPTIONS",
     "typedError",
     "makeEvent",
 ];

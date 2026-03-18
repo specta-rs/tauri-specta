@@ -45,7 +45,7 @@
 //!
 //! use serde::{Deserialize, Serialize};
 //! use specta_typescript::Typescript;
-//! use tauri_specta::{collect_commands, Builder};
+//! use tauri_specta::{collect_commands, Builder, CommandOutputTarget};
 //!
 //! #[tauri::command]
 //! #[specta::specta] // < You must annotate your commands
@@ -56,7 +56,11 @@
 //! fn main() {
 //!     let mut builder = Builder::<tauri::Wry>::new()
 //!         // Then register them (separated by a comma)
-//!         .commands(collect_commands![hello_world,]);
+//!         .commands(collect_commands![hello_world,])
+//!         // Optional: generate TanStack Query queryOptions instead of plain invoke functions.
+//!         .command_output_target(CommandOutputTarget::TanstackQuery)
+//!         // Optional: mark side-effecting commands to generate mutationOptions.
+//!         .mutation_commands(["hello_world"]);
 //!
 //!     #[cfg(debug_assertions)] // <- Only export on non-release builds
 //!     builder
@@ -185,7 +189,7 @@ mod event;
 mod lang;
 mod macros;
 
-pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
+pub use builder::{Builder, BuilderConfiguration, CommandOutputTarget, ErrorHandlingMode};
 pub use commands::Commands;
 pub use event::{Event, Events, TypedEvent};
 pub use lang::LanguageExt;

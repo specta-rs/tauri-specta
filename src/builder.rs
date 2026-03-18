@@ -1,4 +1,9 @@
-use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
+use std::{
+    any::TypeId,
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
 use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
 use serde::Serialize;
@@ -16,6 +21,16 @@ pub enum ErrorHandlingMode {
     /// Errors will be returned as a Result enum
     #[default]
     Result,
+}
+
+/// The command output target used when generating bindings.
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub enum CommandOutputTarget {
+    /// Generate plain `commands.*` invoke functions (default).
+    #[default]
+    Invoke,
+    /// Generate `commands.*` helpers powered by `queryOptions` from `@tanstack/react-query`.
+    TanstackQuery,
 }
 
 /// Builder for configuring Tauri Specta in your application.
@@ -95,6 +110,8 @@ pub struct BuilderConfiguration {
     pub plugin_name: Option<&'static str>,
     pub commands: Vec<Function>,
     pub error_handling: ErrorHandlingMode,
+    pub command_output_target: CommandOutputTarget,
+    pub mutation_commands: BTreeSet<Cow<'static, str>>,
     pub events: BTreeMap<&'static str, (TypeId, Reference)>,
     pub types: TypeCollection,
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
@@ -246,6 +263,27 @@ impl<R: Runtime> Builder<R> {
     /// Set the error handling mode for the generated bindings.
     pub fn error_handling(mut self, error_handling: ErrorHandlingMode) -> Self {
         self.cfg.error_handling = error_handling;
+        self
+    }
+
+    /// Set the command output target for generated bindings.
+    ///
+    /// Defaults to [`CommandOutputTarget::Invoke`].
+    pub fn command_output_target(mut self, target: CommandOutputTarget) -> Self {
+        self.cfg.command_output_target = target;
+        self
+    }
+
+    /// Mark a set of commands as mutations when using [`CommandOutputTarget::TanstackQuery`].
+    ///
+    /// Commands listed here generate `mutationOptions`, while all other commands generate
+    /// `queryOptions`.
+    pub fn mutation_commands<I, S>(mut self, commands: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<Cow<'static, str>>,
+    {
+        self.cfg.mutation_commands = commands.into_iter().map(Into::into).collect();
         self
     }
 
