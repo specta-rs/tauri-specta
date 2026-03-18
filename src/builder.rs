@@ -1,4 +1,9 @@
-use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
+use std::{
+    any::TypeId,
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
 use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
 use serde::Serialize;
@@ -106,6 +111,7 @@ pub struct BuilderConfiguration {
     pub commands: Vec<Function>,
     pub error_handling: ErrorHandlingMode,
     pub command_output_target: CommandOutputTarget,
+    pub mutation_commands: BTreeSet<Cow<'static, str>>,
     pub events: BTreeMap<&'static str, (TypeId, Reference)>,
     pub types: TypeCollection,
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
@@ -265,6 +271,19 @@ impl<R: Runtime> Builder<R> {
     /// Defaults to [`CommandOutputTarget::Invoke`].
     pub fn command_output_target(mut self, target: CommandOutputTarget) -> Self {
         self.cfg.command_output_target = target;
+        self
+    }
+
+    /// Mark a set of commands as mutations when using [`CommandOutputTarget::TanstackQuery`].
+    ///
+    /// Commands listed here generate `mutationOptions`, while all other commands generate
+    /// `queryOptions`.
+    pub fn mutation_commands<I, S>(mut self, commands: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<Cow<'static, str>>,
+    {
+        self.cfg.mutation_commands = commands.into_iter().map(Into::into).collect();
         self
     }
 

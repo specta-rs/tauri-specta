@@ -58,7 +58,9 @@
 //!         // Then register them (separated by a comma)
 //!         .commands(collect_commands![hello_world,])
 //!         // Optional: generate TanStack Query queryOptions instead of plain invoke functions.
-//!         .command_output_target(CommandOutputTarget::TanstackQuery);
+//!         .command_output_target(CommandOutputTarget::TanstackQuery)
+//!         // Optional: mark side-effecting commands to generate mutationOptions.
+//!         .mutation_commands(["hello_world"]);
 //!
 //!     #[cfg(debug_assertions)] // <- Only export on non-release builds
 //!     builder

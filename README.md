@@ -45,6 +45,18 @@ commands.myCommand(argOne, argTwo)
 // -> queryOptions({ queryKey: ["my_command", { argOne, argTwo }] as const, queryFn: ... })
 ```
 
+You can also mark specific commands as mutations:
+
+```rust
+let builder = Builder::<tauri::Wry>::new()
+    .commands(collect_commands![create_user, list_users])
+    .command_output_target(CommandOutputTarget::TanstackQuery)
+    .mutation_commands(["create_user"]);
+```
+
+`create_user` will generate `mutationOptions({ mutationKey, mutationFn })` while `list_users`
+will still generate `queryOptions({ queryKey, queryFn })`.
+
 ## Development
 
 Run the example:
