@@ -5,7 +5,7 @@ use specta::TypeCollection;
 use specta::datatype::{DataType, Field, Reference, Struct};
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
-use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
+use crate::{BuilderConfiguration, CommandOutputTarget, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
     type Error = specta_typescript::Error;
@@ -71,6 +71,7 @@ fn runtime(
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
+    let tanstack_query_output = cfg.command_output_target == CommandOutputTarget::TanstackQuery;
 
     let mut out = String::new();
 
@@ -132,6 +133,11 @@ fn runtime(
     if enabled_events {
         out.push_str("import * as __TAURI_EVENT from \"@tauri-apps/api/event\";\n");
     }
+    if enabled_commands && tanstack_query_output {
+        out.push_str(
+            "import { queryOptions as __TANSTACK_QUERY_OPTIONS } from \"@tanstack/react-query\";\n",
+        );
+    }
 
     // Commands
     if enabled_commands {
@@ -184,7 +190,7 @@ fn runtime(
 
             let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
 
-            let body = if cfg.error_handling == ErrorHandlingMode::Result
+            let invoke_ts = if cfg.error_handling == ErrorHandlingMode::Result
                 && let Some(result) = command.result()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, &cfg.types)
             {
@@ -216,6 +222,28 @@ fn runtime(
                     invoke_ts.push('>');
                 }
                 invoke_ts.push_str(&invoke_args);
+                invoke_ts
+            };
+
+            let body = if tanstack_query_output {
+                let query_key = if command.args().is_empty() {
+                    format!("[{command_name_escaped}] as const")
+                } else {
+                    format!(
+                        "[{command_name_escaped}, {{ {} }}] as const",
+                        command
+                            .args()
+                            .iter()
+                            .map(|(name, _)| name.to_lower_camel_case())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+
+                format!(
+                    "__TANSTACK_QUERY_OPTIONS({{ queryKey: {query_key}, queryFn: () => {invoke_ts} }})"
+                )
+            } else {
                 invoke_ts
             };
 
@@ -431,6 +459,7 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "Channel",
     "__TAURI_EVENT",
     "__TAURI_INVOKE",
+    "__TANSTACK_QUERY_OPTIONS",
     "typedError",
     "makeEvent",
 ];
