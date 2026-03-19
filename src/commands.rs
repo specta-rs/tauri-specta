@@ -1,6 +1,6 @@
 use std::{fmt, sync::Arc};
 
-use specta::{TypeCollection, datatype};
+use specta::{Types, datatype};
 use tauri::{Runtime, ipc::Invoke};
 
 /// A wrapper around the output of the `collect_commands` macro.
@@ -9,7 +9,7 @@ use tauri::{Runtime, ipc::Invoke};
 pub struct Commands<R: Runtime>(
     // Bounds copied from `tauri::Builder::invoke_handler`
     pub(crate) Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
-    pub(crate) fn(&mut TypeCollection) -> Vec<datatype::Function>,
+    pub(crate) fn(&mut Types) -> Vec<datatype::Function>,
 );
 
 impl<R: Runtime> fmt::Debug for Commands<R> {

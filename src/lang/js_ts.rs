@@ -1,7 +1,7 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
-use specta::TypeCollection;
+use specta::{ResolvedTypes, Types};
 use specta::datatype::{DataType, Field, Reference, Struct};
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
@@ -11,6 +11,7 @@ impl LanguageExt for specta_typescript::Typescript {
     type Error = specta_typescript::Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
+        let resolved = ResolvedTypes::from_resolved_types(cfg.types.clone());
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
             .framework_runtime({
@@ -30,7 +31,7 @@ impl LanguageExt for specta_typescript::Typescript {
                     )
                 }
             })
-            .export_to(path, &cfg.types)
+            .export_to(path, &resolved)
     }
 }
 
@@ -38,6 +39,7 @@ impl LanguageExt for specta_typescript::JSDoc {
     type Error = specta_typescript::Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
+        let resolved = ResolvedTypes::from_resolved_types(cfg.types.clone());
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
             .framework_runtime({
@@ -57,7 +59,7 @@ impl LanguageExt for specta_typescript::JSDoc {
                     )
                 }
             })
-            .export_to(path, &cfg.types)
+            .export_to(path, &resolved)
     }
 }
 
@@ -369,7 +371,7 @@ fn runtime(
 
 fn extract_std_result<'a>(
     dt: &'a DataType,
-    types: &'a TypeCollection,
+    types: &'a Types,
 ) -> Option<(&'a DataType, &'a DataType)> {
     let DataType::Reference(Reference::Named(r)) = dt else {
         return None;
@@ -391,7 +393,7 @@ fn extract_std_result<'a>(
     Some((ok, err))
 }
 
-fn is_channel_type(dt: &DataType, types: &TypeCollection) -> bool {
+fn is_channel_type(dt: &DataType, types: &Types) -> bool {
     match dt {
         DataType::Reference(Reference::Named(r)) => r
             .get(types)
@@ -405,7 +407,7 @@ fn is_channel_type(dt: &DataType, types: &TypeCollection) -> bool {
 // Also handles Tauri channel references.
 fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt
-        && let Some(ndt) = r.get(exporter.types)
+        && let Some(ndt) = r.get(exporter.types.as_types())
         && ndt.name() == "TAURI_CHANNEL"
         && ndt.module_path().starts_with("tauri::")
     {
