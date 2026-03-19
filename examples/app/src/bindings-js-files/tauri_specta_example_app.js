@@ -8,12 +8,12 @@
 	*
 	* @typedef {null} EmptyEvent
 	*
-	* @typedef {{ type: "IoError"; data: { type: "IoError" } } | { type: "AnotherError"; data: string }} MyError
-	* @property {{ type: "IoError"; data: { type: "IoError" } }} IoError
-	* @property {{ type: "AnotherError"; data: string }} AnotherError
+	* @typedef {never | string} MyError
+	* @property {never} IoError
+	* @property {string} AnotherError
 	*
-	* @typedef {{ type: "IoError"; data: string }} MyError2
-	* @property {{ type: "IoError"; data: string }} IoError
+	* @typedef {string} MyError2
+	* @property {string} IoError
 	*
 	* @typedef {{
 	*		a: string,
