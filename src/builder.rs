@@ -3,7 +3,7 @@ use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
 use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
 use serde::Serialize;
 use specta::{
-    Type, TypeCollection,
+    Type, Types,
     datatype::{Function, Reference},
 };
 use tauri::{Manager, Runtime, ipc::Invoke};
@@ -96,7 +96,7 @@ pub struct BuilderConfiguration {
     pub commands: Vec<Function>,
     pub error_handling: ErrorHandlingMode,
     pub events: BTreeMap<&'static str, (TypeId, Reference)>,
-    pub types: TypeCollection,
+    pub types: Types,
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
     pub typed_error_impl: Cow<'static, str>,
 }
@@ -214,11 +214,11 @@ impl<R: Runtime> Builder<R> {
     ///
     /// ```rust,ignore-windows
     /// use tauri_specta::Builder;
-    /// use specta::{Type, TypeCollection};
+    /// use specta::{Type, Types};
     ///
-    /// let mut builder = Builder::<tauri::Wry>::new().types(&TypeCollection::default());
+    /// let mut builder = Builder::<tauri::Wry>::new().types(&Types::default());
     /// ```
-    pub fn types(mut self, types: &TypeCollection) -> Self {
+    pub fn types(mut self, types: &Types) -> Self {
         self.cfg.types.merge(types);
         self
     }

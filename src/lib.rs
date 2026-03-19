@@ -209,7 +209,7 @@ pub mod internal {
     use std::{any::TypeId, sync::Arc};
 
     use specta::{
-        TypeCollection,
+        Types,
         datatype::{self, DataType},
     };
     use tauri::{Runtime, ipc::Invoke};
@@ -219,7 +219,7 @@ pub mod internal {
     /// called by `collect_commands` to construct `Commands`
     pub fn command<R: Runtime, F>(
         f: F,
-        types: fn(&mut TypeCollection) -> Vec<datatype::Function>,
+        types: fn(&mut Types) -> Vec<datatype::Function>,
     ) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,

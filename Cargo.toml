@@ -68,9 +68,9 @@ specta-typescript = { version = "0.0.10" }
 
 # TODO: Drop patches
 [patch.crates-io]
-specta = { git = "https://github.com/oscartbeaumont/specta", rev = "09878718731efefd74329b593b29305800906e60" }
-specta-typescript = { git = "https://github.com/oscartbeaumont/specta", rev = "09878718731efefd74329b593b29305800906e60" }
-specta-serde = { git = "https://github.com/oscartbeaumont/specta", rev = "09878718731efefd74329b593b29305800906e60" }
+specta = { git = "https://github.com/specta-rs/specta", rev = "25f7eb50628225febe16d6018c6c58bf2c958539" }
+specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "25f7eb50628225febe16d6018c6c58bf2c958539" }
+specta-serde = { git = "https://github.com/specta-rs/specta", rev = "25f7eb50628225febe16d6018c6c58bf2c958539" }
 
 # specta = { path = "/Users/oscar/Desktop/specta17/specta" }
 # specta-typescript = { path = "/Users/oscar/Desktop/specta17/specta-typescript" }

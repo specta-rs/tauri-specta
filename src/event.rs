@@ -6,7 +6,7 @@ use std::{
 };
 
 use serde::{Serialize, de::DeserializeOwned};
-use specta::{Type, TypeCollection, datatype::Reference};
+use specta::{Type, Types, datatype::Reference};
 use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
 /// A wrapper around the output of the `collect_commands` macro.
@@ -14,7 +14,7 @@ use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 /// This acts to seal the implementation details of the macro.
 #[derive(Default)]
 pub struct Events(
-    pub(crate) BTreeMap<&'static str, fn(&mut TypeCollection) -> (TypeId, Reference)>,
+    pub(crate) BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>,
 );
 
 #[derive(Default)]
