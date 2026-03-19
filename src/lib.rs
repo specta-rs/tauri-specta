@@ -84,12 +84,14 @@
 //! with [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html) like the following:
 //!
 //! ```rust,ignore-windows
+//! use specta_typescript::JSDoc;
+//!
 //! let mut builder = tauri_specta::Builder::<tauri::Wry>::new();
 //!
 //! #[cfg(debug_assertions)]
 //! builder
-//!     .export(specta_jsdoc::JSDoc::default(), "../src/bindings.js")
-//!     .expect("Failed to export typescript bindings");
+//!     .export(JSDoc::default(), "../src/bindings.js")
+//!     .expect("Failed to export jsdoc bindings");
 //! ```
 //!
 //! ## Usage on frontend

@@ -253,6 +253,8 @@ impl<R: Runtime> Builder<R> {
     /// This would allow integrating with Effect or any other result library.
     ///
     /// ```rust
+    /// use tauri_specta::Builder;
+    ///
     /// const TYPED_ERROR_IMPL: &str = r#"async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
     ///     try {
     ///         return { status: "ok", data: await result };
@@ -262,7 +264,7 @@ impl<R: Runtime> Builder<R> {
     ///     }
     /// }"#;
     ///
-    /// Builder::default()
+    /// Builder::<tauri::Wry>::default()
     ///  .typed_error_impl(TYPED_ERROR_IMPL);
     /// ```
     pub fn typed_error_impl(mut self, runtime: impl Into<Cow<'static, str>>) -> Self {
