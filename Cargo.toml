@@ -22,6 +22,7 @@ default = []
 derive = ["dep:tauri-specta-macros"]
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
+rescript = ["dep:specta-rescript"]
 
 [lints]
 workspace = true
@@ -30,6 +31,7 @@ workspace = true
 # Public
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
+specta-rescript = { git = "https://github.com/rofinn/specta", branch = "rf/rescript", optional = true }
 tauri-specta-macros = { version = "=2.0.0-rc.23", optional = true, path = "./macros" }
 serde = "1"
 serde_json = "1"
@@ -68,10 +70,6 @@ specta-typescript = { version = "0.0.10" }
 
 # TODO: Drop patches
 [patch.crates-io]
-specta = { git = "https://github.com/specta-rs/specta", rev = "25f7eb50628225febe16d6018c6c58bf2c958539" }
-specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "25f7eb50628225febe16d6018c6c58bf2c958539" }
-specta-serde = { git = "https://github.com/specta-rs/specta", rev = "25f7eb50628225febe16d6018c6c58bf2c958539" }
-
-# specta = { path = "/Users/oscar/Desktop/specta17/specta" }
-# specta-typescript = { path = "/Users/oscar/Desktop/specta17/specta-typescript" }
-# specta-serde = { path = "/Users/oscar/Desktop/specta17/specta-serde" }
+specta = { git = "https://github.com/rofinn/specta", branch = "rf/rescript" }
+specta-typescript = { git = "https://github.com/rofinn/specta", branch = "rf/rescript" }
+specta-serde = { git = "https://github.com/rofinn/specta", branch = "rf/rescript" }

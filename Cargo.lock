@@ -3268,7 +3268,7 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "2.0.0-rc.23"
-source = "git+https://github.com/specta-rs/specta?rev=25f7eb50628225febe16d6018c6c58bf2c958539#25f7eb50628225febe16d6018c6c58bf2c958539"
+source = "git+https://github.com/rofinn/specta?branch=rf%2Frescript#2421dd40b0f3a4d649dcf04d5fa862b2f7c39bf8"
 dependencies = [
  "paste",
  "rustc_version",
@@ -3278,7 +3278,7 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.23"
-source = "git+https://github.com/specta-rs/specta?rev=25f7eb50628225febe16d6018c6c58bf2c958539#25f7eb50628225febe16d6018c6c58bf2c958539"
+source = "git+https://github.com/rofinn/specta?branch=rf%2Frescript#2421dd40b0f3a4d649dcf04d5fa862b2f7c39bf8"
 dependencies = [
  "Inflector",
  "proc-macro-crate 3.5.0",
@@ -3288,9 +3288,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "specta-rescript"
+version = "0.0.1"
+source = "git+https://github.com/rofinn/specta?branch=rf%2Frescript#2421dd40b0f3a4d649dcf04d5fa862b2f7c39bf8"
+dependencies = [
+ "specta",
+ "specta-serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "specta-serde"
+version = "0.0.10"
+source = "git+https://github.com/rofinn/specta?branch=rf%2Frescript#2421dd40b0f3a4d649dcf04d5fa862b2f7c39bf8"
+dependencies = [
+ "specta",
+]
+
+[[package]]
 name = "specta-typescript"
 version = "0.0.10"
-source = "git+https://github.com/specta-rs/specta?rev=25f7eb50628225febe16d6018c6c58bf2c958539#25f7eb50628225febe16d6018c6c58bf2c958539"
+source = "git+https://github.com/rofinn/specta?branch=rf%2Frescript#2421dd40b0f3a4d649dcf04d5fa862b2f7c39bf8"
 dependencies = [
  "specta",
 ]
@@ -3708,6 +3726,7 @@ dependencies = [
  "serde",
  "serde_json",
  "specta",
+ "specta-rescript",
  "specta-typescript",
  "tauri",
  "tauri-specta-macros",
@@ -5255,8 +5274,3 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
-
-[[patch.unused]]
-name = "specta-serde"
-version = "0.0.10"
-source = "git+https://github.com/specta-rs/specta?rev=25f7eb50628225febe16d6018c6c58bf2c958539#25f7eb50628225febe16d6018c6c58bf2c958539"

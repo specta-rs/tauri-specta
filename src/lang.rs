@@ -7,6 +7,7 @@ use crate::BuilderConfiguration;
 /// Currently implemented for:
 ///  - [`specta_typescript::Typescript`]
 ///  - [`specta_typescript::JSDoc`]
+///  - [`specta_rescript::ReScript`]
 pub trait LanguageExt {
     /// The error type returned by the language's export function.
     type Error: error::Error + From<io::Error>;
@@ -17,3 +18,6 @@ pub trait LanguageExt {
 
 #[cfg(any(feature = "javascript", feature = "typescript"))]
 mod js_ts;
+
+#[cfg(feature = "rescript")]
+mod rescript;
