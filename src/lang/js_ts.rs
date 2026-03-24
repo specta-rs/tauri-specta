@@ -1,11 +1,11 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
-use serde::Serialize;
 use specta::TypeCollection;
-use specta::datatype::{
-    DataType, Field, Fields, GenericReference, NamedReference, Primitive, Reference, Struct,
-    TypeTag, skip_fields, skip_fields_named,
+use specta::datatype::{DataType, Field, Reference, Struct};
+use specta_tags::{
+    Analyzer, RUNTIME_RESERVED_NAMES, RuntimeRequirements, RuntimeTarget, TransformSpec,
+    render_runtime,
 };
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
@@ -31,7 +31,6 @@ impl LanguageExt for specta_typescript::Typescript {
                         },
                         TYPED_ERROR_ASSERTION_TS,
                         MAKE_EVENT_IMPL_TS,
-                        TRANSFORM_IMPL_TS,
                     )
                 }
             })
@@ -59,7 +58,6 @@ impl LanguageExt for specta_typescript::JSDoc {
                         },
                         "",
                         MAKE_EVENT_IMPL_JS,
-                        TRANSFORM_IMPL_JS,
                     )
                 }
             })
@@ -74,18 +72,16 @@ fn runtime(
     typed_error_impl: &str,
     typed_error_assertion: &str,
     make_event_impl: &str,
-    transform_impl: &str,
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
 
     let mut out = String::new();
 
-    if let Some(ndt) = cfg
-        .types
-        .into_unsorted_iter()
-        .find(|ndt| RESERVED_NDT_NAMES.contains(&&**ndt.name()))
-    {
+    if let Some(ndt) = cfg.types.into_unsorted_iter().find(|ndt| {
+        RESERVED_NDT_NAMES.contains(&&**ndt.name())
+            || RUNTIME_RESERVED_NAMES.contains(&&**ndt.name())
+    }) {
         return Err(Error::framework(
             "",
             format!(
@@ -116,7 +112,9 @@ fn runtime(
                 .and_then(|dt| extract_std_result(dt, &cfg.types))
                 .is_some()
         });
-    let mut has_type_tag_transforms = false;
+    let analyzer = Analyzer::with_builtins();
+    let mut transform_specs = Vec::<TransformSpec>::new();
+    let mut needs_transform_result_helper = false;
 
     if enabled_commands || is_channel_used {
         out.push_str("import { ");
@@ -196,8 +194,8 @@ fn runtime(
                 && let Some(result) = command.result()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, &cfg.types)
             {
-                let ok_transform = analyze_transform(dt_ok, &cfg.types, &[]);
-                let err_transform = analyze_transform(dt_err, &cfg.types, &[]);
+                let ok_transform = analyzer.analyze(dt_ok, &cfg.types, &[]);
+                let err_transform = analyzer.analyze(dt_err, &cfg.types, &[]);
 
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
@@ -212,11 +210,13 @@ fn runtime(
                 invoke_ts.push(')');
 
                 if !ok_transform.is_identity() || !err_transform.is_identity() {
-                    has_type_tag_transforms = true;
+                    transform_specs.push(ok_transform.clone());
+                    transform_specs.push(err_transform.clone());
+                    needs_transform_result_helper = true;
                     format!(
                         "__TS_transformResult({invoke_ts}, {}, {})",
-                        render_transform_spec(&ok_transform),
-                        render_transform_spec(&err_transform)
+                        ok_transform.to_json(),
+                        err_transform.to_json()
                     )
                 } else {
                     invoke_ts
@@ -225,7 +225,7 @@ fn runtime(
                 let result_transform = command
                     .result()
                     .map(|dt| {
-                        analyze_transform(
+                        analyzer.analyze(
                             extract_std_result(dt, &cfg.types)
                                 .map(|(ok, _)| ok)
                                 .unwrap_or(dt),
@@ -252,10 +252,10 @@ fn runtime(
                 invoke_ts.push_str(&invoke_args);
 
                 if !result_transform.is_identity() {
-                    has_type_tag_transforms = true;
+                    transform_specs.push(result_transform.clone());
                     format!(
                         "{invoke_ts}.then((v) => __TS_transform(v, {}))",
-                        render_transform_spec(&result_transform)
+                        result_transform.to_json()
                     )
                 } else {
                     invoke_ts
@@ -383,8 +383,21 @@ fn runtime(
         out.push_str(&types);
     }
 
+    let transform_runtime = {
+        let requirements = RuntimeRequirements::from_specs(&transform_specs)
+            .with_result_helper(needs_transform_result_helper);
+        render_runtime(
+            if jsdoc {
+                RuntimeTarget::JavaScript
+            } else {
+                RuntimeTarget::TypeScript
+            },
+            &requirements,
+        )
+    };
+
     // Runtime
-    if has_typed_error || enabled_events || has_type_tag_transforms {
+    if has_typed_error || enabled_events || !transform_runtime.is_empty() {
         out.push_str("\n/* Tauri Specta runtime */\n");
 
         if has_typed_error {
@@ -405,11 +418,11 @@ fn runtime(
             out.push_str(make_event_impl);
             out.push('\n');
         }
-        if has_type_tag_transforms {
+        if !transform_runtime.is_empty() {
             if has_typed_error || enabled_events {
                 out.push('\n');
             }
-            out.push_str(transform_impl);
+            out.push_str(&transform_runtime);
             out.push('\n');
         }
     }
@@ -481,198 +494,9 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "Channel",
     "__TAURI_EVENT",
     "__TAURI_INVOKE",
-    "__TS_transform",
-    "__TS_transformEnum",
-    "__TS_transformResult",
     "typedError",
     "makeEvent",
 ];
-
-#[derive(Debug, Clone, Default, Serialize)]
-#[serde(tag = "t", content = "v", rename_all = "snake_case")]
-enum TransformSpec {
-    #[default]
-    Identity,
-    BigInt,
-    Date,
-    Bytes,
-    Nullable(Box<TransformSpec>),
-    List(Box<TransformSpec>),
-    Tuple(Vec<TransformSpec>),
-    Object(Vec<(String, TransformSpec)>),
-    Map(Box<TransformSpec>),
-    Enum(Vec<EnumVariantTransformSpec>),
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct EnumVariantTransformSpec {
-    name: String,
-    kind: EnumVariantTransformKind,
-    spec: TransformSpec,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum EnumVariantTransformKind {
-    Unit,
-    Named,
-    Unnamed,
-}
-
-impl TransformSpec {
-    fn is_identity(&self) -> bool {
-        match self {
-            TransformSpec::Identity => true,
-            TransformSpec::Nullable(inner)
-            | TransformSpec::List(inner)
-            | TransformSpec::Map(inner) => inner.is_identity(),
-            TransformSpec::Tuple(items) => items.iter().all(TransformSpec::is_identity),
-            TransformSpec::Object(fields) => fields.iter().all(|(_, spec)| spec.is_identity()),
-            TransformSpec::Enum(variants) => {
-                variants.iter().all(|variant| variant.spec.is_identity())
-            }
-            TransformSpec::BigInt | TransformSpec::Date | TransformSpec::Bytes => false,
-        }
-    }
-}
-
-fn render_transform_spec(spec: &TransformSpec) -> String {
-    serde_json::to_string(spec).expect("failed to serialize transform spec")
-}
-
-fn analyze_transform(
-    dt: &DataType,
-    types: &TypeCollection,
-    generics: &[(GenericReference, DataType)],
-) -> TransformSpec {
-    analyze_transform_inner(dt, types, generics, &mut Vec::new())
-}
-
-fn analyze_transform_inner(
-    dt: &DataType,
-    types: &TypeCollection,
-    generics: &[(GenericReference, DataType)],
-    stack: &mut Vec<NamedReference>,
-) -> TransformSpec {
-    match dt {
-        DataType::Primitive(Primitive::i64)
-        | DataType::Primitive(Primitive::u64)
-        | DataType::Primitive(Primitive::i128)
-        | DataType::Primitive(Primitive::u128) => TransformSpec::BigInt,
-        DataType::Primitive(_) => TransformSpec::Identity,
-        DataType::List(list) => TransformSpec::List(Box::new(analyze_transform_inner(
-            list.ty(),
-            types,
-            generics,
-            stack,
-        ))),
-        DataType::Map(map) => TransformSpec::Map(Box::new(analyze_transform_inner(
-            map.value_ty(),
-            types,
-            generics,
-            stack,
-        ))),
-        DataType::Struct(st) => match st.fields() {
-            Fields::Unit => TransformSpec::Identity,
-            Fields::Unnamed(fields) => TransformSpec::Tuple(
-                skip_fields(fields.fields())
-                    .map(|(_, ty)| analyze_transform_inner(ty, types, generics, stack))
-                    .collect(),
-            ),
-            Fields::Named(fields) => TransformSpec::Object(
-                skip_fields_named(fields.fields())
-                    .map(|(name, (_, ty))| {
-                        (
-                            name.to_string(),
-                            analyze_transform_inner(ty, types, generics, stack),
-                        )
-                    })
-                    .collect(),
-            ),
-        },
-        DataType::Enum(e) => TransformSpec::Enum(
-            e.variants()
-                .iter()
-                .filter(|(_, variant)| !variant.skip())
-                .map(|(name, variant)| {
-                    let (kind, spec) = match variant.fields() {
-                        Fields::Unit => (EnumVariantTransformKind::Unit, TransformSpec::Identity),
-                        Fields::Unnamed(fields) => {
-                            let fields = skip_fields(fields.fields())
-                                .map(|(_, ty)| analyze_transform_inner(ty, types, generics, stack))
-                                .collect::<Vec<_>>();
-                            let spec = if fields.len() == 1 {
-                                fields.into_iter().next().unwrap_or_default()
-                            } else {
-                                TransformSpec::Tuple(fields)
-                            };
-                            (EnumVariantTransformKind::Unnamed, spec)
-                        }
-                        Fields::Named(fields) => {
-                            let spec = TransformSpec::Object(
-                                skip_fields_named(fields.fields())
-                                    .map(|(name, (_, ty))| {
-                                        (
-                                            name.to_string(),
-                                            analyze_transform_inner(ty, types, generics, stack),
-                                        )
-                                    })
-                                    .collect(),
-                            );
-                            (EnumVariantTransformKind::Named, spec)
-                        }
-                    };
-
-                    EnumVariantTransformSpec {
-                        name: name.to_string(),
-                        kind,
-                        spec,
-                    }
-                })
-                .collect(),
-        ),
-        DataType::Tuple(tuple) => TransformSpec::Tuple(
-            tuple
-                .elements()
-                .iter()
-                .map(|ty| analyze_transform_inner(ty, types, generics, stack))
-                .collect(),
-        ),
-        DataType::Nullable(inner) => TransformSpec::Nullable(Box::new(analyze_transform_inner(
-            inner, types, generics, stack,
-        ))),
-        DataType::Reference(Reference::Named(r)) => {
-            if let Some(ndt) = r.get(types) {
-                if ndt.tags().contains(&TypeTag::BigInt) {
-                    return TransformSpec::BigInt;
-                }
-                if ndt.tags().contains(&TypeTag::Date) {
-                    return TransformSpec::Date;
-                }
-                if ndt.tags().contains(&TypeTag::UInt8Array) {
-                    return TransformSpec::Bytes;
-                }
-
-                if stack.contains(r) {
-                    return TransformSpec::Identity;
-                }
-
-                stack.push(r.clone());
-                let spec = analyze_transform_inner(ndt.ty(), types, r.generics(), stack);
-                stack.pop();
-                spec
-            } else {
-                TransformSpec::Identity
-            }
-        }
-        DataType::Reference(Reference::Generic(generic)) => generics
-            .iter()
-            .find(|(key, _)| key == generic)
-            .map(|(_, dt)| analyze_transform_inner(dt, types, &[], stack))
-            .unwrap_or_default(),
-        DataType::Reference(Reference::Opaque(_)) => TransformSpec::Identity,
-    }
-}
 
 const FRAMEWORK_HEADER: &str =
     "// This file has been generated by Tauri Specta. Do not edit this file manually.";
@@ -744,254 +568,4 @@ function makeEvent(name) {
     });
 
     return Object.assign(fn, base);
-}"#;
-
-const TRANSFORM_IMPL_TS: &str = r#"type __TS_TransformSpec =
-    | { t: "identity" }
-    | { t: "big_int" }
-    | { t: "date" }
-    | { t: "bytes" }
-    | { t: "nullable"; v: __TS_TransformSpec }
-    | { t: "list"; v: __TS_TransformSpec }
-    | { t: "tuple"; v: __TS_TransformSpec[] }
-    | { t: "object"; v: [string, __TS_TransformSpec][] }
-    | { t: "map"; v: __TS_TransformSpec }
-    | { t: "enum"; v: __TS_EnumVariantTransformSpec[] };
-
-type __TS_EnumVariantTransformSpec = {
-    name: string;
-    kind: "unit" | "named" | "unnamed";
-    spec: __TS_TransformSpec;
-};
-
-function __TS_transform<T>(value: T, spec: __TS_TransformSpec): T {
-    if (!spec || spec.t === "identity") return value;
-
-    const rawValue = value as any;
-
-    switch (spec.t) {
-        case "big_int":
-            if (typeof rawValue === "bigint") return value;
-            if (typeof rawValue === "number" && Number.isInteger(rawValue)) return BigInt(rawValue) as T;
-            if (typeof rawValue === "string") {
-                try {
-                    return BigInt(rawValue) as T;
-                } catch {
-                    return value;
-                }
-            }
-            return value;
-        case "date":
-            return (typeof rawValue === "string" ? new Date(rawValue) : value) as T;
-        case "bytes":
-            return (Array.isArray(rawValue) && rawValue.every((v) => typeof v === "number") ? Uint8Array.from(rawValue) : value) as T;
-        case "nullable":
-            return rawValue == null ? value : __TS_transform(value, spec.v);
-        case "list":
-            return (Array.isArray(rawValue) ? rawValue.map((item) => __TS_transform(item, spec.v)) : value) as T;
-        case "tuple":
-            return (Array.isArray(rawValue)
-                ? rawValue.map((item, index) => __TS_transform(item, spec.v[index] || { t: "identity" }))
-                : value) as T;
-        case "object": {
-            if (rawValue == null || typeof rawValue !== "object" || Array.isArray(rawValue)) return value;
-
-            let out = rawValue;
-            for (const [key, nested] of spec.v) {
-                if (!Object.prototype.hasOwnProperty.call(rawValue, key)) continue;
-                const next = __TS_transform(rawValue[key], nested);
-                if (next !== rawValue[key]) {
-                    if (out === rawValue) out = { ...rawValue };
-                    out[key] = next;
-                }
-            }
-            return out as T;
-        }
-        case "map": {
-            if (rawValue == null || typeof rawValue !== "object" || Array.isArray(rawValue)) return value;
-
-            let out = rawValue;
-            for (const key of Object.keys(rawValue)) {
-                const next = __TS_transform(rawValue[key], spec.v);
-                if (next !== rawValue[key]) {
-                    if (out === rawValue) out = { ...rawValue };
-                    out[key] = next;
-                }
-            }
-            return out as T;
-        }
-        case "enum":
-            return __TS_transformEnum(value, spec.v);
-        default:
-            return value;
-    }
-}
-
-function __TS_transformEnum<T>(value: T, variants: __TS_EnumVariantTransformSpec[]): T {
-    for (const variant of variants) {
-        const transformed = __TS_transformEnumVariant(value, variant);
-        if (transformed !== undefined) return transformed;
-    }
-    return value;
-}
-
-function __TS_transformEnumVariant<T>(value: T, variant: __TS_EnumVariantTransformSpec): T | undefined {
-    const rawValue = value as any;
-
-    if (variant.kind === "unit") return undefined;
-
-    if (rawValue != null && typeof rawValue === "object" && !Array.isArray(rawValue)) {
-        if (Object.prototype.hasOwnProperty.call(rawValue, variant.name)) {
-            const next = __TS_transform(rawValue[variant.name], variant.spec);
-            if (next === rawValue[variant.name]) return value;
-            return { ...rawValue, [variant.name]: next } as T;
-        }
-
-        if (rawValue.type === variant.name && Object.prototype.hasOwnProperty.call(rawValue, "data")) {
-            const next = __TS_transform(rawValue.data, variant.spec);
-            if (next === rawValue.data) return value;
-            return { ...rawValue, data: next } as T;
-        }
-
-        if (rawValue.tag === variant.name && Object.prototype.hasOwnProperty.call(rawValue, "content")) {
-            const next = __TS_transform(rawValue.content, variant.spec);
-            if (next === rawValue.content) return value;
-            return { ...rawValue, content: next } as T;
-        }
-    }
-
-    const direct = __TS_transform(value, variant.spec);
-    if (direct !== value) return direct;
-
-    return undefined;
-}
-
-function __TS_transformResult<T, E>(
-    result: Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>,
-    okSpec: __TS_TransformSpec,
-    errSpec: __TS_TransformSpec,
-): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
-    return result.then((value) => {
-        if (value?.status === "ok") {
-            return { status: "ok", data: __TS_transform(value.data, okSpec) };
-        }
-
-        if (value?.status === "error") {
-            return { status: "error", error: __TS_transform(value.error, errSpec) };
-        }
-
-        return value;
-    });
-}"#;
-
-const TRANSFORM_IMPL_JS: &str = r#"function __TS_transform(value, spec) {
-    if (!spec || spec.t === "identity") return value;
-
-    switch (spec.t) {
-        case "big_int":
-            if (typeof value === "bigint") return value;
-            if (typeof value === "number" && Number.isInteger(value)) return BigInt(value);
-            if (typeof value === "string") {
-                try {
-                    return BigInt(value);
-                } catch {
-                    return value;
-                }
-            }
-            return value;
-        case "date":
-            return typeof value === "string" ? new Date(value) : value;
-        case "bytes":
-            return Array.isArray(value) && value.every((v) => typeof v === "number") ? Uint8Array.from(value) : value;
-        case "nullable":
-            return value == null ? value : __TS_transform(value, spec.v);
-        case "list":
-            return Array.isArray(value) ? value.map((item) => __TS_transform(item, spec.v)) : value;
-        case "tuple":
-            return Array.isArray(value)
-                ? value.map((item, index) => __TS_transform(item, spec.v[index] || { t: "identity" }))
-                : value;
-        case "object": {
-            if (value == null || typeof value !== "object" || Array.isArray(value)) return value;
-
-            let out = value;
-            for (const [key, nested] of spec.v) {
-                if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
-                const next = __TS_transform(value[key], nested);
-                if (next !== value[key]) {
-                    if (out === value) out = { ...value };
-                    out[key] = next;
-                }
-            }
-            return out;
-        }
-        case "map": {
-            if (value == null || typeof value !== "object" || Array.isArray(value)) return value;
-
-            let out = value;
-            for (const key of Object.keys(value)) {
-                const next = __TS_transform(value[key], spec.v);
-                if (next !== value[key]) {
-                    if (out === value) out = { ...value };
-                    out[key] = next;
-                }
-            }
-            return out;
-        }
-        case "enum":
-            return __TS_transformEnum(value, spec.v);
-        default:
-            return value;
-    }
-}
-
-function __TS_transformEnum(value, variants) {
-    for (const variant of variants) {
-        const transformed = __TS_transformEnumVariant(value, variant);
-        if (transformed !== undefined) return transformed;
-    }
-    return value;
-}
-
-function __TS_transformEnumVariant(value, variant) {
-    if (variant.kind === "unit") return undefined;
-
-    if (value != null && typeof value === "object" && !Array.isArray(value)) {
-        if (Object.prototype.hasOwnProperty.call(value, variant.name)) {
-            const next = __TS_transform(value[variant.name], variant.spec);
-            if (next === value[variant.name]) return value;
-            return { ...value, [variant.name]: next };
-        }
-
-        if (value.type === variant.name && Object.prototype.hasOwnProperty.call(value, "data")) {
-            const next = __TS_transform(value.data, variant.spec);
-            if (next === value.data) return value;
-            return { ...value, data: next };
-        }
-
-        if (value.tag === variant.name && Object.prototype.hasOwnProperty.call(value, "content")) {
-            const next = __TS_transform(value.content, variant.spec);
-            if (next === value.content) return value;
-            return { ...value, content: next };
-        }
-    }
-
-    const direct = __TS_transform(value, variant.spec);
-    if (direct !== value) return direct;
-
-    return undefined;
-}
-
-function __TS_transformResult(result, okSpec, errSpec) {
-    return result.then((value) => {
-        if (value?.status === "ok") {
-            return { status: "ok", data: __TS_transform(value.data, okSpec) };
-        }
-
-        if (value?.status === "error") {
-            return { status: "error", error: __TS_transform(value.error, errSpec) };
-        }
-
-        return value;
-    });
 }"#;

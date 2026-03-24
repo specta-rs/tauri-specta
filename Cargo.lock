@@ -3193,6 +3193,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "specta-tags"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "specta",
+]
+
+[[package]]
 name = "specta-typescript"
 version = "0.0.10"
 dependencies = [
@@ -3592,6 +3601,7 @@ dependencies = [
  "serde",
  "serde_json",
  "specta",
+ "specta-tags",
  "specta-typescript",
  "tauri",
  "tauri-specta-macros",

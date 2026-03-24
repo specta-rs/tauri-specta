@@ -29,6 +29,7 @@ workspace = true
 [dependencies]
 # Public
 specta = { workspace = true, features = ["function"] }
+specta-tags = { path = "/Users/oscar/Desktop/specta18/specta-tags" }
 specta-typescript = { workspace = true, optional = true }
 tauri-specta-macros = { version = "=2.0.0-rc.23", optional = true, path = "./macros" }
 serde = "1"

@@ -106,115 +106,19 @@ function __TS_transform<T>(value: T, spec: __TS_TransformSpec): T {
     switch (spec.t) {
         case "big_int":
             if (typeof rawValue === "bigint") return value;
-            if (typeof rawValue === "number" && Number.isInteger(rawValue)) return BigInt(rawValue) as T;
+            if (typeof rawValue === "number" && Number.isInteger(rawValue)) return BigInt(rawValue);
             if (typeof rawValue === "string") {
                 try {
-                    return BigInt(rawValue) as T;
+                    return BigInt(rawValue);
                 } catch {
                     return value;
                 }
             }
             return value;
-        case "date":
-            return (typeof rawValue === "string" ? new Date(rawValue) : value) as T;
-        case "bytes":
-            return (Array.isArray(rawValue) && rawValue.every((v) => typeof v === "number") ? Uint8Array.from(rawValue) : value) as T;
-        case "nullable":
-            return rawValue == null ? value : __TS_transform(value, spec.v);
-        case "list":
-            return (Array.isArray(rawValue) ? rawValue.map((item) => __TS_transform(item, spec.v)) : value) as T;
-        case "tuple":
-            return (Array.isArray(rawValue)
-                ? rawValue.map((item, index) => __TS_transform(item, spec.v[index] || { t: "identity" }))
-                : value) as T;
-        case "object": {
-            if (rawValue == null || typeof rawValue !== "object" || Array.isArray(rawValue)) return value;
-
-            let out = rawValue;
-            for (const [key, nested] of spec.v) {
-                if (!Object.prototype.hasOwnProperty.call(rawValue, key)) continue;
-                const next = __TS_transform(rawValue[key], nested);
-                if (next !== rawValue[key]) {
-                    if (out === rawValue) out = { ...rawValue };
-                    out[key] = next;
-                }
-            }
-            return out as T;
-        }
-        case "map": {
-            if (rawValue == null || typeof rawValue !== "object" || Array.isArray(rawValue)) return value;
-
-            let out = rawValue;
-            for (const key of Object.keys(rawValue)) {
-                const next = __TS_transform(rawValue[key], spec.v);
-                if (next !== rawValue[key]) {
-                    if (out === rawValue) out = { ...rawValue };
-                    out[key] = next;
-                }
-            }
-            return out as T;
-        }
-        case "enum":
-            return __TS_transformEnum(value, spec.v);
         default:
             return value;
     }
 }
 
-function __TS_transformEnum<T>(value: T, variants: __TS_EnumVariantTransformSpec[]): T {
-    for (const variant of variants) {
-        const transformed = __TS_transformEnumVariant(value, variant);
-        if (transformed !== undefined) return transformed;
-    }
-    return value;
-}
 
-function __TS_transformEnumVariant<T>(value: T, variant: __TS_EnumVariantTransformSpec): T | undefined {
-    const rawValue = value as any;
-
-    if (variant.kind === "unit") return undefined;
-
-    if (rawValue != null && typeof rawValue === "object" && !Array.isArray(rawValue)) {
-        if (Object.prototype.hasOwnProperty.call(rawValue, variant.name)) {
-            const next = __TS_transform(rawValue[variant.name], variant.spec);
-            if (next === rawValue[variant.name]) return value;
-            return { ...rawValue, [variant.name]: next } as T;
-        }
-
-        if (rawValue.type === variant.name && Object.prototype.hasOwnProperty.call(rawValue, "data")) {
-            const next = __TS_transform(rawValue.data, variant.spec);
-            if (next === rawValue.data) return value;
-            return { ...rawValue, data: next } as T;
-        }
-
-        if (rawValue.tag === variant.name && Object.prototype.hasOwnProperty.call(rawValue, "content")) {
-            const next = __TS_transform(rawValue.content, variant.spec);
-            if (next === rawValue.content) return value;
-            return { ...rawValue, content: next } as T;
-        }
-    }
-
-    const direct = __TS_transform(value, variant.spec);
-    if (direct !== value) return direct;
-
-    return undefined;
-}
-
-function __TS_transformResult<T, E>(
-    result: Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>,
-    okSpec: __TS_TransformSpec,
-    errSpec: __TS_TransformSpec,
-): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
-    return result.then((value) => {
-        if (value?.status === "ok") {
-            return { status: "ok", data: __TS_transform(value.data, okSpec) };
-        }
-
-        if (value?.status === "error") {
-            return { status: "error", error: __TS_transform(value.error, errSpec) };
-        }
-
-        return value;
-    });
-}
 

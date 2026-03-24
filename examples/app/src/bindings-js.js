@@ -151,110 +151,20 @@ function __TS_transform(value, spec) {
 
     switch (spec.t) {
         case "big_int":
-            if (typeof value === "bigint") return value;
-            if (typeof value === "number" && Number.isInteger(value)) return BigInt(value);
-            if (typeof value === "string") {
+            if (typeof rawValue === "bigint") return value;
+            if (typeof rawValue === "number" && Number.isInteger(rawValue)) return BigInt(rawValue);
+            if (typeof rawValue === "string") {
                 try {
-                    return BigInt(value);
+                    return BigInt(rawValue);
                 } catch {
                     return value;
                 }
             }
             return value;
-        case "date":
-            return typeof value === "string" ? new Date(value) : value;
-        case "bytes":
-            return Array.isArray(value) && value.every((v) => typeof v === "number") ? Uint8Array.from(value) : value;
-        case "nullable":
-            return value == null ? value : __TS_transform(value, spec.v);
-        case "list":
-            return Array.isArray(value) ? value.map((item) => __TS_transform(item, spec.v)) : value;
-        case "tuple":
-            return Array.isArray(value)
-                ? value.map((item, index) => __TS_transform(item, spec.v[index] || { t: "identity" }))
-                : value;
-        case "object": {
-            if (value == null || typeof value !== "object" || Array.isArray(value)) return value;
-
-            let out = value;
-            for (const [key, nested] of spec.v) {
-                if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
-                const next = __TS_transform(value[key], nested);
-                if (next !== value[key]) {
-                    if (out === value) out = { ...value };
-                    out[key] = next;
-                }
-            }
-            return out;
-        }
-        case "map": {
-            if (value == null || typeof value !== "object" || Array.isArray(value)) return value;
-
-            let out = value;
-            for (const key of Object.keys(value)) {
-                const next = __TS_transform(value[key], spec.v);
-                if (next !== value[key]) {
-                    if (out === value) out = { ...value };
-                    out[key] = next;
-                }
-            }
-            return out;
-        }
-        case "enum":
-            return __TS_transformEnum(value, spec.v);
         default:
             return value;
     }
 }
 
-function __TS_transformEnum(value, variants) {
-    for (const variant of variants) {
-        const transformed = __TS_transformEnumVariant(value, variant);
-        if (transformed !== undefined) return transformed;
-    }
-    return value;
-}
 
-function __TS_transformEnumVariant(value, variant) {
-    if (variant.kind === "unit") return undefined;
-
-    if (value != null && typeof value === "object" && !Array.isArray(value)) {
-        if (Object.prototype.hasOwnProperty.call(value, variant.name)) {
-            const next = __TS_transform(value[variant.name], variant.spec);
-            if (next === value[variant.name]) return value;
-            return { ...value, [variant.name]: next };
-        }
-
-        if (value.type === variant.name && Object.prototype.hasOwnProperty.call(value, "data")) {
-            const next = __TS_transform(value.data, variant.spec);
-            if (next === value.data) return value;
-            return { ...value, data: next };
-        }
-
-        if (value.tag === variant.name && Object.prototype.hasOwnProperty.call(value, "content")) {
-            const next = __TS_transform(value.content, variant.spec);
-            if (next === value.content) return value;
-            return { ...value, content: next };
-        }
-    }
-
-    const direct = __TS_transform(value, variant.spec);
-    if (direct !== value) return direct;
-
-    return undefined;
-}
-
-function __TS_transformResult(result, okSpec, errSpec) {
-    return result.then((value) => {
-        if (value?.status === "ok") {
-            return { status: "ok", data: __TS_transform(value.data, okSpec) };
-        }
-
-        if (value?.status === "error") {
-            return { status: "error", error: __TS_transform(value.error, errSpec) };
-        }
-
-        return value;
-    });
-}
 
