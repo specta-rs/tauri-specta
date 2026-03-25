@@ -377,8 +377,8 @@ fn extract_std_result<'a>(
 ) -> Option<(&'a DataType, &'a DataType)> {
     if let DataType::Reference(Reference::Named(r)) = dt
         && let Some(ndt) = r.get(types)
-        && (ndt.name() != "Result"
-            || (ndt.module_path() != "std::result" && ndt.module_path() != "core::result"))
+        && ndt.name() == "Result"
+        && (ndt.module_path() == "std::result" || ndt.module_path() == "core::result")
         && let [(_, ok), (_, err), ..] = r.generics()
     {
         return Some((ok, err));

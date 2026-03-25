@@ -21,6 +21,9 @@ specta-typescript = { workspace = true }
 tauri-plugin-os = "^2.3.2"
 thiserror = "2"
 
+# TODO: Remove this, it's needed for Serde detection logic in Specta macros right now, bruh
+specta-serde = { workspace = true }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

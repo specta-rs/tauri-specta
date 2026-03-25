@@ -79,12 +79,12 @@ export const universalConstant = 42;
 	*
 	* @typedef {null} EmptyEvent
 	*
-	* @typedef {never | string} MyError
-	* @property {never} IoError
-	* @property {string} AnotherError
+	* @typedef {{ type: "IoError" } | { type: "AnotherError"; data: string }} MyError
+	* @property {{ type: "IoError" }} IoError
+	* @property {{ type: "AnotherError"; data: string }} AnotherError
 	*
-	* @typedef {string} MyError2
-	* @property {string} IoError
+	* @typedef {{ type: "IoError"; data: string }} MyError2
+	* @property {{ type: "IoError"; data: string }} IoError
 	*
 	* @typedef {{
 	*		some_field: string,
