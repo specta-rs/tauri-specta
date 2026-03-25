@@ -1,0 +1,7 @@
+{
+  "name": "tauri-specta-rescript-example",
+  "sources": [{ "dir": "src", "subdirs": true }],
+  "dependencies": ["@rescript/core", "@rescript/webapi"],
+  "compiler-flags": ["-open RescriptCore"],
+  "package-specs": [{ "module": "esmodule" }]
+}

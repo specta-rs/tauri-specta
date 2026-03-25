@@ -1,0 +1,33 @@
+{
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420"
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "targets": "all",
+    "icon": []
+  },
+  "productName": "tauri-specta-rescript-example",
+  "version": "0.0.0",
+  "identifier": "com.example.tauri-specta-rescript",
+  "plugins": {},
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "fullscreen": false,
+        "height": 600,
+        "resizable": true,
+        "title": "Tauri + ReScript",
+        "width": 800
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

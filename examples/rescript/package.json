@@ -1,0 +1,25 @@
+{
+  "name": "tauri-specta-rescript-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "predev": "rescript build",
+    "dev": "vite",
+    "prebuild": "rescript build",
+    "build": "vite build",
+    "serve": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@rescript/core": "^1.6.1",
+    "@rescript/runtime": "^12.2.0",
+    "@rescript/webapi": "0.1.0-experimental-29b94b3",
+    "@tauri-apps/api": "^2.10.1"
+  },
+  "devDependencies": {
+    "@jihchi/vite-plugin-rescript": "8.0.0-beta.2",
+    "@tauri-apps/cli": "^2.10.0",
+    "rescript": "^12.2.0",
+    "vite": "^7.3.1"
+  }
+}

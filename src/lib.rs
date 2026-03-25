@@ -84,12 +84,14 @@
 //! with [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html) like the following:
 //!
 //! ```rust,ignore-windows
+//! use specta_typescript::JSDoc;
+//!
 //! let mut builder = tauri_specta::Builder::<tauri::Wry>::new();
 //!
 //! #[cfg(debug_assertions)]
 //! builder
-//!     .export(specta_jsdoc::JSDoc::default(), "../src/bindings.js")
-//!     .expect("Failed to export typescript bindings");
+//!     .export(JSDoc::default(), "../src/bindings.js")
+//!     .expect("Failed to export jsdoc bindings");
 //! ```
 //!
 //! ## Usage on frontend
@@ -209,7 +211,7 @@ pub mod internal {
     use std::{any::TypeId, sync::Arc};
 
     use specta::{
-        TypeCollection,
+        Types,
         datatype::{self, DataType},
     };
     use tauri::{Runtime, ipc::Invoke};
@@ -219,7 +221,7 @@ pub mod internal {
     /// called by `collect_commands` to construct `Commands`
     pub fn command<R: Runtime, F>(
         f: F,
-        types: fn(&mut TypeCollection) -> Vec<datatype::Function>,
+        types: fn(&mut Types) -> Vec<datatype::Function>,
     ) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
