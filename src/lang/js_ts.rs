@@ -1,17 +1,18 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
-use specta::{ResolvedTypes, Types};
+use specta::Types;
 use specta::datatype::{DataType, Field, Reference, Struct};
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
-    type Error = specta_typescript::Error;
+    type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let resolved = ResolvedTypes::from_resolved_types(cfg.types.clone());
+        let types = specta_serde::apply_phases(cfg.types.clone())
+            .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
             .framework_runtime({
@@ -31,15 +32,16 @@ impl LanguageExt for specta_typescript::Typescript {
                     )
                 }
             })
-            .export_to(path, &resolved)
+            .export_to(path, &types)
     }
 }
 
 impl LanguageExt for specta_typescript::JSDoc {
-    type Error = specta_typescript::Error;
+    type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let resolved = ResolvedTypes::from_resolved_types(cfg.types.clone());
+        let types = specta_serde::apply_phases(cfg.types.clone())
+            .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
             .framework_runtime({
@@ -59,7 +61,7 @@ impl LanguageExt for specta_typescript::JSDoc {
                     )
                 }
             })
-            .export_to(path, &resolved)
+            .export_to(path, &types)
     }
 }
 
