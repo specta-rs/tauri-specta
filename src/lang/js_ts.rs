@@ -375,24 +375,16 @@ fn extract_std_result<'a>(
     dt: &'a DataType,
     types: &'a Types,
 ) -> Option<(&'a DataType, &'a DataType)> {
-    let DataType::Reference(Reference::Named(r)) = dt else {
-        return None;
-    };
-
-    let ndt = r.get(types)?;
-    if ndt.name() != "Result" {
-        return None;
+    if let DataType::Reference(Reference::Named(r)) = dt
+        && let Some(ndt) = r.get(types)
+        && (ndt.name() != "Result"
+            || (ndt.module_path() != "std::result" && ndt.module_path() != "core::result"))
+        && let [(_, ok), (_, err), ..] = r.generics()
+    {
+        return Some((ok, err));
     }
 
-    let module_path = ndt.module_path();
-    if module_path != "std::result" && module_path != "core::result" {
-        return None;
-    }
-
-    let mut generics = r.generics().iter();
-    let (_, ok) = generics.next()?;
-    let (_, err) = generics.next()?;
-    Some((ok, err))
+    None
 }
 
 fn is_channel_type(dt: &DataType, types: &Types) -> bool {
