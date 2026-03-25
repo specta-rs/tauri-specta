@@ -3771,6 +3771,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-specta-rescript-example"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "specta",
+ "specta-rescript",
+ "tauri",
+ "tauri-build",
+ "tauri-specta",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "tauri-utils"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

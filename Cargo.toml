@@ -46,6 +46,7 @@ members = [
     "examples/app/src-tauri",
     "examples/custom-plugin/app/src-tauri",
     "examples/custom-plugin/plugin",
+    "examples/rescript/src-tauri",
     "macros",
 ]
 

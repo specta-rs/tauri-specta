@@ -1,0 +1,25 @@
+[package]
+name = "tauri-specta-rescript-example"
+version = "0.0.0"
+description = "A Tauri + ReScript example using tauri-specta"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2024"
+publish = false
+
+[build-dependencies]
+tauri-build = { workspace = true, features = [] }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+specta = { workspace = true }
+specta-rescript = { git = "https://github.com/rofinn/specta", branch = "rf/rescript" }
+tauri = { workspace = true, features = [] }
+tauri-specta = { path = "../../../", features = ["derive", "rescript"] }
+thiserror = "2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

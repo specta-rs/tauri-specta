@@ -3,7 +3,7 @@ use std::path::Path;
 use heck::ToLowerCamelCase;
 use specta::{
     Types,
-    datatype::{DataType, Function, NamedDataType, Reference},
+    datatype::{DataType, Function, Reference},
 };
 use specta_rescript::{Error, ReScript, primitives::datatype_to_rescript};
 
@@ -47,6 +47,7 @@ fn render(exporter: &ReScript, config: &BuilderConfiguration) -> Result<String, 
     render_types(exporter, &config.types, &mut out)?;
     render_commands(config, &mut out)?;
     render_events(config, &mut out)?;
+    render_constants(config, &mut out);
     Ok(out)
 }
 
@@ -70,7 +71,7 @@ fn render_channel(config: &BuilderConfiguration, out: &mut String) {
     let has_channel = config.commands.iter().any(|cmd| {
         cmd.args()
             .iter()
-            .any(|(_, dt)| as_tauri_channel(&config.types, dt).is_some())
+            .any(|(_, dt)| is_tauri_channel(&config.types, dt))
     });
 
     if has_channel {
@@ -89,9 +90,11 @@ fn render_events(config: &BuilderConfiguration, out: &mut String) -> Result<(), 
     }
 
     out.push_str("\ntype tauriEventCallback__<'a> = {\"payload\": 'a} => unit\n");
+    out.push_str("type tauriEvent__<'a> = {\n  \"listen\": tauriEventCallback__<'a> => promise<unit => unit>,\n  \"once\": tauriEventCallback__<'a> => promise<unit => unit>,\n  \"emit\": 'a => promise<unit>,\n}\n");
     out.push_str("@module(\"@tauri-apps/api/event\") external tauriListen__: (string, tauriEventCallback__<'a>) => promise<unit => unit> = \"listen\"\n");
     out.push_str("@module(\"@tauri-apps/api/event\") external tauriOnce__: (string, tauriEventCallback__<'a>) => promise<unit => unit> = \"once\"\n");
     out.push_str("@module(\"@tauri-apps/api/event\") external tauriEmit__: (string, 'a) => promise<unit> = \"emit\"\n");
+    out.push_str(MAKE_EVENT_IMPL);
     out.push_str("\nmodule Events = {\n");
     for (name, (_, r)) in &config.events {
         let name_json = format_name_json(config.plugin_name, name, ':');
@@ -99,7 +102,7 @@ fn render_events(config: &BuilderConfiguration, out: &mut String) -> Result<(), 
         let payload_type = format_dt(&config.types, &DataType::Reference(r.clone()))?;
 
         out.push_str(&format!(
-            "  let {fn_name} = {{\n    \"listen\": (cb: tauriEventCallback__<{payload_type}>) => tauriListen__({name_json}, cb),\n    \"once\": (cb: tauriEventCallback__<{payload_type}>) => tauriOnce__({name_json}, cb),\n    \"emit\": (payload: {payload_type}) => tauriEmit__({name_json}, payload),\n  }}\n"
+            "  let {fn_name}: tauriEvent__<{payload_type}> = makeEvent__({name_json})\n"
         ));
     }
     out.push_str("}\n");
@@ -117,6 +120,8 @@ fn render_commands(config: &BuilderConfiguration, out: &mut String) -> Result<()
     );
     render_typed_error(config, out);
 
+    // TODO: emit doc comments (/** ... */ and @deprecated) for each command.
+    // We should be able to reuse the existing JSDoc code.
     out.push_str("\nmodule Commands = {\n");
     for command in &config.commands {
         let fn_name = command.name().to_lower_camel_case();
@@ -174,7 +179,7 @@ fn format_fn_args(labeled: &[String]) -> String {
 
 fn format_invoke_obj(fields: &[String]) -> String {
     if fields.is_empty() {
-        return "Js.Obj.empty()".to_string();
+        return "Object.make()".to_string();
     }
     format!("{{{}}}", fields.join(", "))
 }
@@ -211,24 +216,22 @@ fn has_typed_error(config: &BuilderConfiguration) -> bool {
         })
 }
 
-/// Returns `Some(ndt)` if `dt` is a reference to the Tauri Channel type.
-fn as_tauri_channel<'a>(types: &'a Types, dt: &DataType) -> Option<&'a NamedDataType> {
+/// Returns `true` if `dt` is a reference to the Tauri Channel type.
+fn is_tauri_channel(types: &Types, dt: &DataType) -> bool {
     let DataType::Reference(Reference::Named(r)) = dt else {
-        return None;
+        return false;
     };
-    let ndt = r.get(types)?;
-    if ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::") {
-        Some(ndt)
-    } else {
-        None
-    }
+    let Some(ndt) = r.get(types) else {
+        return false;
+    };
+    ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::")
 }
 
 /// Render a DataType to a ReScript type string, with special handling for Tauri's Channel type
 /// and `std::result::Result`.
 fn format_dt(types: &Types, dt: &DataType) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt {
-        if as_tauri_channel(types, dt).is_some() {
+        if is_tauri_channel(types, dt) {
             let generic = r
                 .generics()
                 .first()
@@ -269,6 +272,23 @@ fn extract_std_result<'a>(
     Some((ok, err))
 }
 
+fn render_constants(config: &BuilderConfiguration, out: &mut String) {
+    if config.constants.is_empty() {
+        return;
+    }
+    out.push_str("\n/* Constants */\n");
+    let mut constants: Vec<_> = config.constants.iter().collect();
+    constants.sort_by(|(a, _), (b, _)| a.cmp(b));
+    for (name, value) in constants {
+        let rescript_value = constant_value_to_rescript(value);
+        out.push_str(&format!("let {name} = {rescript_value}\n"));
+    }
+}
+
+fn constant_value_to_rescript(value: &serde_json::Value) -> String {
+    serde_json::to_string(value).expect("failed to serialize constant value")
+}
+
 /// Typed-error helper: wraps a promise into `result<ok, err>` using ReScript's built-in type.
 /// Uses ReScript v11 async/await with `switch await` exception handling.
 /// Tauri rejects with the raw error value, so `Obj.magic` is used to coerce the caught exception.
@@ -279,6 +299,19 @@ const TYPED_ERROR_IMPL: &str = r#"
     | exception e => Error(Obj.magic(e))
     | v => Ok(v)
     }
+)
+"#;
+
+/// makeEvent__ helper: given an event name, returns a typed `tauriEvent__<'a>` object with
+/// listen / once / emit methods.  The `'a` type variable is unified at each call site via the
+/// explicit type annotation on the individual event `let` bindings.
+const MAKE_EVENT_IMPL: &str = r#"
+%%private(
+  let makeEvent__ = (name: string): tauriEvent__<'a> => {
+    "listen": cb => tauriListen__(name, cb),
+    "once": cb => tauriOnce__(name, cb),
+    "emit": payload => tauriEmit__(name, payload),
+  }
 )
 "#;
 
@@ -401,8 +434,8 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            format_body(&cmd, &config, "Js.Obj.empty()"),
-            r#"tauriInvoke__("cmd_no_args", Js.Obj.empty())"#
+            format_body(&cmd, &config, "Object.make()"),
+            r#"tauriInvoke__("cmd_no_args", Object.make())"#
         );
     }
 
@@ -417,8 +450,8 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            format_body(&cmd, &config, "Js.Obj.empty()"),
-            r#"typedError__(tauriInvoke__("cmd_returns_result", Js.Obj.empty()))"#
+            format_body(&cmd, &config, "Object.make()"),
+            r#"typedError__(tauriInvoke__("cmd_returns_result", Object.make()))"#
         );
     }
 
@@ -436,8 +469,8 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            format_body(&plain_cmd, &config, "Js.Obj.empty()"),
-            r#"tauriInvoke__("cmd_no_args", Js.Obj.empty())"#
+            format_body(&plain_cmd, &config, "Object.make()"),
+            r#"tauriInvoke__("cmd_no_args", Object.make())"#
         );
     }
 
@@ -461,8 +494,8 @@ mod tests {
     }
 
     #[test]
-    fn format_invoke_obj_empty_returns_js_empty() {
-        assert_eq!(format_invoke_obj(&[]), "Js.Obj.empty()");
+    fn format_invoke_obj_empty_returns_object_make() {
+        assert_eq!(format_invoke_obj(&[]), "Object.make()");
     }
 
     #[test]
@@ -554,11 +587,44 @@ mod tests {
         let out = render(&ReScript::default().header(""), &config).unwrap();
         assert!(out.contains("module Events"), "missing Events module");
         assert!(
-            out.contains("let myEvent"),
-            "missing camelCase event binding"
+            out.contains("let myEvent: tauriEvent__<string>"),
+            "missing typed event binding"
         );
-        assert!(out.contains("tauriListen__"), "missing listen binding");
-        assert!(out.contains("tauriEmit__"), "missing emit binding");
+        assert!(
+            out.contains("makeEvent__(\"my-event\")"),
+            "missing makeEvent__ call"
+        );
+        assert!(out.contains("tauriListen__"), "missing listen external");
+        assert!(out.contains("tauriEmit__"), "missing emit external");
+    }
+
+    #[test]
+    fn render_constants_emits_let_bindings() {
+        use std::collections::BTreeMap;
+
+        let config = BuilderConfiguration {
+            constants: BTreeMap::from([
+                ("myNumber".into(), serde_json::json!(42)),
+                ("myString".into(), serde_json::json!("hello")),
+                ("myBool".into(), serde_json::json!(true)),
+            ]),
+            ..Default::default()
+        };
+        let out = render(&ReScript::default().header(""), &config).unwrap();
+        assert!(out.contains("/* Constants */"), "missing Constants header");
+        assert!(out.contains("let myBool = true"), "missing bool constant");
+        assert!(out.contains("let myNumber = 42"), "missing number constant");
+        assert!(
+            out.contains("let myString = \"hello\""),
+            "missing string constant"
+        );
+        // constants are sorted alphabetically
+        let bool_pos = out.find("let myBool").unwrap();
+        let num_pos = out.find("let myNumber").unwrap();
+        assert!(
+            bool_pos < num_pos,
+            "constants should be sorted alphabetically"
+        );
     }
 
     // ── export ────────────────────────────────────────────────────────────────
