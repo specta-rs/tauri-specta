@@ -3279,7 +3279,6 @@ name = "specta-macros"
 version = "2.0.0-rc.23"
 dependencies = [
  "Inflector",
- "proc-macro-crate 3.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -3290,6 +3289,7 @@ name = "specta-serde"
 version = "0.0.10"
 dependencies = [
  "specta",
+ "specta-macros",
 ]
 
 [[package]]

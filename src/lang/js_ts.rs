@@ -1,8 +1,8 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
-use specta::Types;
-use specta::datatype::{DataType, Field, Reference, Struct};
+use specta::datatype::{DataType, Field, Function, Reference, Struct};
+use specta::{ResolvedTypes, Types};
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
@@ -141,6 +141,8 @@ fn runtime(
     if enabled_commands {
         let mut s = Struct::named();
         for command in &cfg.commands {
+            validate_exported_command(command, exporter.types)?;
+
             let command_name_escaped = serde_json::to_string(
                 &cfg.plugin_name
                     .map(|plugin_name| format!("plugin|{plugin_name}|{}", command.name()).into())
@@ -369,6 +371,36 @@ fn runtime(
     }
 
     Ok(Cow::Owned(out))
+}
+
+fn validate_exported_command(command: &Function, types: &ResolvedTypes) -> Result<(), Error> {
+    for (position, (name, dt)) in command.args().iter().enumerate() {
+        specta_serde::validate(dt, types).map_err(|err| {
+            Error::framework(
+                format!(
+                    "Specta Serde validation failed for command '{}' param #{} ('{}')",
+                    command.name(),
+                    position + 1,
+                    name
+                ),
+                err,
+            )
+        })?;
+    }
+
+    if let Some(result) = command.result() {
+        specta_serde::validate(result, types).map_err(|err| {
+            Error::framework(
+                format!(
+                    "Specta Serde validation failed for command '{}' result",
+                    command.name()
+                ),
+                err,
+            )
+        })?;
+    }
+
+    Ok(())
 }
 
 fn extract_std_result<'a>(

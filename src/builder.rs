@@ -219,7 +219,7 @@ impl<R: Runtime> Builder<R> {
     /// let mut builder = Builder::<tauri::Wry>::new().types(&Types::default());
     /// ```
     pub fn types(mut self, types: &Types) -> Self {
-        self.cfg.types.merge(types);
+        self.cfg.types.extend(types);
         self
     }
 
