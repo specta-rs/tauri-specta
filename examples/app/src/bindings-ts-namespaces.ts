@@ -21,6 +21,7 @@ export const commands = {
 	 */
 	deprecated: () => __TAURI_INVOKE<void>("deprecated"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
+	phaseSpecificRename: (input: $s$.tauri_specta_example_app.PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<$s$.tauri_specta_example_app.PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
 	typesafeErrorsUsingThiserror: () => typedError<null, $s$.tauri_specta_example_app.MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, $s$.tauri_specta_example_app.MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 };
@@ -47,6 +48,16 @@ namespace $s$ {
 		export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
 
 		export type MyError2 = { type: "IoError"; data: string };
+
+		export type PhaseSpecificRename = $s$.tauri_specta_example_app.PhaseSpecificRename_Serialize | $s$.tauri_specta_example_app.PhaseSpecificRename_Deserialize;
+
+		export type PhaseSpecificRename_Deserialize = {
+			deserialized_value: string,
+		};
+
+		export type PhaseSpecificRename_Serialize = {
+			serialized_value: string,
+		};
 
 		export type Testing = {
 			a: string,

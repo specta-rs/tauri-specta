@@ -9,6 +9,16 @@ export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string
 
 export type MyError2 = { type: "IoError"; data: string };
 
+export type PhaseSpecificRename = PhaseSpecificRename_Serialize | PhaseSpecificRename_Deserialize;
+
+export type PhaseSpecificRename_Deserialize = {
+	deserialized_value: string,
+};
+
+export type PhaseSpecificRename_Serialize = {
+	serialized_value: string,
+};
+
 export type Testing = {
 	a: string,
 };

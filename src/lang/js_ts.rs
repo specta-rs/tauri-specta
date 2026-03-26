@@ -3,6 +3,7 @@ use std::{borrow::Cow, path::Path};
 use heck::ToLowerCamelCase;
 use specta::datatype::{DataType, Field, Function, Reference, Struct};
 use specta::{ResolvedTypes, Types};
+use specta_serde::Phase;
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
@@ -156,7 +157,7 @@ fn runtime(
                 .map(|(name, dt)| {
                     Ok((
                         name.to_lower_camel_case(),
-                        render_reference_dt(dt, &exporter)?,
+                        render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter)?,
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -197,9 +198,17 @@ fn runtime(
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
                     invoke_ts.push('<');
-                    invoke_ts.push_str(&render_reference_dt(dt_ok, &exporter)?);
+                    invoke_ts.push_str(&render_reference_dt_for_phase(
+                        dt_ok,
+                        Phase::Serialize,
+                        &exporter,
+                    )?);
                     invoke_ts.push_str(", ");
-                    invoke_ts.push_str(&render_reference_dt(dt_err, &exporter)?);
+                    invoke_ts.push_str(&render_reference_dt_for_phase(
+                        dt_err,
+                        Phase::Serialize,
+                        &exporter,
+                    )?);
                     invoke_ts.push('>');
                 }
                 invoke_ts.push_str("(__TAURI_INVOKE");
@@ -212,9 +221,13 @@ fn runtime(
                     invoke_ts.push('<');
                     invoke_ts.push_str(&match command.result() {
                         Some(dt) => Cow::Owned(render_reference_dt(
-                            extract_std_result(dt, &cfg.types)
-                                .map(|(ok, _)| ok)
-                                .unwrap_or(dt),
+                            &specta_serde::select_phase_datatype(
+                                extract_std_result(dt, &cfg.types)
+                                    .map(|(ok, _)| ok)
+                                    .unwrap_or(dt),
+                                exporter.types,
+                                Phase::Serialize,
+                            ),
                             &exporter,
                         )?),
                         None => Cow::Borrowed("void"),
@@ -427,6 +440,15 @@ fn is_channel_type(dt: &DataType, types: &Types) -> bool {
             .unwrap_or(false),
         _ => false,
     }
+}
+
+fn render_reference_dt_for_phase(
+    dt: &DataType,
+    phase: Phase,
+    exporter: &FrameworkExporter,
+) -> Result<String, Error> {
+    let dt = specta_serde::select_phase_datatype(dt, exporter.types, phase);
+    render_reference_dt(&dt, exporter)
 }
 
 // Render a `DataType` as a reference (or fallback to inline).

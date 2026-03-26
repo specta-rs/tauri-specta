@@ -49,6 +49,11 @@ export const commands = {
 	 */
 	withChannel: (channel) => __TAURI_INVOKE("with_channel", { channel }),
 	/**
+	 * @param {tauri_specta_example_app.PhaseSpecificRename_Deserialize} input
+	 * @returns {string} myName
+	 */
+	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
+	/**
 	 * @returns {string} myName
 	 */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),

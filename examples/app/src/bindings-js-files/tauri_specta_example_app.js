@@ -15,6 +15,20 @@
 	* @typedef {{ type: "IoError"; data: string }} MyError2
 	* @property {{ type: "IoError"; data: string }} IoError
 	*
+	* @typedef {PhaseSpecificRename_Serialize | PhaseSpecificRename_Deserialize} PhaseSpecificRename
+	* @property {PhaseSpecificRename_Serialize} Serialize
+	* @property {PhaseSpecificRename_Deserialize} Deserialize
+	*
+	* @typedef {{
+	*		deserialized_value: string,
+	*	}} PhaseSpecificRename_Deserialize
+	* @property {string} deserialized_value
+	*
+	* @typedef {{
+	*		serialized_value: string,
+	*	}} PhaseSpecificRename_Serialize
+	* @property {string} serialized_value
+	*
 	* @typedef {{
 	*		a: string,
 	*	}} Testing
