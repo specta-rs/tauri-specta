@@ -1,9 +1,10 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
-use specta::datatype::{DataType, Field, Function, Reference, Struct};
+use specta::datatype::{DataType, Field, Fields, Function, Primitive, Reference, Struct};
 use specta::{ResolvedTypes, Types};
 use specta_serde::Phase;
+use specta_tags::TransformPlan;
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
@@ -12,26 +13,26 @@ impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let types = specta_serde::apply_phases(cfg.types.clone())
+        let cfg = cfg.clone();
+        let mut types = specta_serde::apply_phases(cfg.types.clone())
             .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
+        types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut()));
+
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
-            .framework_runtime({
-                let cfg = cfg.clone();
-                move |exporter| {
-                    runtime(
-                        exporter,
-                        &cfg,
-                        false,
-                        if !cfg.typed_error_impl.is_empty() {
-                            &cfg.typed_error_impl
-                        } else {
-                            TYPED_ERROR_IMPL_TS
-                        },
-                        TYPED_ERROR_ASSERTION_TS,
-                        MAKE_EVENT_IMPL_TS,
-                    )
-                }
+            .framework_runtime(|exporter| {
+                runtime(
+                    exporter,
+                    &cfg,
+                    false,
+                    if !cfg.typed_error_impl.is_empty() {
+                        &cfg.typed_error_impl
+                    } else {
+                        TYPED_ERROR_IMPL_TS
+                    },
+                    TYPED_ERROR_ASSERTION_TS,
+                    MAKE_EVENT_IMPL_TS,
+                )
             })
             .export_to(path, &types)
     }
@@ -41,26 +42,26 @@ impl LanguageExt for specta_typescript::JSDoc {
     type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let types = specta_serde::apply_phases(cfg.types.clone())
+        let cfg = cfg.clone();
+        let mut types = specta_serde::apply_phases(cfg.types.clone())
             .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
+        types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut()));
+
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
-            .framework_runtime({
-                let cfg = cfg.clone();
-                move |exporter| {
-                    runtime(
-                        exporter,
-                        &cfg,
-                        true,
-                        if !cfg.typed_error_impl.is_empty() {
-                            &cfg.typed_error_impl
-                        } else {
-                            TYPED_ERROR_IMPL_JS
-                        },
-                        "",
-                        MAKE_EVENT_IMPL_JS,
-                    )
-                }
+            .framework_runtime(|exporter| {
+                runtime(
+                    exporter,
+                    &cfg,
+                    true,
+                    if !cfg.typed_error_impl.is_empty() {
+                        &cfg.typed_error_impl
+                    } else {
+                        TYPED_ERROR_IMPL_JS
+                    },
+                    "",
+                    MAKE_EVENT_IMPL_JS,
+                )
             })
             .export_to(path, &types)
     }
@@ -74,6 +75,7 @@ fn runtime(
     typed_error_assertion: &str,
     make_event_impl: &str,
 ) -> Result<Cow<'static, str>, Error> {
+    let types = exporter.types.as_types();
     let enabled_commands = !cfg.commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
 
@@ -96,13 +98,16 @@ fn runtime(
 
     let is_channel_used = cfg.commands.iter().any(|command| {
         // Check if any argument is a Channel
-        command.args().iter().any(|(_, dt)| is_channel_type(dt, &cfg.types))
+        command
+            .args()
+            .iter()
+            .any(|(_, dt)| is_channel_type(dt, types))
             // Check if result contains a Channel
             || command.result().is_some_and(|result| {
-                if let Some((ok, err)) = extract_std_result(result, &cfg.types) {
-                    is_channel_type(ok, &cfg.types) || is_channel_type(err, &cfg.types)
+                if let Some((ok, err)) = extract_std_result(result, types) {
+                    is_channel_type(ok, types) || is_channel_type(err, types)
                 } else {
-                    is_channel_type(result, &cfg.types)
+                    is_channel_type(result, types)
                 }
             })
     });
@@ -111,7 +116,7 @@ fn runtime(
         && cfg.commands.iter().any(|command| {
             command
                 .result()
-                .and_then(|dt| extract_std_result(dt, &cfg.types))
+                .and_then(|dt| extract_std_result(dt, types))
                 .is_some()
         });
 
@@ -193,7 +198,7 @@ fn runtime(
 
             let body = if cfg.error_handling == ErrorHandlingMode::Result
                 && let Some(result) = command.result()
-                && let Some((dt_ok, dt_err)) = extract_std_result(result, &cfg.types)
+                && let Some((dt_ok, dt_err)) = extract_std_result(result, types)
             {
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
@@ -214,15 +219,41 @@ fn runtime(
                 invoke_ts.push_str("(__TAURI_INVOKE");
                 invoke_ts.push_str(&invoke_args);
                 invoke_ts.push(')');
-                invoke_ts
+
+                let ok_transform = render_result_transform_for_phase(dt_ok, "v.data", &exporter);
+                let err_transform = render_result_transform_for_phase(dt_err, "v.error", &exporter);
+
+                if ok_transform.is_none() && err_transform.is_none() {
+                    invoke_ts
+                } else {
+                    let mapper = match (ok_transform, err_transform) {
+                        (Some(ok), Some(err)) => format!(
+                            "(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v.status === \"error\" ? {{ ...v, error: {err} }} : v)"
+                        ),
+                        (Some(ok), None) => {
+                            format!("(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v)")
+                        }
+                        (None, Some(err)) => {
+                            format!("(v.status === \"error\" ? {{ ...v, error: {err} }} : v)")
+                        }
+                        (None, None) => "v".to_string(),
+                    };
+
+                    format!("{invoke_ts}.then((v) => {mapper})")
+                }
             } else {
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
+                let output_dt = command
+                    .result()
+                    .and_then(|dt| extract_std_result(dt, types).map(|(ok, _)| ok))
+                    .or(command.result());
+
                 if !jsdoc {
                     invoke_ts.push('<');
                     invoke_ts.push_str(&match command.result() {
                         Some(dt) => Cow::Owned(render_reference_dt(
                             &specta_serde::select_phase_datatype(
-                                extract_std_result(dt, &cfg.types)
+                                extract_std_result(dt, types)
                                     .map(|(ok, _)| ok)
                                     .unwrap_or(dt),
                                 exporter.types,
@@ -235,7 +266,14 @@ fn runtime(
                     invoke_ts.push('>');
                 }
                 invoke_ts.push_str(&invoke_args);
-                invoke_ts
+
+                if let Some(dt) = output_dt
+                    && let Some(mapped) = render_result_transform_for_phase(dt, "v", &exporter)
+                {
+                    format!("{invoke_ts}.then((v) => {mapped})")
+                } else {
+                    invoke_ts
+                }
             };
 
             let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
@@ -386,6 +424,66 @@ fn runtime(
     Ok(Cow::Owned(out))
 }
 
+fn rewrite_bigints_in_datatype(dt: &mut DataType) {
+    fn rewrite_bigints_in_fields(fields: &mut Fields) {
+        match fields {
+            Fields::Unit => {}
+            Fields::Unnamed(fields) => {
+                for field in fields.fields_mut() {
+                    if let Some(ty) = field.ty_mut() {
+                        rewrite_bigints_in_datatype(ty);
+                    }
+                }
+            }
+            Fields::Named(fields) => {
+                for (_, field) in fields.fields_mut() {
+                    if let Some(ty) = field.ty_mut() {
+                        rewrite_bigints_in_datatype(ty);
+                    }
+                }
+            }
+        }
+    }
+
+    match dt {
+        DataType::Primitive(
+            Primitive::usize
+            | Primitive::isize
+            | Primitive::i64
+            | Primitive::u64
+            | Primitive::i128
+            | Primitive::u128
+            | Primitive::f128,
+        ) => {
+            *dt = specta_typescript::define("bigint").into();
+        }
+        DataType::Primitive(_) => {}
+        DataType::List(list) => rewrite_bigints_in_datatype(list.ty_mut()),
+        DataType::Map(map) => {
+            rewrite_bigints_in_datatype(map.key_ty_mut());
+            rewrite_bigints_in_datatype(map.value_ty_mut());
+        }
+        DataType::Struct(strct) => rewrite_bigints_in_fields(strct.fields_mut()),
+        DataType::Enum(enm) => {
+            for (_, variant) in enm.variants_mut() {
+                rewrite_bigints_in_fields(variant.fields_mut());
+            }
+        }
+        DataType::Tuple(tuple) => {
+            for item in tuple.elements_mut() {
+                rewrite_bigints_in_datatype(item);
+            }
+        }
+        DataType::Nullable(inner) => rewrite_bigints_in_datatype(inner),
+        DataType::Reference(Reference::Named(reference)) => {
+            for (_, generic) in reference.generics_mut() {
+                rewrite_bigints_in_datatype(generic);
+            }
+        }
+        DataType::Reference(Reference::Generic(_)) | DataType::Reference(Reference::Opaque(_)) => {}
+    }
+}
+
 fn validate_exported_command(command: &Function, types: &ResolvedTypes) -> Result<(), Error> {
     for (position, (name, dt)) in command.args().iter().enumerate() {
         specta_serde::validate(dt, types).map_err(|err| {
@@ -440,6 +538,16 @@ fn is_channel_type(dt: &DataType, types: &Types) -> bool {
             .unwrap_or(false),
         _ => false,
     }
+}
+
+fn render_result_transform_for_phase(
+    dt: &DataType,
+    input: &str,
+    exporter: &FrameworkExporter,
+) -> Option<String> {
+    let dt = specta_serde::select_phase_datatype(dt, exporter.types, Phase::Serialize);
+    let mapped = TransformPlan::analyze(dt, exporter.types).map(input);
+    (mapped != input).then(|| mapped.into_owned())
 }
 
 fn render_reference_dt_for_phase(

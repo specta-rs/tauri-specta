@@ -13,9 +13,7 @@ use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 ///
 /// This acts to seal the implementation details of the macro.
 #[derive(Default)]
-pub struct Events(
-    pub(crate) BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>,
-);
+pub struct Events(pub(crate) BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>);
 
 #[derive(Default)]
 pub(crate) struct EventRegistryMeta {

@@ -13,13 +13,15 @@ tauri-build = { workspace = true, features = [] }
 
 [dependencies]
 serde_json = "1.0"
-specta = { workspace = true }
+specta = { workspace = true, features = ["bytes", "chrono"] }
 serde = { version = "1.0", features = ["derive"] }
 tauri = { workspace = true, features = [] }
 tauri-specta = { path = "../../../", features = ["derive", "typescript", "javascript"] }
 specta-typescript = { workspace = true }
 tauri-plugin-os = "^2.3.2"
 thiserror = "2"
+bytes = { version = "1.11.1", features = ["serde"] }
+chrono = { version = "0.4.44", features = ["serde"] }
 
 [features]
 default = ["custom-protocol"]

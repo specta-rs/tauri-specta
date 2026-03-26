@@ -3,9 +3,11 @@
     windows_subsystem = "windows"
 )]
 
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use specta_typescript::Typescript;
+use tauri::{AppHandle, Manager, ipc::Channel};
 use tauri_specta::*;
 use thiserror::Error;
 
@@ -60,6 +62,59 @@ struct PhaseSpecificRename {
 fn phase_specific_rename(input: PhaseSpecificRename) -> PhaseSpecificRename {
     input
 }
+
+#[derive(Debug, Serialize, Deserialize, Type)]
+struct SpecialTypes {
+    u128_max: u128,
+    u128_min: u128,
+    i128_max: i128,
+    i128_min: i128,
+    // bytes: bytes::Bytes,
+    // #[specta(type = specta_typescript::Bytes)] // TODO
+    // bytes_from_vec: Vec<u8>,
+    // TODO: Example with bytes + base64 encoding
+    // TODO: Allow `UInt8Array` from any `String`.
+    // date: chrono::NaiveDate,
+    // datetime: chrono::NaiveDateTime,
+}
+
+#[tauri::command]
+#[specta::specta]
+fn special_types(input: SpecialTypes) -> (SpecialTypes, SpecialTypes) {
+    println!("SPECIAL TYPES: {:?}", input);
+    println!(
+        "ASSERTIONS: {} {} {} {}",
+        input.u128_max == u128::MAX,
+        input.u128_min == u128::MIN,
+        input.i128_max == i128::MAX,
+        input.i128_min == i128::MIN
+    );
+
+    (
+        input,
+        SpecialTypes {
+            u128_max: u128::MAX,
+            u128_min: u128::MIN,
+            i128_max: i128::MAX,
+            i128_min: i128::MIN,
+            // bytes: vec![1, 2, 3, 4].into(),
+            // bytes_from_vec: vec![1, 2, 3, 4],
+            // date: chrono::Utc::now().date_naive(),
+            // datetime: chrono::Utc::now().naive_utc(),
+        },
+    )
+}
+
+fn special_types_w_channel(channel: Channel<u128>) {
+    channel.send(u128::MAX).unwrap();
+}
+
+fn emit_event_with_bigint(app: AppHandle) {
+    EventWithBigInt(u128::MAX).emit(&app).unwrap();
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
+pub struct EventWithBigInt(u128);
 
 mod nested {
     use super::*;
@@ -147,6 +202,9 @@ fn main() {
             deprecated,
             with_channel,
             phase_specific_rename,
+            special_types,
+            special_types_w_channel,
+            emit_event_with_bigint,
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
         ])
@@ -161,36 +219,37 @@ fn main() {
 
         builder
             .export(
-                Typescript::default(),
+                Typescript::default().bigint(specta_typescript::BigIntExportBehavior::Number), // TODO: Remove this
                 // .header("/* eslint-disable */")
                 "../src/bindings.ts",
             )
             .expect("Failed to export typescript bindings");
 
-        builder
-            .export(JSDoc::default(), "../src/bindings-js.js")
-            .expect("Failed to export typescript bindings");
+        // TODO: Reneable these
+        // builder
+        //     .export(JSDoc::default(), "../src/bindings-js.js")
+        //     .expect("Failed to export typescript bindings");
 
-        builder
-            .export(
-                Typescript::default().layout(Layout::Files),
-                "../src/bindings-ts-files",
-            )
-            .expect("Failed to export typescript bindings");
+        // builder
+        //     .export(
+        //         Typescript::default().layout(Layout::Files),
+        //         "../src/bindings-ts-files",
+        //     )
+        //     .expect("Failed to export typescript bindings");
 
-        builder
-            .export(
-                JSDoc::default().layout(Layout::Files),
-                "../src/bindings-js-files",
-            )
-            .expect("Failed to export typescript bindings");
+        // builder
+        //     .export(
+        //         JSDoc::default().layout(Layout::Files),
+        //         "../src/bindings-js-files",
+        //     )
+        //     .expect("Failed to export typescript bindings");
 
-        builder
-            .export(
-                Typescript::default().layout(Layout::Namespaces),
-                "../src/bindings-ts-namespaces.ts",
-            )
-            .expect("Failed to export typescript bindings");
+        // builder
+        //     .export(
+        //         Typescript::default().layout(Layout::Namespaces),
+        //         "../src/bindings-ts-namespaces.ts",
+        //     )
+        //     .expect("Failed to export typescript bindings");
     }
 
     #[cfg(debug_assertions)]

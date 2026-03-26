@@ -20,8 +20,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 default = []
 derive = ["dep:tauri-specta-macros"]
-javascript = ["dep:specta-typescript"]
-typescript = ["dep:specta-typescript"]
+javascript = ["dep:specta-typescript", "dep:specta-tags"]
+typescript = ["dep:specta-typescript", "dep:specta-tags"]
 
 [lints]
 workspace = true
@@ -31,6 +31,7 @@ workspace = true
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
 specta-serde = { workspace = true }
+specta-tags = { version = "0.0.0", optional = true, path = "/Users/oscar/Desktop/specta17/specta-tags" }
 tauri-specta-macros = { version = "=2.0.0-rc.23", optional = true, path = "./macros" }
 serde = "1"
 serde_json = "1"
@@ -77,3 +78,8 @@ specta-serde = { version = "0.0.10" }
 specta = { path = "/Users/oscar/Desktop/specta17/specta" }
 specta-typescript = { path = "/Users/oscar/Desktop/specta17/specta-typescript" }
 specta-serde = { path = "/Users/oscar/Desktop/specta17/specta-serde" }
+specta-tags = { path = "/Users/oscar/Desktop/specta17/specta-tags" }
+
+# TODO: This should be optional?
+# `otbeaumont/bigint` branch
+tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "c1d13daf34ce881e248c06a7bccc31bc1f39afd4" }
