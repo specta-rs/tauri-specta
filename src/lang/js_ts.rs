@@ -14,22 +14,22 @@ impl LanguageExt for specta_typescript::Typescript {
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
-        let mut types = specta_serde::apply_phases(cfg.types.clone())
-            .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
-        types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut()));
+        let types = resolve_types_for_export(&cfg)?;
+        let runtime_cfg = cfg.clone();
+        let typed_error_impl = if cfg.typed_error_impl.is_empty() {
+            Cow::Borrowed(TYPED_ERROR_IMPL_TS)
+        } else {
+            cfg.typed_error_impl.clone()
+        };
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
-            .framework_runtime(|exporter| {
+            .framework_runtime(move |exporter| {
                 runtime(
                     exporter,
-                    &cfg,
+                    &runtime_cfg,
                     false,
-                    if !cfg.typed_error_impl.is_empty() {
-                        &cfg.typed_error_impl
-                    } else {
-                        TYPED_ERROR_IMPL_TS
-                    },
+                    &typed_error_impl,
                     TYPED_ERROR_ASSERTION_TS,
                     MAKE_EVENT_IMPL_TS,
                 )
@@ -43,28 +43,43 @@ impl LanguageExt for specta_typescript::JSDoc {
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
-        let mut types = specta_serde::apply_phases(cfg.types.clone())
-            .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
-        types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut()));
+        let types = resolve_types_for_export(&cfg)?;
+        let runtime_cfg = cfg.clone();
+        let typed_error_impl = if cfg.typed_error_impl.is_empty() {
+            Cow::Borrowed(TYPED_ERROR_IMPL_JS)
+        } else {
+            cfg.typed_error_impl.clone()
+        };
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
-            .framework_runtime(|exporter| {
+            .framework_runtime(move |exporter| {
                 runtime(
                     exporter,
-                    &cfg,
+                    &runtime_cfg,
                     true,
-                    if !cfg.typed_error_impl.is_empty() {
-                        &cfg.typed_error_impl
-                    } else {
-                        TYPED_ERROR_IMPL_JS
-                    },
+                    &typed_error_impl,
                     "",
                     MAKE_EVENT_IMPL_JS,
                 )
             })
             .export_to(path, &types)
     }
+}
+
+fn resolve_types_for_export(cfg: &BuilderConfiguration) -> Result<ResolvedTypes, Error> {
+    let mut types = if cfg.disable_serde_phases {
+        specta_serde::apply(cfg.types.clone())
+    } else {
+        specta_serde::apply_phases(cfg.types.clone())
+    }
+    .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
+
+    if cfg.enable_nuanced_types {
+        types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut()));
+    }
+
+    Ok(types)
 }
 
 fn runtime(
@@ -220,8 +235,10 @@ fn runtime(
                 invoke_ts.push_str(&invoke_args);
                 invoke_ts.push(')');
 
-                let ok_transform = render_result_transform_for_phase(dt_ok, "v.data", &exporter);
-                let err_transform = render_result_transform_for_phase(dt_err, "v.error", &exporter);
+                let ok_transform =
+                    render_result_transform_for_phase(dt_ok, "v.data", &exporter, cfg);
+                let err_transform =
+                    render_result_transform_for_phase(dt_err, "v.error", &exporter, cfg);
 
                 if ok_transform.is_none() && err_transform.is_none() {
                     invoke_ts
@@ -268,7 +285,7 @@ fn runtime(
                 invoke_ts.push_str(&invoke_args);
 
                 if let Some(dt) = output_dt
-                    && let Some(mapped) = render_result_transform_for_phase(dt, "v", &exporter)
+                    && let Some(mapped) = render_result_transform_for_phase(dt, "v", &exporter, cfg)
                 {
                     format!("{invoke_ts}.then((v) => {mapped})")
                 } else {
@@ -544,7 +561,12 @@ fn render_result_transform_for_phase(
     dt: &DataType,
     input: &str,
     exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
 ) -> Option<String> {
+    if !cfg.enable_nuanced_types {
+        return None;
+    }
+
     let dt = specta_serde::select_phase_datatype(dt, exporter.types, Phase::Serialize);
     let mapped = TransformPlan::analyze(dt, exporter.types).map(input);
     (mapped != input).then(|| mapped.into_owned())

@@ -3,11 +3,10 @@
     windows_subsystem = "windows"
 )]
 
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use specta_typescript::Typescript;
-use tauri::{AppHandle, Manager, ipc::Channel};
+use tauri::{AppHandle, ipc::Channel};
 use tauri_specta::*;
 use thiserror::Error;
 
@@ -105,10 +104,14 @@ fn special_types(input: SpecialTypes) -> (SpecialTypes, SpecialTypes) {
     )
 }
 
+#[tauri::command]
+#[specta::specta]
 fn special_types_w_channel(channel: Channel<u128>) {
     channel.send(u128::MAX).unwrap();
 }
 
+#[tauri::command]
+#[specta::specta]
 fn emit_event_with_bigint(app: AppHandle) {
     EventWithBigInt(u128::MAX).emit(&app).unwrap();
 }
@@ -192,6 +195,8 @@ pub struct Testing {
 
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
+        // TODO: You shouldn't enable this unless you know what you're doing!
+        .unstable_nuanced_types()
         .commands(tauri_specta::collect_commands![
             hello_world,
             goodbye_world,
@@ -219,37 +224,36 @@ fn main() {
 
         builder
             .export(
-                Typescript::default().bigint(specta_typescript::BigIntExportBehavior::Number), // TODO: Remove this
+                Typescript::default(),
                 // .header("/* eslint-disable */")
                 "../src/bindings.ts",
             )
             .expect("Failed to export typescript bindings");
 
-        // TODO: Reneable these
-        // builder
-        //     .export(JSDoc::default(), "../src/bindings-js.js")
-        //     .expect("Failed to export typescript bindings");
+        builder
+            .export(JSDoc::default(), "../src/bindings-js.js")
+            .expect("Failed to export typescript bindings");
 
-        // builder
-        //     .export(
-        //         Typescript::default().layout(Layout::Files),
-        //         "../src/bindings-ts-files",
-        //     )
-        //     .expect("Failed to export typescript bindings");
+        builder
+            .export(
+                Typescript::default().layout(Layout::Files),
+                "../src/bindings-ts-files",
+            )
+            .expect("Failed to export typescript bindings");
 
-        // builder
-        //     .export(
-        //         JSDoc::default().layout(Layout::Files),
-        //         "../src/bindings-js-files",
-        //     )
-        //     .expect("Failed to export typescript bindings");
+        builder
+            .export(
+                JSDoc::default().layout(Layout::Files),
+                "../src/bindings-js-files",
+            )
+            .expect("Failed to export typescript bindings");
 
-        // builder
-        //     .export(
-        //         Typescript::default().layout(Layout::Namespaces),
-        //         "../src/bindings-ts-namespaces.ts",
-        //     )
-        //     .expect("Failed to export typescript bindings");
+        builder
+            .export(
+                Typescript::default().layout(Layout::Namespaces),
+                "../src/bindings-ts-namespaces.ts",
+            )
+            .expect("Failed to export typescript bindings");
     }
 
     #[cfg(debug_assertions)]

@@ -99,6 +99,8 @@ pub struct BuilderConfiguration {
     pub types: Types,
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
     pub typed_error_impl: Cow<'static, str>,
+    pub enable_nuanced_types: bool,
+    pub disable_serde_phases: bool,
 }
 
 impl<R: Runtime> Default for Builder<R> {
@@ -269,6 +271,28 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn typed_error_impl(mut self, runtime: impl Into<Cow<'static, str>>) -> Self {
         self.cfg.typed_error_impl = runtime.into();
+        self
+    }
+
+    /// Enable nuanced frontend type handling for exported bindings.
+    ///
+    /// This opts into runtime transforms for values such as bigints and other
+    /// transport-specific shapes which require client-side restoration.
+    ///
+    /// NOTE: The runtime behavior of this isn't guarantee without a Tauri crates.io patch so ensure you are careful!
+    /// NOTE: This will be enabled by default in future releases.
+    /// TODO: Flip this to be enabled by default
+    pub fn unstable_nuanced_types(mut self) -> Self {
+        self.cfg.enable_nuanced_types = true;
+        self
+    }
+
+    /// Disable phase-aware serde export handling and use unified serde mode.
+    ///
+    /// This causes export to use `specta_serde::apply` instead of
+    /// `specta_serde::apply_phases`.
+    pub fn disable_serde_phases(mut self) -> Self {
+        self.cfg.disable_serde_phases = true;
         self
     }
 
