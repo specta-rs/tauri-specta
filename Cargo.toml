@@ -71,9 +71,14 @@ specta-serde = { version = "0.0.10" }
 specta-tags = { version = "0.0.0" }
 
 
-# TODO: remove these once released as `.rc-24`
+# TODO: Remove patches
 [patch.crates-io]
-specta = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
-specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
-specta-serde = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
-specta-tags = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
+specta = { path = "/Users/oscar/Desktop/specta17/specta" }
+specta-typescript = { path = "/Users/oscar/Desktop/specta17/specta-typescript" }
+specta-serde = { path = "/Users/oscar/Desktop/specta17/specta-serde" }
+specta-tags = { path = "/Users/oscar/Desktop/specta17/specta-tags" }
+
+# TODO: This should be optional?
+# `otbeaumont/bigint` branch
+# tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "c1d13daf34ce881e248c06a7bccc31bc1f39afd4" }
+tauri = { path = "/Users/oscar/Desktop/tauri/crates/tauri" }
