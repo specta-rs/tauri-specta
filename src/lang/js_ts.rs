@@ -1,8 +1,8 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
+use specta::ResolvedTypes;
 use specta::datatype::{DataType, Field, Fields, Function, Primitive, Reference, Struct};
-use specta::{ResolvedTypes, Types};
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
@@ -64,22 +64,20 @@ impl LanguageExt for specta_typescript::JSDoc {
 }
 
 fn resolve_types_for_export(cfg: &BuilderConfiguration) -> Result<ResolvedTypes, Error> {
-    if cfg.enable_nuanced_types && cfg.disable_serde_phases {
-        return Err(Error::framework(
-            "",
-            "`unstable_nuanced_types` requires serde phase splitting; remove `disable_serde_phases()` to export bigint-style types".to_string(),
-        ));
-    }
-
-    let mut types = cfg.types.clone();
-    rewrite_bigints_in_types(&mut types, cfg.enable_nuanced_types);
-
-    let types = if cfg.disable_serde_phases {
+    let types = cfg.types.clone();
+    let mut types = if cfg.disable_serde_phases {
         specta_serde::apply(types)
     } else {
         specta_serde::apply_phases(types)
     }
     .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
+    types.iter_mut(|ndt| {
+        rewrite_bigints_in_datatype(
+            ndt.ty_mut(),
+            cfg.enable_nuanced_types,
+            !cfg.disable_serde_phases,
+        )
+    });
 
     Ok(types)
 }
@@ -494,25 +492,21 @@ fn runtime(
     Ok(Cow::Owned(out))
 }
 
-fn rewrite_bigints_in_types(types: &mut Types, nuanced: bool) {
-    types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut(), nuanced));
-}
-
-fn rewrite_bigints_in_datatype(dt: &mut DataType, nuanced: bool) {
-    fn rewrite_bigints_in_fields(fields: &mut Fields, nuanced: bool) {
+fn rewrite_bigints_in_datatype(dt: &mut DataType, nuanced: bool, phased: bool) {
+    fn rewrite_bigints_in_fields(fields: &mut Fields, nuanced: bool, phased: bool) {
         match fields {
             Fields::Unit => {}
             Fields::Unnamed(fields) => {
                 for field in fields.fields_mut() {
                     if let Some(ty) = field.ty_mut() {
-                        rewrite_bigints_in_datatype(ty, nuanced);
+                        rewrite_bigints_in_datatype(ty, nuanced, phased);
                     }
                 }
             }
             Fields::Named(fields) => {
                 for (_, field) in fields.fields_mut() {
                     if let Some(ty) = field.ty_mut() {
-                        rewrite_bigints_in_datatype(ty, nuanced);
+                        rewrite_bigints_in_datatype(ty, nuanced, phased);
                     }
                 }
             }
@@ -521,18 +515,19 @@ fn rewrite_bigints_in_datatype(dt: &mut DataType, nuanced: bool) {
 
     match dt {
         DataType::Primitive(primitive) => match primitive {
-            Primitive::usize | Primitive::u64 | Primitive::u128 => {
-                *dt = if nuanced {
-                    specta_serde::phased(define("bigint | number").into(), define("bigint").into())
-                } else {
+            Primitive::usize
+            | Primitive::isize
+            | Primitive::u64
+            | Primitive::i64
+            | Primitive::u128
+            | Primitive::i128 => {
+                *dt = if !nuanced {
+                    // TODO: This is temporary until we have official support for large number types in Tauri.
                     DataType::Primitive(Primitive::u32)
-                };
-            }
-            Primitive::isize | Primitive::i64 | Primitive::i128 => {
-                *dt = if nuanced {
+                } else if phased {
                     specta_serde::phased(define("bigint | number").into(), define("bigint").into())
                 } else {
-                    DataType::Primitive(Primitive::i32)
+                    define("bigint | number").into()
                 };
             }
             Primitive::f128 => {
@@ -540,26 +535,26 @@ fn rewrite_bigints_in_datatype(dt: &mut DataType, nuanced: bool) {
             }
             _ => {}
         },
-        DataType::List(list) => rewrite_bigints_in_datatype(list.ty_mut(), nuanced),
+        DataType::List(list) => rewrite_bigints_in_datatype(list.ty_mut(), nuanced, phased),
         DataType::Map(map) => {
-            rewrite_bigints_in_datatype(map.key_ty_mut(), nuanced);
-            rewrite_bigints_in_datatype(map.value_ty_mut(), nuanced);
+            rewrite_bigints_in_datatype(map.key_ty_mut(), nuanced, phased);
+            rewrite_bigints_in_datatype(map.value_ty_mut(), nuanced, phased);
         }
-        DataType::Struct(strct) => rewrite_bigints_in_fields(strct.fields_mut(), nuanced),
+        DataType::Struct(strct) => rewrite_bigints_in_fields(strct.fields_mut(), nuanced, phased),
         DataType::Enum(enm) => {
             for (_, variant) in enm.variants_mut() {
-                rewrite_bigints_in_fields(variant.fields_mut(), nuanced);
+                rewrite_bigints_in_fields(variant.fields_mut(), nuanced, phased);
             }
         }
         DataType::Tuple(tuple) => {
             for item in tuple.elements_mut() {
-                rewrite_bigints_in_datatype(item, nuanced);
+                rewrite_bigints_in_datatype(item, nuanced, phased);
             }
         }
-        DataType::Nullable(inner) => rewrite_bigints_in_datatype(inner, nuanced),
+        DataType::Nullable(inner) => rewrite_bigints_in_datatype(inner, nuanced, phased),
         DataType::Reference(Reference::Named(reference)) => {
             for (_, generic) in reference.generics_mut() {
-                rewrite_bigints_in_datatype(generic, nuanced);
+                rewrite_bigints_in_datatype(generic, nuanced, phased);
             }
         }
         DataType::Reference(Reference::Generic(_)) | DataType::Reference(Reference::Opaque(_)) => {}
@@ -568,7 +563,7 @@ fn rewrite_bigints_in_datatype(dt: &mut DataType, nuanced: bool) {
 
 fn rewrite_bigints_for_export(dt: &DataType, cfg: &BuilderConfiguration) -> DataType {
     let mut dt = dt.clone();
-    rewrite_bigints_in_datatype(&mut dt, cfg.enable_nuanced_types);
+    rewrite_bigints_in_datatype(&mut dt, cfg.enable_nuanced_types, !cfg.disable_serde_phases);
     dt
 }
 
