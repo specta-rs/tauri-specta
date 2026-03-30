@@ -1,12 +1,13 @@
 [package]
 name = "tauri-specta-macros"
 description = "Completely typesafe Tauri commands"
-version = "2.0.0-rc.23"
+version = "2.0.0-rc.24"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/specta-rs/tauri-specta"
 documentation = "https://docs.rs/tauri-specta/latest/tauri-specta"
+readme = "../README.md"
 keywords = ["async", "specta", "rspc", "typescript", "typesafe"]
 categories = ["web-programming", "asynchronous"]
 

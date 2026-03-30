@@ -13,6 +13,7 @@ use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 ///
 /// This acts to seal the implementation details of the macro.
 #[derive(Default)]
+#[allow(clippy::type_complexity)]
 pub struct Events(pub(crate) BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>);
 
 #[derive(Default)]
@@ -26,6 +27,7 @@ pub(crate) struct EventRegistry(pub(crate) RwLock<HashMap<TypeId, EventRegistryM
 
 impl EventRegistry {
     /// gets the name of the event (taking into account plugin prefixes) and ensuring it was correctly mounted to the current app.
+    #[allow(clippy::panic)]
     pub fn get_event_name<E: Event, R: Runtime>(handle: &impl Manager<R>) -> Cow<'static, str> {
         let this = handle.try_state::<EventRegistry>().expect(
             "EventRegistry not found in Tauri state - Did you forget to call Builder::mount_events?",

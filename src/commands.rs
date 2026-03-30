@@ -29,6 +29,6 @@ impl<R: Runtime> Default for Commands<R> {
 
 impl<R: Runtime> Clone for Commands<R> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1.clone())
+        Self(self.0.clone(), self.1)
     }
 }

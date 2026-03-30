@@ -186,13 +186,16 @@ pub struct DemoEvent(String);
 pub struct EmptyEvent;
 
 #[derive(Type)]
+#[allow(dead_code)]
 pub struct Custom(String);
 
 #[derive(Type)]
+#[allow(dead_code)]
 pub struct Testing {
     a: String,
 }
 
+#[allow(deprecated)]
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
         // TODO: You shouldn't enable this unless you know what you're doing!

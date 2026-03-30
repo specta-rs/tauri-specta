@@ -1,7 +1,7 @@
 [package]
 name = "tauri-specta"
 description = "Completely typesafe Tauri commands"
-version = "2.0.0-rc.23"
+version = "2.0.0-rc.24"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2024"
 license = "MIT"
@@ -30,7 +30,7 @@ workspace = true
 # Public
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
-tauri-specta-macros = { version = "=2.0.0-rc.23", optional = true, path = "./macros" }
+tauri-specta-macros = { version = "=2.0.0-rc.24", optional = true, path = "./macros" }
 serde = "1"
 serde_json = "1"
 thiserror = "2"
@@ -65,11 +65,10 @@ panic_in_result_fn = { level = "warn", priority = -1 }
 tauri = { version = "2" }
 tauri-build = { version = "2" }
 tauri-plugin = { version = "2" }
-specta = { version = "=2.0.0-rc.23", features = ["derive"] }
-specta-typescript = { version = "0.0.10" }
-specta-serde = { version = "0.0.10" }
+specta = { version = "=2.0.0-rc.24", features = ["derive"] }
+specta-typescript = { version = "0.0.11" }
+specta-serde = { version = "0.0.11" }
 specta-tags = { version = "0.0.0" }
-
 
 # TODO: Remove patches
 [patch.crates-io]
