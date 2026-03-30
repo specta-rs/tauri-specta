@@ -39,7 +39,7 @@ tauri = { workspace = true, features = ["specta"] }
 # Private
 heck = "0.5"
 specta-serde = { workspace = true }
-specta-tags = { version = "0.0.0", optional = true } # TODO: Remove `path` once published
+specta-tags = { version = "0.0.0", optional = true }
 
 [workspace]
 members = [
