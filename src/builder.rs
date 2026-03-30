@@ -1,12 +1,12 @@
 use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
 
-use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
+use crate::{event::EventRegistryMeta, Commands, EventRegistry, Events, LanguageExt};
 use serde::Serialize;
 use specta::{
-    Type, Types,
     datatype::{Function, Reference},
+    Type, Types,
 };
-use tauri::{Manager, Runtime, ipc::Invoke};
+use tauri::{ipc::Invoke, Manager, Runtime};
 
 /// The mode which the error handling is done in the bindings.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
@@ -91,15 +91,25 @@ pub struct Builder<R: Runtime = tauri::Wry> {
 
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
+/// Serializable builder state used to configure exported commands, events, and types.
 pub struct BuilderConfiguration {
+    /// Plugin name used when generating bindings for plugin commands.
     pub plugin_name: Option<&'static str>,
+    /// Commands registered on the builder.
     pub commands: Vec<Function>,
+    /// Error handling mode used by generated bindings.
     pub error_handling: ErrorHandlingMode,
+    /// Event names mapped to their type metadata.
     pub events: BTreeMap<&'static str, (TypeId, Reference)>,
+    /// Collected Specta types referenced by commands, events, and manual registrations.
     pub types: Types,
+    /// Constants exported alongside generated bindings.
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
+    /// Implementation source used for typed frontend error helpers.
     pub typed_error_impl: Cow<'static, str>,
+    /// Whether nuanced type generation is enabled for supported exporters.
     pub enable_nuanced_types: bool,
+    /// Whether serde serialize/deserialize phase differences should be ignored.
     pub disable_serde_phases: bool,
 }
 
