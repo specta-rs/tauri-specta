@@ -69,3 +69,15 @@ specta = { version = "=2.0.0-rc.24", features = ["derive"] }
 specta-typescript = { version = "0.0.11" }
 specta-serde = { version = "0.0.11" }
 specta-tags = { version = "0.0.0" }
+
+# TODO: Remove patches
+[patch.crates-io]
+specta = { path = "/Users/oscar/Desktop/specta17/specta" }
+specta-typescript = { path = "/Users/oscar/Desktop/specta17/specta-typescript" }
+specta-serde = { path = "/Users/oscar/Desktop/specta17/specta-serde" }
+specta-tags = { path = "/Users/oscar/Desktop/specta17/specta-tags" }
+
+# TODO: This should be optional?
+# `otbeaumont/bigint` branch
+# tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "c1d13daf34ce881e248c06a7bccc31bc1f39afd4" }
+tauri = { path = "/Users/oscar/Desktop/tauri/crates/tauri" }

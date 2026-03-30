@@ -29,6 +29,32 @@
 	*	}} PhaseSpecificRename_Serialize
 	* @property {string} serialized_value
 	*
+	* @typedef {SpecialTypes_Serialize | SpecialTypes_Deserialize} SpecialTypes
+	* @property {SpecialTypes_Serialize} Serialize
+	* @property {SpecialTypes_Deserialize} Deserialize
+	*
+	* @typedef {{
+	*		u128_max: bigint,
+	*		u128_min: bigint,
+	*		i128_max: bigint,
+	*		i128_min: bigint,
+	*	}} SpecialTypes_Deserialize
+	* @property {bigint} u128_max
+	* @property {bigint} u128_min
+	* @property {bigint} i128_max
+	* @property {bigint} i128_min
+	*
+	* @typedef {{
+	*		u128_max: bigint | number,
+	*		u128_min: bigint | number,
+	*		i128_max: bigint | number,
+	*		i128_min: bigint | number,
+	*	}} SpecialTypes_Serialize
+	* @property {bigint | number} u128_max
+	* @property {bigint | number} u128_min
+	* @property {bigint | number} i128_max
+	* @property {bigint | number} i128_min
+	*
 	* @typedef {{
 	*		a: string,
 	*	}} Testing

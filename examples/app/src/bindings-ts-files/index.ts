@@ -25,6 +25,9 @@ export const commands = {
 	deprecated: () => __TAURI_INVOKE<void>("deprecated"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
 	phaseSpecificRename: (input: tauri_specta_example_app.PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<tauri_specta_example_app.PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
+	specialTypes: (input: tauri_specta_example_app.SpecialTypes_Deserialize) => __TAURI_INVOKE<[tauri_specta_example_app.SpecialTypes_Serialize, tauri_specta_example_app.SpecialTypes_Serialize]>("special_types", { input }),
+	specialTypesWChannel: (channel: Channel<bigint>) => __TAURI_INVOKE<void>("special_types_w_channel", { channel }),
+	emitEventWithBigint: () => __TAURI_INVOKE<void>("emit_event_with_bigint"),
 	typesafeErrorsUsingThiserror: () => typedError<null, tauri_specta_example_app.MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, tauri_specta_example_app.MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 };
