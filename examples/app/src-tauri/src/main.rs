@@ -6,7 +6,6 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use specta_typescript::Typescript;
-use tauri::{AppHandle, ipc::Channel};
 use tauri_specta::*;
 use thiserror::Error;
 

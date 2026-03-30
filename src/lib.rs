@@ -230,6 +230,7 @@ pub mod internal {
     }
 
     /// called by `collect_events` to register events to an `Events`
+    #[allow(clippy::panic)]
     pub fn register_event<E: Event>(Events(events): &mut Events) {
         if events
             .insert(E::NAME, |types| {
