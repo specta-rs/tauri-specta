@@ -1,64 +1,86 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
-use specta::TypeCollection;
-use specta::datatype::{DataType, Field, Reference, Struct};
+use specta::ResolvedTypes;
+use specta::datatype::{DataType, Field, Fields, Function, Primitive, Reference, Struct};
+use specta_serde::Phase;
+use specta_tags::TransformPlan;
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
-    type Error = specta_typescript::Error;
+    type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
+        let cfg = cfg.clone();
+        let types = resolve_types_for_export(&cfg)?;
+
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
-            .framework_runtime({
-                let cfg = cfg.clone();
-                move |exporter| {
-                    runtime(
-                        exporter,
-                        &cfg,
-                        false,
-                        if !cfg.typed_error_impl.is_empty() {
-                            &cfg.typed_error_impl
-                        } else {
-                            TYPED_ERROR_IMPL_TS
-                        },
-                        TYPED_ERROR_ASSERTION_TS,
-                        MAKE_EVENT_IMPL_TS,
-                    )
-                }
+            .framework_runtime(move |exporter| {
+                runtime(
+                    exporter,
+                    &cfg,
+                    false,
+                    if cfg.typed_error_impl.is_empty() {
+                        TYPED_ERROR_IMPL_TS
+                    } else {
+                        &cfg.typed_error_impl
+                    },
+                    TYPED_ERROR_ASSERTION_TS,
+                    MAKE_EVENT_IMPL_TS,
+                )
             })
-            .export_to(path, &cfg.types)
+            .export_to(path, &types)
     }
 }
 
 impl LanguageExt for specta_typescript::JSDoc {
-    type Error = specta_typescript::Error;
+    type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
+        let cfg = cfg.clone();
+        let types = resolve_types_for_export(&cfg)?;
+
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
-            .framework_runtime({
-                let cfg = cfg.clone();
-                move |exporter| {
-                    runtime(
-                        exporter,
-                        &cfg,
-                        true,
-                        if !cfg.typed_error_impl.is_empty() {
-                            &cfg.typed_error_impl
-                        } else {
-                            TYPED_ERROR_IMPL_JS
-                        },
-                        "",
-                        MAKE_EVENT_IMPL_JS,
-                    )
-                }
+            .framework_runtime(move |exporter| {
+                runtime(
+                    exporter,
+                    &cfg,
+                    true,
+                    if cfg.typed_error_impl.is_empty() {
+                        TYPED_ERROR_IMPL_JS
+                    } else {
+                        &cfg.typed_error_impl
+                    },
+                    "",
+                    MAKE_EVENT_IMPL_JS,
+                )
             })
-            .export_to(path, &cfg.types)
+            .export_to(path, &types)
     }
+}
+
+fn resolve_types_for_export(cfg: &BuilderConfiguration) -> Result<ResolvedTypes, Error> {
+    let types = cfg.types.clone();
+    let mut types = if cfg.disable_serde_phases {
+        specta_serde::apply(types)
+    } else {
+        specta_serde::apply_phases(types)
+    }
+    .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
+
+    types.iter_mut(|ndt| {
+        rewrite_bigints_in_datatype(
+            ndt.ty_mut(),
+            cfg.enable_nuanced_types,
+            !cfg.disable_serde_phases,
+        )
+    });
+
+    Ok(types)
 }
 
 fn runtime(
@@ -91,22 +113,19 @@ fn runtime(
 
     let is_channel_used = cfg.commands.iter().any(|command| {
         // Check if any argument is a Channel
-        command.args().iter().any(|(_, dt)| is_channel_type(dt, &cfg.types))
+        command
+            .args()
+            .iter()
+            .any(|(_, dt)| is_channel_type(dt, exporter.types))
             // Check if result contains a Channel
-            || command.result().is_some_and(|result| {
-                if let Some((ok, err)) = extract_std_result(result, &cfg.types) {
-                    is_channel_type(ok, &cfg.types) || is_channel_type(err, &cfg.types)
-                } else {
-                    is_channel_type(result, &cfg.types)
-                }
-            })
+            || command.result().is_some_and(|dt| is_channel_type(dt, exporter.types))
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling == ErrorHandlingMode::Result
         && cfg.commands.iter().any(|command| {
             command
                 .result()
-                .and_then(|dt| extract_std_result(dt, &cfg.types))
+                .and_then(|dt| extract_std_result(dt, exporter.types))
                 .is_some()
         });
 
@@ -137,6 +156,8 @@ fn runtime(
     if enabled_commands {
         let mut s = Struct::named();
         for command in &cfg.commands {
+            validate_exported_command(command, exporter.types)?;
+
             let command_name_escaped = serde_json::to_string(
                 &cfg.plugin_name
                     .map(|plugin_name| format!("plugin|{plugin_name}|{}", command.name()).into())
@@ -150,7 +171,7 @@ fn runtime(
                 .map(|(name, dt)| {
                     Ok((
                         name.to_lower_camel_case(),
-                        render_reference_dt(dt, &exporter)?,
+                        render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter, cfg)?,
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -186,29 +207,89 @@ fn runtime(
 
             let body = if cfg.error_handling == ErrorHandlingMode::Result
                 && let Some(result) = command.result()
-                && let Some((dt_ok, dt_err)) = extract_std_result(result, &cfg.types)
+                && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
             {
+                let ok_transform =
+                    render_result_transform_for_phase(dt_ok, "v.data", &exporter, cfg);
+                let err_transform =
+                    render_result_transform_for_phase(dt_err, "v.error", &exporter, cfg);
+
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
                     invoke_ts.push('<');
-                    invoke_ts.push_str(&render_reference_dt(dt_ok, &exporter)?);
+                    invoke_ts.push_str(&render_reference_dt_for_phase(
+                        dt_ok,
+                        if ok_transform.is_some() {
+                            Phase::Deserialize
+                        } else {
+                            Phase::Serialize
+                        },
+                        &exporter,
+                        cfg,
+                    )?);
                     invoke_ts.push_str(", ");
-                    invoke_ts.push_str(&render_reference_dt(dt_err, &exporter)?);
+                    invoke_ts.push_str(&render_reference_dt_for_phase(
+                        dt_err,
+                        if err_transform.is_some() {
+                            Phase::Deserialize
+                        } else {
+                            Phase::Serialize
+                        },
+                        &exporter,
+                        cfg,
+                    )?);
                     invoke_ts.push('>');
                 }
                 invoke_ts.push_str("(__TAURI_INVOKE");
                 invoke_ts.push_str(&invoke_args);
                 invoke_ts.push(')');
-                invoke_ts
+
+                if ok_transform.is_none() && err_transform.is_none() {
+                    invoke_ts
+                } else {
+                    let mapper = match (ok_transform, err_transform) {
+                        (Some(ok), Some(err)) => format!(
+                            "(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v.status === \"error\" ? {{ ...v, error: {err} }} : v)"
+                        ),
+                        (Some(ok), None) => {
+                            format!("(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v)")
+                        }
+                        (None, Some(err)) => {
+                            format!("(v.status === \"error\" ? {{ ...v, error: {err} }} : v)")
+                        }
+                        (None, None) => "v".to_string(),
+                    };
+
+                    format!("{invoke_ts}.then((v) => {mapper})")
+                }
             } else {
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
+                let output_dt = command
+                    .result()
+                    .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
+                    .or(command.result());
+
                 if !jsdoc {
+                    let output_transform = output_dt
+                        .and_then(|dt| render_result_transform_for_phase(dt, "v", &exporter, cfg));
+
                     invoke_ts.push('<');
                     invoke_ts.push_str(&match command.result() {
                         Some(dt) => Cow::Owned(render_reference_dt(
-                            extract_std_result(dt, &cfg.types)
-                                .map(|(ok, _)| ok)
-                                .unwrap_or(dt),
+                            &specta_serde::select_phase_datatype(
+                                &rewrite_bigints_for_export(
+                                    extract_std_result(dt, exporter.types)
+                                        .map(|(ok, _)| ok)
+                                        .unwrap_or(dt),
+                                    cfg,
+                                ),
+                                exporter.types,
+                                if output_transform.is_some() {
+                                    Phase::Deserialize
+                                } else {
+                                    Phase::Serialize
+                                },
+                            ),
                             &exporter,
                         )?),
                         None => Cow::Borrowed("void"),
@@ -216,7 +297,14 @@ fn runtime(
                     invoke_ts.push('>');
                 }
                 invoke_ts.push_str(&invoke_args);
-                invoke_ts
+
+                if let Some(dt) = output_dt
+                    && let Some(mapped) = render_result_transform_for_phase(dt, "v", &exporter, cfg)
+                {
+                    format!("{invoke_ts}.then((v) => {mapped})")
+                } else {
+                    invoke_ts
+                }
             };
 
             let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
@@ -347,7 +435,7 @@ fn runtime(
         if has_typed_error {
             out.push_str(typed_error_impl);
             out.push('\n');
-            // We only include assertion for user-provided impl.
+            // We check against `cfg` not `typed_error_assertion` as we only include the assertion if the user-provides an impl.
             // It's assumed the internal one is correct.
             if !cfg.typed_error_impl.is_empty() {
                 out.push('\n');
@@ -367,45 +455,170 @@ fn runtime(
     Ok(Cow::Owned(out))
 }
 
-fn extract_std_result<'a>(
-    dt: &'a DataType,
-    types: &'a TypeCollection,
-) -> Option<(&'a DataType, &'a DataType)> {
-    let DataType::Reference(Reference::Named(r)) = dt else {
-        return None;
-    };
-
-    let ndt = r.get(types)?;
-    if ndt.name() != "Result" {
-        return None;
+fn rewrite_bigints_in_datatype(dt: &mut DataType, nuanced: bool, phased: bool) {
+    fn rewrite_bigints_in_fields(fields: &mut Fields, nuanced: bool, phased: bool) {
+        match fields {
+            Fields::Unit => {}
+            Fields::Unnamed(fields) => {
+                for field in fields.fields_mut() {
+                    if let Some(ty) = field.ty_mut() {
+                        rewrite_bigints_in_datatype(ty, nuanced, phased);
+                    }
+                }
+            }
+            Fields::Named(fields) => {
+                for (_, field) in fields.fields_mut() {
+                    if let Some(ty) = field.ty_mut() {
+                        rewrite_bigints_in_datatype(ty, nuanced, phased);
+                    }
+                }
+            }
+        }
     }
 
-    let module_path = ndt.module_path();
-    if module_path != "std::result" && module_path != "core::result" {
-        return None;
+    match dt {
+        DataType::Primitive(primitive) => match primitive {
+            Primitive::usize
+            | Primitive::isize
+            | Primitive::u64
+            | Primitive::i64
+            | Primitive::u128
+            | Primitive::i128 => {
+                *dt = if !nuanced {
+                    // TODO: This is temporary until we have official support for large number types in Tauri.
+                    DataType::Primitive(Primitive::u32)
+                } else if phased {
+                    specta_serde::phased(define("bigint | number").into(), define("bigint").into())
+                } else {
+                    define("bigint | number").into()
+                };
+            }
+            Primitive::f128 => {
+                *dt = DataType::Primitive(Primitive::f64);
+            }
+            _ => {}
+        },
+        DataType::List(list) => rewrite_bigints_in_datatype(list.ty_mut(), nuanced, phased),
+        DataType::Map(map) => {
+            rewrite_bigints_in_datatype(map.key_ty_mut(), nuanced, phased);
+            rewrite_bigints_in_datatype(map.value_ty_mut(), nuanced, phased);
+        }
+        DataType::Struct(strct) => rewrite_bigints_in_fields(strct.fields_mut(), nuanced, phased),
+        DataType::Enum(enm) => {
+            for (_, variant) in enm.variants_mut() {
+                rewrite_bigints_in_fields(variant.fields_mut(), nuanced, phased);
+            }
+        }
+        DataType::Tuple(tuple) => {
+            for item in tuple.elements_mut() {
+                rewrite_bigints_in_datatype(item, nuanced, phased);
+            }
+        }
+        DataType::Nullable(inner) => rewrite_bigints_in_datatype(inner, nuanced, phased),
+        DataType::Reference(Reference::Named(reference)) => {
+            for (_, generic) in reference.generics_mut() {
+                rewrite_bigints_in_datatype(generic, nuanced, phased);
+            }
+        }
+        DataType::Reference(Reference::Generic(_)) | DataType::Reference(Reference::Opaque(_)) => {}
     }
-
-    let mut generics = r.generics().iter();
-    let (_, ok) = generics.next()?;
-    let (_, err) = generics.next()?;
-    Some((ok, err))
 }
 
-fn is_channel_type(dt: &DataType, types: &TypeCollection) -> bool {
+fn rewrite_bigints_for_export(dt: &DataType, cfg: &BuilderConfiguration) -> DataType {
+    let mut dt = dt.clone();
+    rewrite_bigints_in_datatype(&mut dt, cfg.enable_nuanced_types, !cfg.disable_serde_phases);
+    dt
+}
+
+fn validate_exported_command(command: &Function, types: &ResolvedTypes) -> Result<(), Error> {
+    for (position, (name, dt)) in command.args().iter().enumerate() {
+        specta_serde::validate(dt, types).map_err(|err| {
+            Error::framework(
+                format!(
+                    "Specta Serde validation failed for command '{}' param #{} ('{}')",
+                    command.name(),
+                    position + 1,
+                    name
+                ),
+                err,
+            )
+        })?;
+    }
+
+    if let Some(result) = command.result() {
+        specta_serde::validate(result, types).map_err(|err| {
+            Error::framework(
+                format!(
+                    "Specta Serde validation failed for command '{}' result",
+                    command.name()
+                ),
+                err,
+            )
+        })?;
+    }
+
+    Ok(())
+}
+
+fn extract_std_result<'a>(
+    dt: &'a DataType,
+    types: &'a ResolvedTypes,
+) -> Option<(&'a DataType, &'a DataType)> {
+    if let DataType::Reference(Reference::Named(r)) = dt
+        && let Some(ndt) = r.get(types.as_types())
+        && ndt.name() == "Result"
+        && (ndt.module_path() == "std::result" || ndt.module_path() == "core::result")
+        && let [(_, ok), (_, err), ..] = r.generics()
+    {
+        return Some((ok, err));
+    }
+
+    None
+}
+
+fn is_channel_type(dt: &DataType, types: &ResolvedTypes) -> bool {
     match dt {
         DataType::Reference(Reference::Named(r)) => r
-            .get(types)
+            .get(types.as_types())
             .map(|ndt| ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::"))
             .unwrap_or(false),
         _ => false,
     }
 }
 
+fn render_result_transform_for_phase(
+    dt: &DataType,
+    input: &str,
+    exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
+) -> Option<String> {
+    if !cfg.enable_nuanced_types {
+        return None;
+    }
+
+    let mapped = TransformPlan::analyze(dt, exporter.types).map(input);
+    (mapped != input).then(|| mapped.into_owned())
+}
+
+fn render_reference_dt_for_phase(
+    dt: &DataType,
+    phase: Phase,
+    exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
+) -> Result<String, Error> {
+    let dt = specta_serde::select_phase_datatype(
+        &rewrite_bigints_for_export(dt, cfg),
+        exporter.types,
+        phase,
+    );
+    render_reference_dt(&dt, exporter)
+}
+
 // Render a `DataType` as a reference (or fallback to inline).
 // Also handles Tauri channel references.
 fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt
-        && let Some(ndt) = r.get(exporter.types)
+        && let Some(ndt) = r.get(exporter.types.as_types())
         && ndt.name() == "TAURI_CHANNEL"
         && ndt.module_path().starts_with("tauri::")
     {

@@ -63,7 +63,7 @@ macro_rules! collect_commands {
 /// pub struct MyEvent(String);
 ///
 /// #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
-/// pub struct MyGenericEvent<T: Type>(T);
+/// pub struct MyGenericEvent<T: Type + 'static>(T);
 ///
 /// mod hello {
 /// # use serde::{Serialize, Deserialize};

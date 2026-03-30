@@ -3,7 +3,7 @@ use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
 use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
 use serde::Serialize;
 use specta::{
-    Type, TypeCollection,
+    Type, Types,
     datatype::{Function, Reference},
 };
 use tauri::{Manager, Runtime, ipc::Invoke};
@@ -96,9 +96,11 @@ pub struct BuilderConfiguration {
     pub commands: Vec<Function>,
     pub error_handling: ErrorHandlingMode,
     pub events: BTreeMap<&'static str, (TypeId, Reference)>,
-    pub types: TypeCollection,
+    pub types: Types,
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
     pub typed_error_impl: Cow<'static, str>,
+    pub enable_nuanced_types: bool,
+    pub disable_serde_phases: bool,
 }
 
 impl<R: Runtime> Default for Builder<R> {
@@ -214,12 +216,12 @@ impl<R: Runtime> Builder<R> {
     ///
     /// ```rust,ignore-windows
     /// use tauri_specta::Builder;
-    /// use specta::{Type, TypeCollection};
+    /// use specta::{Type, Types};
     ///
-    /// let mut builder = Builder::<tauri::Wry>::new().types(&TypeCollection::default());
+    /// let mut builder = Builder::<tauri::Wry>::new().types(&Types::default());
     /// ```
-    pub fn types(mut self, types: &TypeCollection) -> Self {
-        self.cfg.types.merge(types);
+    pub fn types(mut self, types: &Types) -> Self {
+        self.cfg.types.extend(types);
         self
     }
 
@@ -253,6 +255,8 @@ impl<R: Runtime> Builder<R> {
     /// This would allow integrating with Effect or any other result library.
     ///
     /// ```rust
+    /// use tauri_specta::Builder;
+    ///
     /// const TYPED_ERROR_IMPL: &str = r#"async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
     ///     try {
     ///         return { status: "ok", data: await result };
@@ -262,11 +266,33 @@ impl<R: Runtime> Builder<R> {
     ///     }
     /// }"#;
     ///
-    /// Builder::default()
+    /// Builder::<tauri::Wry>::default()
     ///  .typed_error_impl(TYPED_ERROR_IMPL);
     /// ```
     pub fn typed_error_impl(mut self, runtime: impl Into<Cow<'static, str>>) -> Self {
         self.cfg.typed_error_impl = runtime.into();
+        self
+    }
+
+    /// Enable nuanced frontend type handling for exported bindings.
+    ///
+    /// This opts into runtime transforms for values such as bigints and other
+    /// transport-specific shapes which require client-side restoration.
+    ///
+    /// NOTE: The runtime behavior of this isn't guarantee without a Tauri crates.io patch so ensure you are careful!
+    /// NOTE: This will be enabled by default in future releases.
+    /// TODO: Flip this to be enabled by default
+    pub fn unstable_nuanced_types(mut self) -> Self {
+        self.cfg.enable_nuanced_types = true;
+        self
+    }
+
+    /// Disable phase-aware serde export handling and use unified serde mode.
+    ///
+    /// This causes export to use `specta_serde::apply` instead of
+    /// `specta_serde::apply_phases`.
+    pub fn disable_serde_phases(mut self) -> Self {
+        self.cfg.disable_serde_phases = true;
         self
     }
 

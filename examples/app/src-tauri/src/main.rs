@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use specta_typescript::Typescript;
+use tauri::{AppHandle, ipc::Channel};
 use tauri_specta::*;
 use thiserror::Error;
 
@@ -48,6 +49,18 @@ fn deprecated() {}
 #[tauri::command]
 #[specta::specta]
 fn with_channel(_channel: tauri::ipc::Channel<i32>) {}
+
+#[derive(Serialize, Deserialize, Type)]
+struct PhaseSpecificRename {
+    #[serde(rename(serialize = "serialized_value", deserialize = "deserialized_value"))]
+    value: String,
+}
+
+#[tauri::command]
+#[specta::specta]
+fn phase_specific_rename(input: PhaseSpecificRename) -> PhaseSpecificRename {
+    input
+}
 
 mod nested {
     use super::*;
@@ -134,6 +147,7 @@ fn main() {
             generic::<tauri::Wry>,
             deprecated,
             with_channel,
+            phase_specific_rename,
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
         ])

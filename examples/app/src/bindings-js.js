@@ -45,6 +45,11 @@ export const commands = {
 	 */
 	withChannel: (channel) => __TAURI_INVOKE("with_channel", { channel }),
 	/**
+	 * @param {PhaseSpecificRename_Deserialize} input
+	 * @returns {string} myName
+	 */
+	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
+	/**
 	 * @returns {string} myName
 	 */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
@@ -79,8 +84,8 @@ export const universalConstant = 42;
 	*
 	* @typedef {null} EmptyEvent
 	*
-	* @typedef {{ type: "IoError"; data: { type: "IoError" } } | { type: "AnotherError"; data: string }} MyError
-	* @property {{ type: "IoError"; data: { type: "IoError" } }} IoError
+	* @typedef {{ type: "IoError" } | { type: "AnotherError"; data: string }} MyError
+	* @property {{ type: "IoError" }} IoError
 	* @property {{ type: "AnotherError"; data: string }} AnotherError
 	*
 	* @typedef {{ type: "IoError"; data: string }} MyError2
@@ -90,6 +95,20 @@ export const universalConstant = 42;
 	*		some_field: string,
 	*	}} MyStruct
 	* @property {string} some_field
+	*
+	* @typedef {PhaseSpecificRename_Serialize | PhaseSpecificRename_Deserialize} PhaseSpecificRename
+	* @property {PhaseSpecificRename_Serialize} Serialize
+	* @property {PhaseSpecificRename_Deserialize} Deserialize
+	*
+	* @typedef {{
+	*		deserialized_value: string,
+	*	}} PhaseSpecificRename_Deserialize
+	* @property {string} deserialized_value
+	*
+	* @typedef {{
+	*		serialized_value: string,
+	*	}} PhaseSpecificRename_Serialize
+	* @property {string} serialized_value
 	*
 	* @typedef {{
 	*		a: string,

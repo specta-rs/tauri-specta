@@ -20,8 +20,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 default = []
 derive = ["dep:tauri-specta-macros"]
-javascript = ["dep:specta-typescript"]
-typescript = ["dep:specta-typescript"]
+javascript = ["dep:specta-typescript", "dep:specta-tags"]
+typescript = ["dep:specta-typescript", "dep:specta-tags"]
 
 [lints]
 workspace = true
@@ -38,6 +38,8 @@ tauri = { workspace = true, features = ["specta"] }
 
 # Private
 heck = "0.5"
+specta-serde = { workspace = true }
+specta-tags = { workspace = true, optional = true }
 
 [workspace]
 members = [
@@ -65,13 +67,13 @@ tauri-build = { version = "2" }
 tauri-plugin = { version = "2" }
 specta = { version = "=2.0.0-rc.23", features = ["derive"] }
 specta-typescript = { version = "0.0.10" }
+specta-serde = { version = "0.0.10" }
+specta-tags = { version = "0.0.0" }
 
-# TODO: Drop patches
+
+# TODO: remove these once released as `.rc-24`
 [patch.crates-io]
-specta = { git = "https://github.com/oscartbeaumont/specta", rev = "09878718731efefd74329b593b29305800906e60" }
-specta-typescript = { git = "https://github.com/oscartbeaumont/specta", rev = "09878718731efefd74329b593b29305800906e60" }
-specta-serde = { git = "https://github.com/oscartbeaumont/specta", rev = "09878718731efefd74329b593b29305800906e60" }
-
-# specta = { path = "/Users/oscar/Desktop/specta17/specta" }
-# specta-typescript = { path = "/Users/oscar/Desktop/specta17/specta-typescript" }
-# specta-serde = { path = "/Users/oscar/Desktop/specta17/specta-serde" }
+specta = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
+specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
+specta-serde = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
+specta-tags = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
