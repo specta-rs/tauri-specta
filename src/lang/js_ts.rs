@@ -24,7 +24,7 @@ impl LanguageExt for specta_typescript::Typescript {
                     &cfg,
                     false,
                     if cfg.typed_error_impl.is_empty() {
-                        &Cow::Borrowed(TYPED_ERROR_IMPL_TS)
+                        TYPED_ERROR_IMPL_TS
                     } else {
                         &cfg.typed_error_impl
                     },
@@ -51,7 +51,7 @@ impl LanguageExt for specta_typescript::JSDoc {
                     &cfg,
                     true,
                     if cfg.typed_error_impl.is_empty() {
-                        &Cow::Borrowed(TYPED_ERROR_IMPL_JS)
+                        TYPED_ERROR_IMPL_JS
                     } else {
                         &cfg.typed_error_impl
                     },
@@ -71,6 +71,7 @@ fn resolve_types_for_export(cfg: &BuilderConfiguration) -> Result<ResolvedTypes,
         specta_serde::apply_phases(types)
     }
     .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
+
     types.iter_mut(|ndt| {
         rewrite_bigints_in_datatype(
             ndt.ty_mut(),
@@ -117,13 +118,7 @@ fn runtime(
             .iter()
             .any(|(_, dt)| is_channel_type(dt, exporter.types))
             // Check if result contains a Channel
-            || command.result().is_some_and(|result| {
-                if let Some((ok, err)) = extract_std_result(result, exporter.types) {
-                    is_channel_type(ok, exporter.types) || is_channel_type(err, exporter.types)
-                } else {
-                    is_channel_type(result, exporter.types)
-                }
-            })
+            || command.result().is_some_and(|dt| is_channel_type(dt, exporter.types))
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling == ErrorHandlingMode::Result
@@ -364,9 +359,8 @@ fn runtime(
 
             let mut field_ts = "makeEvent".to_string();
             if !jsdoc {
-                let event_ty = render_reference_dt(&DataType::Reference(r.clone()), &exporter)?;
                 field_ts.push('<');
-                field_ts.push_str(&event_ty);
+                field_ts.push_str(&exporter.reference(r)?);
                 field_ts.push('>');
             }
             field_ts.push('(');
@@ -375,9 +369,12 @@ fn runtime(
 
             let mut field = Field::new(define(field_ts).into());
             if jsdoc {
-                let event_ty = render_reference_dt(&DataType::Reference(r.clone()), &exporter)?;
                 field.set_docs(
-                    format!("@type {{ReturnType<typeof makeEvent<{}>>}}", event_ty).into(),
+                    format!(
+                        "@type {{ReturnType<typeof makeEvent<{}>>}}",
+                        exporter.reference(r)?
+                    )
+                    .into(),
                 );
             }
             s = s.field(name.to_lower_camel_case(), field);
@@ -438,7 +435,7 @@ fn runtime(
         if has_typed_error {
             out.push_str(typed_error_impl);
             out.push('\n');
-            // We only include assertion for user-provided impl.
+            // We check against `cfg` not `typed_error_assertion` as we only include the assertion if the user-provides an impl.
             // It's assumed the internal one is correct.
             if !cfg.typed_error_impl.is_empty() {
                 out.push('\n');
