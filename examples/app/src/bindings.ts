@@ -22,7 +22,6 @@ export const commands = {
 	deprecated: () => __TAURI_INVOKE<void>("deprecated"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
 	phaseSpecificRename: (input: PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
-	specialTypes: (input: SpecialTypes) => __TAURI_INVOKE<[SpecialTypes, SpecialTypes]>("special_types", { input }),
 	typesafeErrorsUsingThiserror: () => typedError<null, MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 };
@@ -61,13 +60,6 @@ export type PhaseSpecificRename_Serialize = {
 	serialized_value: string,
 };
 
-export type SpecialTypes = {
-	u128_max: bigint,
-	u128_min: bigint,
-	i128_max: bigint,
-	i128_min: bigint,
-};
-
 export type Testing = {
 	a: string,
 };
@@ -82,17 +74,17 @@ async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; dat
     }
 }
 
-function makeEvent<T>(name: string) {
+function makeEvent<TListen, TEmit = TListen>(name: string) {
     const base = {
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, cb),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, cb),
-        emit: ((payload: T) => __TAURI_EVENT.emit(name, payload) as unknown) as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
+        listen: (cb: __TAURI_EVENT.EventCallback<TListen>) => __TAURI_EVENT.listen(name, cb),
+        once: (cb: __TAURI_EVENT.EventCallback<TListen>) => __TAURI_EVENT.once(name, cb),
+        emit: ((payload: TEmit) => __TAURI_EVENT.emit(name, payload) as unknown) as (TEmit extends null ? () => Promise<void> : (payload: TEmit) => Promise<void>)
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, cb),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, cb),
-        emit: ((payload: T) => target.emit(name, payload) as unknown) as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
+        listen: (cb: __TAURI_EVENT.EventCallback<TListen>) => target.listen(name, cb),
+        once: (cb: __TAURI_EVENT.EventCallback<TListen>) => target.once(name, cb),
+        emit: ((payload: TEmit) => target.emit(name, payload) as unknown) as (TEmit extends null ? () => Promise<void> : (payload: TEmit) => Promise<void>)
     });
 
     return Object.assign(fn, base);
