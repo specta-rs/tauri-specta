@@ -364,24 +364,9 @@ fn runtime(
 
             let mut field_ts = "makeEvent".to_string();
             if !jsdoc {
-                let serialize = render_reference_dt_for_phase(
-                    &DataType::Reference(r.clone()),
-                    Phase::Serialize,
-                    &exporter,
-                    cfg,
-                )?;
-                let deserialize = render_reference_dt_for_phase(
-                    &DataType::Reference(r.clone()),
-                    Phase::Deserialize,
-                    &exporter,
-                    cfg,
-                )?;
+                let event_ty = render_reference_dt(&DataType::Reference(r.clone()), &exporter)?;
                 field_ts.push('<');
-                field_ts.push_str(&serialize);
-                if serialize != deserialize {
-                    field_ts.push_str(", ");
-                    field_ts.push_str(&deserialize);
-                }
+                field_ts.push_str(&event_ty);
                 field_ts.push('>');
             }
             field_ts.push('(');
@@ -390,28 +375,9 @@ fn runtime(
 
             let mut field = Field::new(define(field_ts).into());
             if jsdoc {
-                let serialize = render_reference_dt_for_phase(
-                    &DataType::Reference(r.clone()),
-                    Phase::Serialize,
-                    &exporter,
-                    cfg,
-                )?;
-                let deserialize = render_reference_dt_for_phase(
-                    &DataType::Reference(r.clone()),
-                    Phase::Deserialize,
-                    &exporter,
-                    cfg,
-                )?;
+                let event_ty = render_reference_dt(&DataType::Reference(r.clone()), &exporter)?;
                 field.set_docs(
-                    if serialize == deserialize {
-                        format!("@type {{ReturnType<typeof makeEvent<{}>>}}", serialize)
-                    } else {
-                        format!(
-                            "@type {{ReturnType<typeof makeEvent<{}, {}>>}}",
-                            serialize, deserialize
-                        )
-                    }
-                    .into(),
+                    format!("@type {{ReturnType<typeof makeEvent<{}>>}}", event_ty).into(),
                 );
             }
             s = s.field(name.to_lower_camel_case(), field);
@@ -714,44 +680,43 @@ async function typedError(result) {
 
 const TYPED_ERROR_ASSERTION_TS: &str = "const _assertTypedErrorFollowsContract: <T, E>(result: Promise<T>) => Promise<any> = typedError;";
 
-const MAKE_EVENT_IMPL_TS: &str = r#"function makeEvent<TListen, TEmit = TListen>(name: string) {
+const MAKE_EVENT_IMPL_TS: &str = r#"function makeEvent<T>(name: string) {
     const base = {
-        listen: (cb: __TAURI_EVENT.EventCallback<TListen>) => __TAURI_EVENT.listen(name, cb),
-        once: (cb: __TAURI_EVENT.EventCallback<TListen>) => __TAURI_EVENT.once(name, cb),
-        emit: ((payload: TEmit) => __TAURI_EVENT.emit(name, payload) as unknown) as (TEmit extends null ? () => Promise<void> : (payload: TEmit) => Promise<void>)
+        listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, cb),
+        once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, cb),
+        emit: ((payload: T) => __TAURI_EVENT.emit(name, payload) as unknown) as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
-        listen: (cb: __TAURI_EVENT.EventCallback<TListen>) => target.listen(name, cb),
-        once: (cb: __TAURI_EVENT.EventCallback<TListen>) => target.once(name, cb),
-        emit: ((payload: TEmit) => target.emit(name, payload) as unknown) as (TEmit extends null ? () => Promise<void> : (payload: TEmit) => Promise<void>)
+        listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, cb),
+        once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, cb),
+        emit: ((payload: T) => target.emit(name, payload) as unknown) as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
     });
 
     return Object.assign(fn, base);
 }"#;
 
 const MAKE_EVENT_IMPL_JS: &str = r#"/**
- * @template TListen
- * @template [TEmit=TListen]
+ * @template T
  * @param {string} name
  */
 function makeEvent(name) {
     const base = {
-        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
         listen: (cb) => __TAURI_EVENT.listen(name, cb),
-        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
         once: (cb) => __TAURI_EVENT.once(name, cb),
-        /** @param {TEmit} payload */
+        /** @param {T} payload */
         emit: (payload) => __TAURI_EVENT.emit(name, payload),
     };
 
     /** @param {import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window} target */
     const fn = (target) => ({
-        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
         listen: (cb) => target.listen(name, cb),
-        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
         once: (cb) => target.once(name, cb),
-        /** @param {TEmit} payload */
+        /** @param {T} payload */
         emit: (payload) => target.emit(name, payload),
     });
 
