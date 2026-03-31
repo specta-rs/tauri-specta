@@ -678,17 +678,19 @@ async function typedError(result) {
 
 const TYPED_ERROR_ASSERTION_TS: &str = "const _assertTypedErrorFollowsContract: <T, E>(result: Promise<T>) => Promise<any> = typedError;";
 
-const MAKE_EVENT_IMPL_TS: &str = r#"function makeEvent<T>(name: string) {
+const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
+
+function makeEvent<T>(name: string) {
     const base = {
         listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, cb),
         once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, cb),
-        emit: ((payload: T) => __TAURI_EVENT.emit(name, payload) as unknown) as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
+        emit: ((payload: T) => __TAURI_EVENT.emit(name, payload) as unknown) as EventEmit<T>
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
         listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, cb),
         once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, cb),
-        emit: ((payload: T) => target.emit(name, payload) as unknown) as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
+        emit: ((payload: T) => target.emit(name, payload) as unknown) as EventEmit<T>
     });
 
     return Object.assign(fn, base);
