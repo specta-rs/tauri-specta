@@ -1,12 +1,12 @@
 use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
 
-use crate::{event::EventRegistryMeta, Commands, EventRegistry, Events, LanguageExt};
+use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
 use serde::Serialize;
 use specta::{
-    datatype::{Function, Reference},
     Type, Types,
+    datatype::{Function, Reference},
 };
-use tauri::{ipc::Invoke, Manager, Runtime};
+use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// The mode which the error handling is done in the bindings.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
@@ -84,7 +84,7 @@ pub enum ErrorHandlingMode {
 /// ```
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct Builder<R: Runtime = tauri::Wry> {
+pub struct Builder<R: Runtime> {
     commands: Commands<R>,
     cfg: BuilderConfiguration,
 }
