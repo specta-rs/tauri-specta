@@ -91,3 +91,4 @@ function makeEvent<T>(name: string) {
 
     return Object.assign(fn, base);
 }
+
