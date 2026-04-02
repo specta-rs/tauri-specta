@@ -49,6 +49,58 @@ macro_rules! collect_commands {
     };
 }
 
+/// Collect queries for TanStack Query integration.
+///
+/// Like [`collect_commands!`] but marks functions as queries, generating
+/// `queryOptions` wrappers in TypeScript output.
+///
+/// # Usage
+/// ```rust,ignore
+/// use tauri_specta::{collect_queries, Builder};
+///
+/// #[tauri::command]
+/// #[specta::specta]
+/// fn get_user(id: u32) -> User { /* ... */ }
+///
+/// let builder = Builder::<tauri::Wry>::new()
+///     .queries(collect_queries![get_user]);
+/// ```
+#[macro_export]
+macro_rules! collect_queries {
+    ($($b:ident $(:: $($p:ident)? $(<$($g:path),*>)? )* ),* $(,)?) => {
+        $crate::internal::query(
+            ::tauri::generate_handler![$($b $($(::$p)? )* ),*],
+            ::specta::function::collect_functions![$($b $($(::$p)? $(::<$($g),*>)? )* ),*],
+        )
+    };
+}
+
+/// Collect mutations for TanStack Query integration.
+///
+/// Like [`collect_commands!`] but marks functions as mutations, generating
+/// `mutationOptions` wrappers in TypeScript output.
+///
+/// # Usage
+/// ```rust,ignore
+/// use tauri_specta::{collect_mutations, Builder};
+///
+/// #[tauri::command]
+/// #[specta::specta]
+/// fn create_user(name: String) -> User { /* ... */ }
+///
+/// let builder = Builder::<tauri::Wry>::new()
+///     .mutations(collect_mutations![create_user]);
+/// ```
+#[macro_export]
+macro_rules! collect_mutations {
+    ($($b:ident $(:: $($p:ident)? $(<$($g:path),*>)? )* ),* $(,)?) => {
+        $crate::internal::mutation(
+            ::tauri::generate_handler![$($b $($(::$p)? )* ),*],
+            ::specta::function::collect_functions![$($b $($(::$p)? $(::<$($g),*>)? )* ),*],
+        )
+    };
+}
+
 /// Collect events and their types.
 ///
 /// This returns a [`Events`](crate::Events) struct that can be passed to [`Builder::events`](crate::Builder::events).

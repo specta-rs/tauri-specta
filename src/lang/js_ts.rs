@@ -92,7 +92,13 @@ fn runtime(
     typed_error_assertion: &str,
     make_event_impl: &str,
 ) -> Result<Cow<'static, str>, Error> {
-    let enabled_commands = !cfg.commands.is_empty();
+    let all_commands: Vec<&Function> = cfg
+        .commands
+        .iter()
+        .chain(&cfg.queries)
+        .chain(&cfg.mutations)
+        .collect();
+    let enabled_commands = !all_commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
 
     let mut out = String::new();
@@ -112,7 +118,7 @@ fn runtime(
         ));
     }
 
-    let is_channel_used = cfg.commands.iter().any(|command| {
+    let is_channel_used = all_commands.iter().any(|command| {
         // Check if any argument is a Channel
         command
             .args()
@@ -123,7 +129,7 @@ fn runtime(
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling == ErrorHandlingMode::Result
-        && cfg.commands.iter().any(|command| {
+        && all_commands.iter().any(|command| {
             command
                 .result()
                 .and_then(|dt| extract_std_result(dt, exporter.types))
@@ -152,11 +158,29 @@ fn runtime(
     if enabled_events {
         out.push_str("import * as __TAURI_EVENT from \"@tauri-apps/api/event\";\n");
     }
+    if let Some(framework) = &cfg.tanstack {
+        let has_queries = !cfg.queries.is_empty();
+        let has_mutations = !cfg.mutations.is_empty();
+        if has_queries || has_mutations {
+            let mut tanstack_imports = Vec::new();
+            if has_queries {
+                tanstack_imports.push("queryOptions as __TANSTACK_QUERY_OPTIONS");
+            }
+            if has_mutations {
+                tanstack_imports.push("mutationOptions as __TANSTACK_MUTATION_OPTIONS");
+            }
+            out.push_str(&format!(
+                "import {{ {} }} from \"{}\";\n",
+                tanstack_imports.join(", "),
+                framework.package_name()
+            ));
+        }
+    }
 
-    // Commands
+    // Commands (includes queries and mutations)
     if enabled_commands {
         let mut s = Struct::named();
-        for command in &cfg.commands {
+        for command in &all_commands {
             validate_exported_command(command, exporter.types)?;
 
             let command_name_escaped = serde_json::to_string(
@@ -347,6 +371,232 @@ fn runtime(
         out.push_str(";\n");
     }
 
+    // TanStack Query
+    let has_unwrap_typed_error = cfg.tanstack.is_some()
+        && cfg
+            .queries
+            .iter()
+            .chain(&cfg.mutations)
+            .any(|cmd| command_uses_typed_error(cmd, exporter.types, cfg));
+
+    if let Some(_framework) = &cfg.tanstack {
+        let has_queries = !cfg.queries.is_empty();
+        let has_mutations = !cfg.mutations.is_empty();
+
+        // Queries + Query Keys
+        if has_queries {
+            let mut queries_struct = Struct::named();
+            let mut query_keys_struct = Struct::named();
+            for command in &cfg.queries {
+                // skip validation here since we validate the same commands for the `commands` export
+                let command_name = command.name().to_lower_camel_case();
+                let has_no_args = command.args().is_empty();
+
+                let arguments = command
+                    .args()
+                    .iter()
+                    .map(|(name, dt)| {
+                        Ok((
+                            name.to_lower_camel_case(),
+                            render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter, cfg)?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, Error>>()?;
+
+                let fn_arguments = arguments
+                    .iter()
+                    .map(|(name, dt)| {
+                        let mut arg = name.to_string();
+                        if !jsdoc {
+                            arg.push_str(": ");
+                            arg.push_str(dt);
+                        }
+                        arg
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let call_args = if has_no_args {
+                    String::new()
+                } else {
+                    arguments
+                        .iter()
+                        .map(|(name, _)| name.to_lower_camel_case())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+
+                let key_prefix = if let Some(plugin_name) = cfg.plugin_name {
+                    format!("\"plugin:{plugin_name}\", \"{command_name}\"")
+                } else {
+                    format!("\"{command_name}\"")
+                };
+
+                let as_const = if jsdoc { "" } else { " as const" };
+                let key_body = if has_no_args {
+                    format!("() => [{key_prefix}]{as_const}")
+                } else {
+                    let first_arg = &arguments[0].0;
+                    let args_obj = format!("{{ {} }}", call_args);
+
+                    format!(
+                        "({fn_arguments}) => {first_arg} !== undefined ? [{key_prefix}, {args_obj}]{as_const} : [{key_prefix}]{as_const}",
+                    )
+                };
+
+                query_keys_struct = query_keys_struct
+                    .field(command_name.clone(), Field::new(define(key_body).into()));
+
+                let (data_type, error_type) =
+                    extract_tanstack_result_types(command, &exporter, cfg)?;
+
+                let generics = if jsdoc {
+                    String::new()
+                } else {
+                    match &error_type {
+                        Some(e) => format!("<{data_type}, {e}>"),
+                        None => format!("<{data_type}>"),
+                    }
+                };
+
+                let query_fn_body = if command_uses_typed_error(command, exporter.types, cfg) {
+                    format!("unwrapTypedError(commands.{command_name}({call_args}))")
+                } else {
+                    format!("commands.{command_name}({call_args})")
+                };
+                let query_body = format!(
+                    "({fn_arguments}) => __TANSTACK_QUERY_OPTIONS{generics}({{ queryKey: queryKeys.{command_name}({call_args}), queryFn: () => {query_fn_body} }})"
+                );
+
+                queries_struct = queries_struct
+                    .field(command_name.clone(), Field::new(define(query_body).into()));
+            }
+
+            out.push_str("\n/** Query Keys */");
+            out.push_str("\nexport const queryKeys = ");
+            out.push_str(&match &query_keys_struct.build() {
+                DataType::Reference(r) => exporter.reference(&r)?,
+                dt => exporter.inline(dt)?,
+            });
+            out.push_str(";\n");
+
+            out.push_str("\n/** Queries */");
+            out.push_str("\nexport const queries = ");
+            out.push_str(&match &queries_struct.build() {
+                DataType::Reference(r) => exporter.reference(&r)?,
+                dt => exporter.inline(dt)?,
+            });
+            out.push_str(";\n");
+        }
+
+        // Mutations + Mutation Keys
+        if has_mutations {
+            let mut mutations_struct = Struct::named();
+            let mut mutation_keys_struct = Struct::named();
+            for command in &cfg.mutations {
+                // skip validation here since we validate the same commands for the `commands` export
+                let command_name = command.name().to_lower_camel_case();
+                let has_no_args = command.args().is_empty();
+
+                let arguments = command
+                    .args()
+                    .iter()
+                    .map(|(name, dt)| {
+                        Ok((
+                            name.to_lower_camel_case(),
+                            render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter, cfg)?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, Error>>()?;
+
+                let call_args = if has_no_args {
+                    String::new()
+                } else {
+                    arguments
+                        .iter()
+                        .map(|(name, _)| name.to_lower_camel_case())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+
+                let key_prefix = if let Some(plugin_name) = cfg.plugin_name {
+                    format!("\"plugin:{plugin_name}\", \"{command_name}\"")
+                } else {
+                    format!("\"{command_name}\"")
+                };
+
+                let as_const = if jsdoc { "" } else { " as const" };
+                let key_body = format!("() => [{key_prefix}]{as_const}");
+
+                mutation_keys_struct = mutation_keys_struct
+                    .field(command_name.clone(), Field::new(define(key_body).into()));
+
+                let (data_type, error_type) =
+                    extract_tanstack_result_types(command, &exporter, cfg)?;
+
+                let variables_type = if has_no_args {
+                    "void".to_string()
+                } else {
+                    format!(
+                        "{{ {} }}",
+                        arguments
+                            .iter()
+                            .map(|(name, dt)| format!("{name}: {dt}"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+
+                let generics = if jsdoc {
+                    String::new()
+                } else {
+                    match &error_type {
+                        Some(e) => format!("<{data_type}, {e}, {variables_type}>"),
+                        None => format!("<{data_type}, Error, {variables_type}>"),
+                    }
+                };
+
+                let mutation_fn_param = if has_no_args {
+                    String::new()
+                } else if jsdoc {
+                    format!("{{ {call_args} }}")
+                } else {
+                    format!("{{ {call_args} }}: {variables_type}")
+                };
+
+                let mutation_fn_body = if command_uses_typed_error(command, exporter.types, cfg) {
+                    format!("unwrapTypedError(commands.{command_name}({call_args}))")
+                } else {
+                    format!("commands.{command_name}({call_args})")
+                };
+                let mutation_body = format!(
+                    "() => __TANSTACK_MUTATION_OPTIONS{generics}({{ mutationKey: mutationKeys.{command_name}(), mutationFn: ({mutation_fn_param}) => {mutation_fn_body} }})"
+                );
+
+                mutations_struct = mutations_struct.field(
+                    command_name.clone(),
+                    Field::new(define(mutation_body).into()),
+                );
+            }
+
+            out.push_str("\n/** Mutation Keys */");
+            out.push_str("\nexport const mutationKeys = ");
+            out.push_str(&match &mutation_keys_struct.build() {
+                DataType::Reference(r) => exporter.reference(&r)?,
+                dt => exporter.inline(dt)?,
+            });
+            out.push_str(";\n");
+
+            out.push_str("\n/** Mutations */");
+            out.push_str("\nexport const mutations = ");
+            out.push_str(&match &mutations_struct.build() {
+                DataType::Reference(r) => exporter.reference(&r)?,
+                dt => exporter.inline(dt)?,
+            });
+            out.push_str(";\n");
+        }
+    }
+
     // Events
     if enabled_events {
         let mut s = Struct::named();
@@ -430,7 +680,7 @@ fn runtime(
     }
 
     // Runtime
-    if has_typed_error || enabled_events {
+    if has_typed_error || has_unwrap_typed_error || enabled_events {
         out.push_str("\n/* Tauri Specta runtime */\n");
 
         if has_typed_error {
@@ -443,17 +693,60 @@ fn runtime(
                 out.push_str(typed_error_assertion);
                 out.push('\n');
             }
-            if enabled_events {
-                out.push('\n');
+        }
+        if has_unwrap_typed_error {
+            out.push('\n');
+            if jsdoc {
+                out.push_str(UNWRAP_TYPED_ERROR_IMPL_JS);
+            } else {
+                out.push_str(UNWRAP_TYPED_ERROR_IMPL_TS);
             }
+            out.push('\n');
         }
         if enabled_events {
+            out.push('\n');
             out.push_str(make_event_impl);
             out.push('\n');
         }
     }
 
     Ok(Cow::Owned(out))
+}
+
+/// Whether a command's generated body uses `typedError` wrapping.
+fn command_uses_typed_error(
+    command: &Function,
+    types: &ResolvedTypes,
+    cfg: &BuilderConfiguration,
+) -> bool {
+    cfg.error_handling == ErrorHandlingMode::Result
+        && command
+            .result()
+            .and_then(|dt| extract_std_result(dt, types))
+            .is_some()
+}
+
+/// Extract data type and optional error type for TanStack Query generics.
+/// For Result<T, E>, returns (T, Some(E)). For plain T, returns (T, None).
+/// TanStack always throws on error, so we unwrap Result.
+fn extract_tanstack_result_types(
+    command: &Function,
+    exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
+) -> Result<(String, Option<String>), Error> {
+    match command.result() {
+        Some(dt) => {
+            if let Some((ok, err)) = extract_std_result(dt, exporter.types) {
+                let data = render_reference_dt_for_phase(ok, Phase::Serialize, exporter, cfg)?;
+                let error = render_reference_dt_for_phase(err, Phase::Serialize, exporter, cfg)?;
+                Ok((data, Some(error)))
+            } else {
+                let data = render_reference_dt_for_phase(dt, Phase::Serialize, exporter, cfg)?;
+                Ok((data, None))
+            }
+        }
+        None => Ok(("void".to_string(), None)),
+    }
 }
 
 fn rewrite_bigints_in_datatype(dt: &mut DataType, nuanced: bool, phased: bool) {
@@ -645,7 +938,10 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "Channel",
     "__TAURI_EVENT",
     "__TAURI_INVOKE",
+    "__TANSTACK_QUERY_OPTIONS",
+    "__TANSTACK_MUTATION_OPTIONS",
     "typedError",
+    "unwrapTypedError",
     "makeEvent",
 ];
 
@@ -677,6 +973,24 @@ async function typedError(result) {
 }"#;
 
 const TYPED_ERROR_ASSERTION_TS: &str = "const _assertTypedErrorFollowsContract: <T, E>(result: Promise<T>) => Promise<any> = typedError;";
+
+const UNWRAP_TYPED_ERROR_IMPL_TS: &str = r#"async function unwrapTypedError<T, E>(result: Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>): Promise<T> {
+    const v = await result;
+    if (v.status === "error") throw v.error;
+    return v.data;
+}"#;
+
+const UNWRAP_TYPED_ERROR_IMPL_JS: &str = r#"/**
+  * @template T
+  * @template E
+  * @param {Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>} result
+  * @returns {Promise<T>}
+  */
+async function unwrapTypedError(result) {
+    const v = await result;
+    if (v.status === "error") throw v.error;
+    return v.data;
+}"#;
 
 const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
