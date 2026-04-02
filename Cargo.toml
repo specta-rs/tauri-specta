@@ -47,6 +47,7 @@ members = [
     "examples/app/src-tauri",
     "examples/custom-plugin/app/src-tauri",
     "examples/custom-plugin/plugin",
+    "examples/tanstack-query/src-tauri",
     "macros",
 ]
 
