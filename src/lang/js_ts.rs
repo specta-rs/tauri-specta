@@ -416,6 +416,20 @@ fn runtime(
                     .collect::<Vec<_>>()
                     .join(", ");
 
+                // Key factory args are optional to allow partial key matching for invalidation
+                let optional_fn_arguments = arguments
+                    .iter()
+                    .map(|(name, dt)| {
+                        let mut arg = name.to_string();
+                        if !jsdoc {
+                            arg.push_str("?: ");
+                            arg.push_str(dt);
+                        }
+                        arg
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
                 let call_args = if has_no_args {
                     String::new()
                 } else {
@@ -440,7 +454,7 @@ fn runtime(
                     let args_obj = format!("{{ {} }}", call_args);
 
                     format!(
-                        "({fn_arguments}) => {first_arg} !== undefined ? [{key_prefix}, {args_obj}]{as_const} : [{key_prefix}]{as_const}",
+                        "({optional_fn_arguments}) => {first_arg} !== undefined ? [{key_prefix}, {args_obj}]{as_const} : [{key_prefix}]{as_const}",
                     )
                 };
 

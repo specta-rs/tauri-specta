@@ -120,8 +120,10 @@ function TodosPanel({ userId }: { userId: number | null }) {
     enabled: userId !== null,
   });
 
+  const [filterTitle, setFilterTitle] = useState("");
+
   const todosQuery = useQuery({
-    ...queries.listTodos(userId!),
+    ...queries.listTodos(userId!, filterTitle || null),
     enabled: userId !== null,
   });
 
@@ -131,7 +133,7 @@ function TodosPanel({ userId }: { userId: number | null }) {
     ...mutations.createTodo(),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.listTodos(userId!),
+        queryKey: queryKeys.listTodos(userId!, filterTitle || null),
       });
       setNewTodoTitle("");
     },
@@ -141,7 +143,7 @@ function TodosPanel({ userId }: { userId: number | null }) {
     ...mutations.deleteTodo(),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.listTodos(userId!),
+        queryKey: queryKeys.listTodos(userId!, filterTitle || null),
       });
     },
   });
@@ -183,6 +185,13 @@ function TodosPanel({ userId }: { userId: number | null }) {
             </button>
           </form>
 
+          <input
+            placeholder="Filter by title..."
+            value={filterTitle}
+            onChange={(e) => setFilterTitle(e.target.value)}
+            style={{ width: "100%", marginTop: "0.5rem" }}
+          />
+
           {todosQuery.isLoading && <p>Loading todos...</p>}
           {todosQuery.isError && <p>Error loading todos</p>}
 
@@ -207,7 +216,9 @@ function TodosPanel({ userId }: { userId: number | null }) {
                 </button>
               </li>
             ))}
-            {todosQuery.data?.length === 0 && <p>No todos yet.</p>}
+            {todosQuery.data?.length === 0 && (
+              <p>{filterTitle ? "No matching todos." : "No todos yet."}</p>
+            )}
           </ul>
         </>
       )}

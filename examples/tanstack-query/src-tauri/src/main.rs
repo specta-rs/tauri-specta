@@ -68,12 +68,18 @@ fn list_users(state: tauri::State<AppStateMutex>) -> Vec<User> {
 
 #[tauri::command]
 #[specta::specta]
-fn list_todos(state: tauri::State<AppStateMutex>, user_id: u32) -> Vec<Todo> {
+fn list_todos(
+    state: tauri::State<AppStateMutex>,
+    user_id: u32,
+    title: Option<String>,
+) -> Vec<Todo> {
     let state = state.lock().unwrap();
     state
         .todos
         .iter()
-        .filter(|todo| todo.user_id == user_id)
+        .filter(|todo| {
+            todo.user_id == user_id && title.as_ref().map_or(true, |t| todo.title.contains(t))
+        })
         .cloned()
         .collect()
 }

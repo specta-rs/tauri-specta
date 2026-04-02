@@ -7,7 +7,7 @@ import { queryOptions as __TANSTACK_QUERY_OPTIONS, mutationOptions as __TANSTACK
 export const commands = {
 	getUser: (id: number) => typedError<User, ApiError>(__TAURI_INVOKE("get_user", { id })),
 	listUsers: () => __TAURI_INVOKE<User[]>("list_users"),
-	listTodos: (userId: number) => __TAURI_INVOKE<Todo[]>("list_todos", { userId }),
+	listTodos: (userId: number, title: string | null) => __TAURI_INVOKE<Todo[]>("list_todos", { userId, title }),
 	createUser: (name: string, email: string) => typedError<User, ApiError>(__TAURI_INVOKE("create_user", { name, email })),
 	createTodo: (title: string, userId: number) => typedError<Todo, ApiError>(__TAURI_INVOKE("create_todo", { title, userId })),
 	deleteUser: (id: number) => typedError<null, ApiError>(__TAURI_INVOKE("delete_user", { id })),
@@ -16,16 +16,16 @@ export const commands = {
 
 /** Query Keys */
 export const queryKeys = {
-	getUser: (id: number) => id !== undefined ? ["getUser", { id }] as const : ["getUser"] as const,
+	getUser: (id?: number) => id !== undefined ? ["getUser", { id }] as const : ["getUser"] as const,
 	listUsers: () => ["listUsers"] as const,
-	listTodos: (userId: number) => userId !== undefined ? ["listTodos", { userId }] as const : ["listTodos"] as const,
+	listTodos: (userId?: number, title?: string | null) => userId !== undefined ? ["listTodos", { userId, title }] as const : ["listTodos"] as const,
 };
 
 /** Queries */
 export const queries = {
 	getUser: (id: number) => __TANSTACK_QUERY_OPTIONS<User, ApiError>({ queryKey: queryKeys.getUser(id), queryFn: () => unwrapTypedError(commands.getUser(id)) }),
 	listUsers: () => __TANSTACK_QUERY_OPTIONS<User[]>({ queryKey: queryKeys.listUsers(), queryFn: () => commands.listUsers() }),
-	listTodos: (userId: number) => __TANSTACK_QUERY_OPTIONS<Todo[]>({ queryKey: queryKeys.listTodos(userId), queryFn: () => commands.listTodos(userId) }),
+	listTodos: (userId: number, title: string | null) => __TANSTACK_QUERY_OPTIONS<Todo[]>({ queryKey: queryKeys.listTodos(userId, title), queryFn: () => commands.listTodos(userId, title) }),
 };
 
 /** Mutation Keys */
