@@ -16,9 +16,9 @@ export const commands = {
 
 /** Query Keys */
 export const queryKeys = {
-	getUser: (id?: number) => id !== undefined ? ["getUser", { id }] as const : ["getUser"] as const,
+	getUser: (id?: number) => filterKey(["getUser"] as const, { id }),
 	listUsers: () => ["listUsers"] as const,
-	listTodos: (userId?: number, title?: string | null) => userId !== undefined ? ["listTodos", { userId, title }] as const : ["listTodos"] as const,
+	listTodos: (userId?: number, title?: string | null) => filterKey(["listTodos"] as const, { userId, title }),
 };
 
 /** Queries */
@@ -74,5 +74,10 @@ async function unwrapTypedError<T, E>(result: Promise<{ status: "ok"; data: T } 
     const v = await result;
     if (v.status === "error") throw v.error;
     return v.data;
+}
+
+function filterKey<const P extends readonly unknown[], A extends Record<string, unknown>>(prefix: P, args: A): readonly [...P] | readonly [...P, Partial<A>] {
+    const filtered = Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined));
+    return Object.keys(filtered).length > 0 ? [...prefix, filtered] as const as any : [...prefix] as const;
 }
 

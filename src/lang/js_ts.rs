@@ -378,6 +378,8 @@ fn runtime(
             .iter()
             .chain(&cfg.mutations)
             .any(|cmd| command_uses_typed_error(cmd, exporter.types, cfg));
+    let has_query_key_args =
+        cfg.tanstack.is_some() && cfg.queries.iter().any(|cmd| !cmd.args().is_empty());
 
     if let Some(_framework) = &cfg.tanstack {
         let has_queries = !cfg.queries.is_empty();
@@ -450,11 +452,10 @@ fn runtime(
                 let key_body = if has_no_args {
                     format!("() => [{key_prefix}]{as_const}")
                 } else {
-                    let first_arg = &arguments[0].0;
                     let args_obj = format!("{{ {} }}", call_args);
 
                     format!(
-                        "({optional_fn_arguments}) => {first_arg} !== undefined ? [{key_prefix}, {args_obj}]{as_const} : [{key_prefix}]{as_const}",
+                        "({optional_fn_arguments}) => filterKey([{key_prefix}]{as_const}, {args_obj})",
                     )
                 };
 
@@ -694,7 +695,7 @@ fn runtime(
     }
 
     // Runtime
-    if has_typed_error || has_unwrap_typed_error || enabled_events {
+    if has_typed_error || has_unwrap_typed_error || has_query_key_args || enabled_events {
         out.push_str("\n/* Tauri Specta runtime */\n");
 
         if has_typed_error {
@@ -714,6 +715,15 @@ fn runtime(
                 out.push_str(UNWRAP_TYPED_ERROR_IMPL_JS);
             } else {
                 out.push_str(UNWRAP_TYPED_ERROR_IMPL_TS);
+            }
+            out.push('\n');
+        }
+        if has_query_key_args {
+            out.push('\n');
+            if jsdoc {
+                out.push_str(FILTER_KEY_IMPL_JS);
+            } else {
+                out.push_str(FILTER_KEY_IMPL_TS);
             }
             out.push('\n');
         }
@@ -954,6 +964,7 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "__TAURI_INVOKE",
     "__TANSTACK_QUERY_OPTIONS",
     "__TANSTACK_MUTATION_OPTIONS",
+    "filterKey",
     "typedError",
     "unwrapTypedError",
     "makeEvent",
@@ -1004,6 +1015,23 @@ async function unwrapTypedError(result) {
     const v = await result;
     if (v.status === "error") throw v.error;
     return v.data;
+}"#;
+
+const FILTER_KEY_IMPL_TS: &str = r#"function filterKey<const P extends readonly unknown[], A extends Record<string, unknown>>(prefix: P, args: A): readonly [...P] | readonly [...P, Partial<A>] {
+    const filtered = Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined));
+    return Object.keys(filtered).length > 0 ? [...prefix, filtered] as const as any : [...prefix] as const;
+}"#;
+
+const FILTER_KEY_IMPL_JS: &str = r#"/**
+  * @template {readonly unknown[]} P
+  * @template {Record<string, unknown>} A
+  * @param {P} prefix
+  * @param {A} args
+  * @returns {readonly [...P] | readonly [...P, Partial<A>]}
+  */
+function filterKey(prefix, args) {
+    const filtered = Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined));
+    return Object.keys(filtered).length > 0 ? [...prefix, filtered] : [...prefix];
 }"#;
 
 const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
