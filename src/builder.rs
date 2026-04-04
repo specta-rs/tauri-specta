@@ -6,7 +6,8 @@ use std::{
 };
 
 use crate::{
-    Commands, EventRegistry, Events, LanguageExt, Mutations, Queries, TanstackFramework,
+    Commands, EventRegistry, Events, LanguageExt, TanstackFramework,
+    commands::{Mutations, Queries},
     event::EventRegistryMeta,
 };
 use serde::Serialize;

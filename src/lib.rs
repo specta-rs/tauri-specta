@@ -186,13 +186,13 @@ mod commands;
 mod event;
 mod lang;
 mod macros;
-mod queries;
+mod tanstack;
 
 pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
 pub use commands::Commands;
 pub use event::{Event, Events, TypedEvent};
 pub use lang::LanguageExt;
-pub use queries::{Mutations, Queries, TanstackFramework};
+pub use tanstack::TanstackFramework;
 
 /// Implements the [`Event`](trait@crate::Event) trait for a struct.
 ///
@@ -229,28 +229,6 @@ pub mod internal {
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
     {
         Commands(Arc::new(f), types)
-    }
-
-    /// called by `collect_queries` to construct `Queries`
-    pub fn query<R: Runtime, F>(
-        f: F,
-        types: fn(&mut Types) -> Vec<datatype::Function>,
-    ) -> Queries<R>
-    where
-        F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
-    {
-        Queries(Arc::new(f), types)
-    }
-
-    /// called by `collect_mutations` to construct `Mutations`
-    pub fn mutation<R: Runtime, F>(
-        f: F,
-        types: fn(&mut Types) -> Vec<datatype::Function>,
-    ) -> Mutations<R>
-    where
-        F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
-    {
-        Mutations(Arc::new(f), types)
     }
 
     /// called by `collect_events` to register events to an `Events`

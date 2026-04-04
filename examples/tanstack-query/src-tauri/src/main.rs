@@ -147,10 +147,10 @@ fn delete_todo(state: tauri::State<AppStateMutex>, id: u32) -> Result<(), ApiErr
 
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
-        .queries(tauri_specta::collect_queries![
+        .queries(tauri_specta::collect_commands![
             get_user, list_users, list_todos,
         ])
-        .mutations(tauri_specta::collect_mutations![
+        .mutations(tauri_specta::collect_commands![
             create_user,
             create_todo,
             delete_user,
