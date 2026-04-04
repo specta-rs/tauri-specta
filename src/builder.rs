@@ -129,6 +129,7 @@ pub struct BuilderConfiguration {
     /// Whether serde serialize/deserialize phase differences should be ignored.
     pub disable_serde_phases: bool,
 }
+
 impl BuilderConfiguration {
     /// Get the names of all registered queries.
     fn query_names(&self) -> HashSet<String> {
@@ -222,7 +223,7 @@ impl<R: Runtime> Builder<R> {
     ///     format!("Hello, {my_name}! You've been greeted from Rust!")
     /// }
     ///
-    /// let mut builder = Builder::<tauri::Wry>::new().queries(collect_queries![hello_world]);
+    /// let mut builder = Builder::<tauri::Wry>::new().queries(collect_commands![hello_world]);
     /// ```
     pub fn queries(mut self, queries: Queries<R>) -> Self {
         self.cfg.queries = (queries.1)(&mut self.cfg.types);
@@ -249,7 +250,7 @@ impl<R: Runtime> Builder<R> {
     ///     format!("Hello, {my_name}! You've been greeted from Rust!")
     /// }
     ///
-    /// let mut builder = Builder::<tauri::Wry>::new().mutations(collect_mutations![hello_world]);
+    /// let mut builder = Builder::<tauri::Wry>::new().mutations(collect_commands![hello_world]);
     /// ```
     pub fn mutations(mut self, mutations: Mutations<R>) -> Self {
         self.cfg.mutations = (mutations.1)(&mut self.cfg.types);
