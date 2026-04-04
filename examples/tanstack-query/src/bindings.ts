@@ -5,12 +5,25 @@ import { queryOptions as __TANSTACK_QUERY_OPTIONS, mutationOptions as __TANSTACK
 
 /** Commands */
 export const commands = {
+	/**
+	 *  Get a user by ID.
+	 * 
+	 *  Returns an error if the user does not exist.
+	 */
 	getUser: (id: number) => typedError<User, ApiError>(__TAURI_INVOKE("get_user", { id })),
+	// List all users.
 	listUsers: () => __TAURI_INVOKE<User[]>("list_users"),
+	/**
+	 *  List todos for a specific user, optionally filtering by title.
+	 * 
+	 *  If `title` is provided, only todos containing that substring are returned.
+	 */
 	listTodos: (userId: number, title: string | null) => __TAURI_INVOKE<Todo[]>("list_todos", { userId, title }),
 	createUser: (name: string, email: string) => typedError<User, ApiError>(__TAURI_INVOKE("create_user", { name, email })),
 	createTodo: (title: string, userId: number) => typedError<Todo, ApiError>(__TAURI_INVOKE("create_todo", { title, userId })),
+	// Delete a user by ID, returning an error if the user does not exist.
 	deleteUser: (id: number) => typedError<null, ApiError>(__TAURI_INVOKE("delete_user", { id })),
+	// Delete a todo by ID, returning an error if the todo does not exist.
 	deleteTodo: (id: number) => typedError<null, ApiError>(__TAURI_INVOKE("delete_todo", { id })),
 };
 
@@ -23,8 +36,19 @@ export const queryKeys = {
 
 /** Queries */
 export const queries = {
+	/**
+	 *  Get a user by ID.
+	 * 
+	 *  Returns an error if the user does not exist.
+	 */
 	getUser: (id: number) => __TANSTACK_QUERY_OPTIONS<User, ApiError>({ queryKey: queryKeys.getUser(id), queryFn: () => unwrapTypedError(commands.getUser(id)) }),
+	// List all users.
 	listUsers: () => __TANSTACK_QUERY_OPTIONS<User[]>({ queryKey: queryKeys.listUsers(), queryFn: () => commands.listUsers() }),
+	/**
+	 *  List todos for a specific user, optionally filtering by title.
+	 * 
+	 *  If `title` is provided, only todos containing that substring are returned.
+	 */
 	listTodos: (userId: number, title: string | null) => __TANSTACK_QUERY_OPTIONS<Todo[]>({ queryKey: queryKeys.listTodos(userId, title), queryFn: () => commands.listTodos(userId, title) }),
 };
 
@@ -40,13 +64,17 @@ export const mutationKeys = {
 export const mutations = {
 	createUser: () => __TANSTACK_MUTATION_OPTIONS<User, ApiError, { name: string, email: string }>({ mutationKey: mutationKeys.createUser(), mutationFn: ({ name, email }: { name: string, email: string }) => unwrapTypedError(commands.createUser(name, email)) }),
 	createTodo: () => __TANSTACK_MUTATION_OPTIONS<Todo, ApiError, { title: string, userId: number }>({ mutationKey: mutationKeys.createTodo(), mutationFn: ({ title, userId }: { title: string, userId: number }) => unwrapTypedError(commands.createTodo(title, userId)) }),
+	// Delete a user by ID, returning an error if the user does not exist.
 	deleteUser: () => __TANSTACK_MUTATION_OPTIONS<null, ApiError, { id: number }>({ mutationKey: mutationKeys.deleteUser(), mutationFn: ({ id }: { id: number }) => unwrapTypedError(commands.deleteUser(id)) }),
+	// Delete a todo by ID, returning an error if the todo does not exist.
 	deleteTodo: () => __TANSTACK_MUTATION_OPTIONS<null, ApiError, { id: number }>({ mutationKey: mutationKeys.deleteTodo(), mutationFn: ({ id }: { id: number }) => unwrapTypedError(commands.deleteTodo(id)) }),
 };
 
 /* Types */
+// A simple API error type for demonstration purposes.
 export type ApiError = { type: "NotFound"; data: string } | { type: "Internal"; data: string };
 
+// A todo item associated with a user.
 export type Todo = {
 	id: number,
 	title: string,
@@ -54,6 +82,7 @@ export type Todo = {
 	user_id: number,
 };
 
+// A user of the application.
 export type User = {
 	id: number,
 	name: string,

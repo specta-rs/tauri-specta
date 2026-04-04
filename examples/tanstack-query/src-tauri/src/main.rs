@@ -13,6 +13,7 @@ use thiserror::Error;
 
 // -- Types --
 
+/// A user of the application.
 #[derive(Serialize, Deserialize, Type, Clone)]
 pub struct User {
     id: u32,
@@ -21,6 +22,7 @@ pub struct User {
 }
 
 #[derive(Serialize, Deserialize, Type, Clone)]
+/// A todo item associated with a user.
 pub struct Todo {
     id: u32,
     title: String,
@@ -36,6 +38,7 @@ pub struct AppState {
 
 pub type AppStateMutex = Mutex<AppState>;
 
+/// A simple API error type for demonstration purposes.
 #[derive(Error, Debug, Serialize, Type)]
 #[serde(tag = "type", content = "data")]
 pub enum ApiError {
@@ -47,6 +50,9 @@ pub enum ApiError {
 
 // -- Queries (read operations) --
 
+/// Get a user by ID.
+///
+/// Returns an error if the user does not exist.
 #[tauri::command]
 #[specta::specta]
 fn get_user(state: tauri::State<AppStateMutex>, id: u32) -> Result<User, ApiError> {
@@ -59,6 +65,7 @@ fn get_user(state: tauri::State<AppStateMutex>, id: u32) -> Result<User, ApiErro
         .ok_or(ApiError::NotFound(format!("User {id} not found")))
 }
 
+/// List all users.
 #[tauri::command]
 #[specta::specta]
 fn list_users(state: tauri::State<AppStateMutex>) -> Vec<User> {
@@ -66,6 +73,9 @@ fn list_users(state: tauri::State<AppStateMutex>) -> Vec<User> {
     state.users.clone()
 }
 
+/// List todos for a specific user, optionally filtering by title.
+///
+/// If `title` is provided, only todos containing that substring are returned.
 #[tauri::command]
 #[specta::specta]
 fn list_todos(
@@ -121,6 +131,7 @@ fn create_todo(
     Ok(todo)
 }
 
+/// Delete a user by ID, returning an error if the user does not exist.
 #[tauri::command]
 #[specta::specta]
 fn delete_user(state: tauri::State<AppStateMutex>, id: u32) -> Result<(), ApiError> {
@@ -133,6 +144,7 @@ fn delete_user(state: tauri::State<AppStateMutex>, id: u32) -> Result<(), ApiErr
     }
 }
 
+/// Delete a todo by ID, returning an error if the todo does not exist.
 #[tauri::command]
 #[specta::specta]
 fn delete_todo(state: tauri::State<AppStateMutex>, id: u32) -> Result<(), ApiError> {

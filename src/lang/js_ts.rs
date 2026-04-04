@@ -307,31 +307,7 @@ fn runtime(
 
             let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
             field.set_deprecated(command.deprecated().cloned());
-            field.set_docs({
-                let mut docs = command.docs().to_string();
-
-                if jsdoc {
-                    if !docs.is_empty() {
-                        docs.push('\n');
-                    }
-
-                    docs.push_str(
-                        &arguments
-                            .iter()
-                            .map(|(name, dt)| format!("@param {{{dt}}} {name}"))
-                            .collect::<Vec<_>>()
-                            .join("\n"),
-                    );
-
-                    if !arguments.is_empty() {
-                        docs.push('\n');
-                    }
-
-                    docs.push_str("@returns {string} myName");
-                }
-
-                docs.into()
-            });
+            field.set_docs(build_command_docs(command, &arguments, jsdoc));
             s = s.field(command.name().to_lower_camel_case(), field);
         }
 
@@ -403,8 +379,10 @@ fn runtime(
                     "({fn_arguments}) => __TANSTACK_QUERY_OPTIONS{generics}({{ queryKey: queryKeys.{command_name}({call_args}), queryFn: () => {query_fn_body} }})"
                 );
 
-                queries_struct = queries_struct
-                    .field(command_name.clone(), Field::new(define(query_body).into()));
+                let mut field = Field::new(define(query_body).into());
+                field.set_deprecated(command.deprecated().cloned());
+                field.set_docs(build_command_docs(command, &arguments, jsdoc));
+                queries_struct = queries_struct.field(command_name.clone(), field);
             }
 
             emit_struct_export(
@@ -478,10 +456,10 @@ fn runtime(
                     "() => __TANSTACK_MUTATION_OPTIONS{generics}({{ mutationKey: mutationKeys.{command_name}(), mutationFn: ({mutation_fn_param}) => {mutation_fn_body} }})"
                 );
 
-                mutations_struct = mutations_struct.field(
-                    command_name.clone(),
-                    Field::new(define(mutation_body).into()),
-                );
+                let mut field = Field::new(define(mutation_body).into());
+                field.set_deprecated(command.deprecated().cloned());
+                field.set_docs(build_command_docs(command, &arguments, jsdoc));
+                mutations_struct = mutations_struct.field(command_name.clone(), field);
             }
 
             emit_struct_export(
@@ -621,6 +599,37 @@ fn runtime(
     }
 
     Ok(Cow::Owned(out))
+}
+
+/// Build the doc comment for a command, including `@param` annotations for each argument if `jsdoc` is true.
+fn build_command_docs(
+    command: &Function,
+    arguments: &[(String, String)],
+    jsdoc: bool,
+) -> Cow<'static, str> {
+    let mut docs = command.docs().to_string();
+
+    if jsdoc {
+        if !docs.is_empty() {
+            docs.push('\n');
+        }
+
+        docs.push_str(
+            &arguments
+                .iter()
+                .map(|(name, dt)| format!("@param {{{dt}}} {name}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+
+        if !arguments.is_empty() {
+            docs.push('\n');
+        }
+
+        docs.push_str("@returns {string} myName");
+    }
+
+    docs.into()
 }
 
 /// Collect command arguments as (camelCase name, rendered type) pairs.
