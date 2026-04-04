@@ -12,12 +12,6 @@ pub struct Commands<R: Runtime>(
     pub(crate) fn(&mut Types) -> Vec<datatype::Function>,
 );
 
-/// A tanstack query type alias for `Commands`.
-pub type Queries<R> = Commands<R>;
-
-/// A tanstack mutation type alias for `Commands`.
-pub type Mutations<R> = Commands<R>;
-
 impl<R: Runtime> fmt::Debug for Commands<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Commands").finish()

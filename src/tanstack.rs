@@ -1,3 +1,11 @@
+use crate::Commands;
+
+/// A tanstack query type alias for [`Commands`].
+pub type Queries<R> = Commands<R>;
+
+/// A tanstack mutation type alias for [`Commands`].
+pub type Mutations<R> = Commands<R>;
+
 /// Which TanStack Query framework to target for imports.
 #[derive(Debug, Clone, Copy)]
 pub enum TanstackFramework {
