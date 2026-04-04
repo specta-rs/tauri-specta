@@ -1,6 +1,14 @@
-use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
+use std::{
+    any::TypeId,
+    borrow::Cow,
+    collections::{BTreeMap, HashSet},
+    path::Path,
+};
 
-use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
+use crate::{
+    Commands, EventRegistry, Events, LanguageExt, Mutations, Queries, TanstackFramework,
+    event::EventRegistryMeta,
+};
 use serde::Serialize;
 use specta::{
     Type, Types,
@@ -86,6 +94,8 @@ pub enum ErrorHandlingMode {
 #[non_exhaustive]
 pub struct Builder<R: Runtime> {
     commands: Commands<R>,
+    queries: Queries<R>,
+    mutations: Mutations<R>,
     cfg: BuilderConfiguration,
 }
 
@@ -99,6 +109,12 @@ pub struct BuilderConfiguration {
     pub commands: Vec<Function>,
     /// Error handling mode used by generated bindings.
     pub error_handling: ErrorHandlingMode,
+    /// Queries registered for TanStack Query code generation.
+    pub queries: Vec<Function>,
+    /// Mutations registered for TanStack Query code generation.
+    pub mutations: Vec<Function>,
+    /// TanStack Query framework target for import generation.
+    pub tanstack: Option<TanstackFramework>,
     /// Event names mapped to their type metadata.
     pub events: BTreeMap<&'static str, (TypeId, Reference)>,
     /// Collected Specta types referenced by commands, events, and manual registrations.
@@ -113,10 +129,27 @@ pub struct BuilderConfiguration {
     pub disable_serde_phases: bool,
 }
 
+impl BuilderConfiguration {
+    /// Get the names of all registered queries.
+    fn query_names(&self) -> HashSet<String> {
+        self.queries.iter().map(|f| f.name().to_string()).collect()
+    }
+
+    /// Get the names of all registered mutations.
+    fn mutation_names(&self) -> HashSet<String> {
+        self.mutations
+            .iter()
+            .map(|f| f.name().to_string())
+            .collect()
+    }
+}
+
 impl<R: Runtime> Default for Builder<R> {
     fn default() -> Self {
         Self {
             commands: Default::default(),
+            queries: Default::default(),
+            mutations: Default::default(),
             cfg: Default::default(),
         }
     }
@@ -126,6 +159,8 @@ impl<R: Runtime> Clone for Builder<R> {
     fn clone(&self) -> Self {
         Self {
             commands: self.commands.clone(),
+            queries: self.queries.clone(),
+            mutations: self.mutations.clone(),
             cfg: self.cfg.clone(),
         }
     }
@@ -166,8 +201,72 @@ impl<R: Runtime> Builder<R> {
         self.cfg.commands = (commands.1)(&mut self.cfg.types);
         Self {
             commands,
+            queries: self.queries,
+            mutations: self.mutations,
             cfg: self.cfg,
         }
+    }
+
+    /// Register queries for TanStack Query integration.
+    ///
+    /// **WARNING:** This method will overwrite any previously registered queries.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore-windows
+    /// use tauri_specta::{Builder, collect_commands};
+    ///
+    /// #[tauri::command]
+    /// #[specta::specta]
+    /// fn hello_world(my_name: String) -> String {
+    ///     format!("Hello, {my_name}! You've been greeted from Rust!")
+    /// }
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().queries(collect_commands![hello_world]);
+    /// ```
+    pub fn queries(mut self, queries: Queries<R>) -> Self {
+        self.cfg.queries = (queries.1)(&mut self.cfg.types);
+        Self {
+            queries,
+            commands: self.commands,
+            mutations: self.mutations,
+            cfg: self.cfg,
+        }
+    }
+
+    /// Register mutations for TanStack Query integration.
+    ///
+    /// **WARNING:** This method will overwrite any previously registered mutations.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore-windows
+    /// use tauri_specta::{Builder, collect_commands};
+    ///
+    /// #[tauri::command]
+    /// #[specta::specta]
+    /// fn hello_world(my_name: String) -> String {
+    ///     format!("Hello, {my_name}! You've been greeted from Rust!")
+    /// }
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().mutations(collect_commands![hello_world]);
+    /// ```
+    pub fn mutations(mut self, mutations: Mutations<R>) -> Self {
+        self.cfg.mutations = (mutations.1)(&mut self.cfg.types);
+        Self {
+            mutations,
+            commands: self.commands,
+            queries: self.queries,
+            cfg: self.cfg,
+        }
+    }
+
+    /// Set the TanStack Query framework for code generation.
+    ///
+    /// Controls which package the generated `queryOptions`/`mutationOptions` imports come from.
+    pub fn tanstack(mut self, framework: TanstackFramework) -> Self {
+        self.cfg.tanstack = Some(framework);
+        self
     }
 
     /// Register events with the builder.
@@ -309,7 +408,23 @@ impl<R: Runtime> Builder<R> {
     /// The Tauri invoke handler to trigger commands registered with the builder.
     pub fn invoke_handler(&self) -> impl Fn(Invoke<R>) -> bool + Send + Sync + 'static {
         let commands = self.commands.0.clone();
-        move |invoke| commands(invoke)
+        let queries = self.queries.0.clone();
+        let mutations = self.mutations.0.clone();
+
+        let query_names = self.cfg.query_names();
+        let mutation_names = self.cfg.mutation_names();
+
+        // Resolve the command to the correct handler based on whether it's a query, mutation, or regular command.
+        move |invoke| {
+            let cmd = invoke.message.command();
+            if query_names.contains(cmd) {
+                queries(invoke)
+            } else if mutation_names.contains(cmd) {
+                mutations(invoke)
+            } else {
+                commands(invoke)
+            }
+        }
     }
 
     /// Mount all of the events in the builder onto a Tauri app.

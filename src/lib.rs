@@ -186,11 +186,13 @@ mod commands;
 mod event;
 mod lang;
 mod macros;
+mod tanstack;
 
 pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
 pub use commands::Commands;
 pub use event::{Event, Events, TypedEvent};
 pub use lang::LanguageExt;
+pub use tanstack::{Mutations, Queries, TanstackFramework};
 
 /// Implements the [`Event`](trait@crate::Event) trait for a struct.
 ///

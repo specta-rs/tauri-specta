@@ -1,0 +1,25 @@
+[package]
+name = "tauri-specta-tanstack-query-example"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+specta = { workspace = true, features = ["bytes", "chrono"] }
+tauri-specta = { path = "../../../", features = [
+    "derive",
+    "typescript",
+    "javascript",
+] }
+specta-typescript = { workspace = true }
+thiserror = "2"
