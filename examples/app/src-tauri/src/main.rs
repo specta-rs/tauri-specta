@@ -140,7 +140,8 @@ pub struct Testing {
 #[allow(deprecated)]
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
-        // .disable_serde_phases() // TODO
+        // This can be used if you don't want per-phase (Serialize/Deserialize) types.
+        // .disable_serde_phases()
         .commands(tauri_specta::collect_commands![
             hello_world,
             goodbye_world,
