@@ -7,7 +7,7 @@ use specta::{
 };
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
-use specta_typescript::{Error, Exporter, FrameworkExporter, define};
+use specta_typescript::{Error, Exporter, FrameworkExporter, IntoFormat, define};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
@@ -70,62 +70,31 @@ impl LanguageExt for specta_typescript::JSDoc {
 fn serde_export_format(
     disable_serde_phases: bool,
     enable_nuanced_types: bool,
-) -> (
-    for<'a> fn(&'a Types) -> Result<Cow<'a, Types>, specta_serde::FormatError>,
-    for<'a> fn(&'a Types, &'a DataType) -> Result<Cow<'a, DataType>, specta_serde::FormatError>,
-) {
-    if disable_serde_phases {
-        if enable_nuanced_types {
-            (specta_serde::map_types, map_datatype_with_nuanced_bigints)
-        } else {
-            (
-                specta_serde::map_types,
-                map_datatype_with_non_nuanced_bigints,
-            )
-        }
-    } else if enable_nuanced_types {
-        (
-            specta_serde::map_phases_types,
-            map_phases_datatype_with_nuanced_bigints,
-        )
+) -> impl IntoFormat {
+    let map_types = if disable_serde_phases {
+        specta_serde::map_types
     } else {
+        specta_serde::map_phases_types
+    };
+
+    move || {
         (
-            specta_serde::map_phases_types,
-            map_phases_datatype_with_non_nuanced_bigints,
+            map_types,
+            move |types: &Types, dt: &DataType| {
+                let dt = if disable_serde_phases {
+                    specta_serde::map_datatype(types, dt)?
+                } else {
+                    specta_serde::map_phases_datatype(types, dt)?
+                };
+
+                Ok(rewrite_bigints_in_datatype(
+                    dt,
+                    enable_nuanced_types,
+                    !disable_serde_phases,
+                ))
+            },
         )
     }
-}
-
-fn map_datatype_with_nuanced_bigints<'a>(
-    types: &'a Types,
-    dt: &'a DataType,
-) -> Result<Cow<'a, DataType>, specta_serde::FormatError> {
-    let dt = specta_serde::map_datatype(types, dt)?;
-    Ok(rewrite_bigints_in_datatype(dt, true, false))
-}
-
-fn map_datatype_with_non_nuanced_bigints<'a>(
-    types: &'a Types,
-    dt: &'a DataType,
-) -> Result<Cow<'a, DataType>, specta_serde::FormatError> {
-    let dt = specta_serde::map_datatype(types, dt)?;
-    Ok(rewrite_bigints_in_datatype(dt, false, false))
-}
-
-fn map_phases_datatype_with_nuanced_bigints<'a>(
-    types: &'a Types,
-    dt: &'a DataType,
-) -> Result<Cow<'a, DataType>, specta_serde::FormatError> {
-    let dt = specta_serde::map_phases_datatype(types, dt)?;
-    Ok(rewrite_bigints_in_datatype(dt, true, true))
-}
-
-fn map_phases_datatype_with_non_nuanced_bigints<'a>(
-    types: &'a Types,
-    dt: &'a DataType,
-) -> Result<Cow<'a, DataType>, specta_serde::FormatError> {
-    let dt = specta_serde::map_phases_datatype(types, dt)?;
-    Ok(rewrite_bigints_in_datatype(dt, false, true))
 }
 
 fn rewrite_bigints_in_datatype<'a>(
