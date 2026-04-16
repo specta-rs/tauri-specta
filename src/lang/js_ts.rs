@@ -7,7 +7,7 @@ use specta::{
 };
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
-use specta_typescript::{Error, Exporter, FrameworkExporter, IntoFormat, define};
+use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
@@ -70,38 +70,41 @@ impl LanguageExt for specta_typescript::JSDoc {
 fn serde_export_format(
     disable_serde_phases: bool,
     enable_nuanced_types: bool,
-) -> impl IntoFormat {
-    let map_types = if disable_serde_phases {
-        specta_serde::map_types
+) -> (
+    impl for<'a> Fn(&'a Types) -> Result<Cow<'a, Types>, specta_typescript::FormatError>
+    + Send
+    + Sync
+    + 'static,
+    impl for<'a> Fn(
+        &'a Types,
+        &'a DataType,
+    ) -> Result<Cow<'a, DataType>, specta_typescript::FormatError>
+    + Send
+    + Sync
+    + 'static,
+) {
+    let (map_types, map_datatype) = if disable_serde_phases {
+        specta_serde::format
     } else {
-        specta_serde::map_phases_types
+        specta_serde::format_phases
     };
 
-    move || {
-        (
-            map_types,
-            move |types: &Types, dt: &DataType| {
-                let dt = if disable_serde_phases {
-                    specta_serde::map_datatype(types, dt)?
-                } else {
-                    specta_serde::map_phases_datatype(types, dt)?
-                };
+    (map_types, move |types: &Types, dt: &DataType| {
+        let dt = map_datatype(types, dt)?;
 
-                Ok(rewrite_bigints_in_datatype(
-                    dt,
-                    enable_nuanced_types,
-                    !disable_serde_phases,
-                ))
-            },
-        )
-    }
+        Ok(rewrite_bigints_in_datatype(
+            dt,
+            enable_nuanced_types,
+            !disable_serde_phases,
+        ))
+    })
 }
 
-fn rewrite_bigints_in_datatype<'a>(
-    dt: Cow<'a, DataType>,
+fn rewrite_bigints_in_datatype(
+    dt: Cow<'_, DataType>,
     nuanced: bool,
     phased: bool,
-) -> Cow<'a, DataType> {
+) -> Cow<'_, DataType> {
     match dt.as_ref() {
         DataType::Primitive(
             Primitive::usize
