@@ -14,8 +14,9 @@ use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
 
-    fn export(self, _cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let cfg = _cfg.clone();
+    fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
+        let cfg = cfg.clone();
+        let types = cfg.types.clone();
         let format = serde_export_format(cfg.disable_serde_phases, cfg.enable_nuanced_types);
 
         Exporter::from(self)
@@ -34,15 +35,16 @@ impl LanguageExt for specta_typescript::Typescript {
                     MAKE_EVENT_IMPL_TS,
                 )
             })
-            .export_to(path, &_cfg.types, format)
+            .export_to(path, &types, format)
     }
 }
 
 impl LanguageExt for specta_typescript::JSDoc {
     type Error = Error;
 
-    fn export(self, _cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let cfg = _cfg.clone();
+    fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
+        let cfg = cfg.clone();
+        let types = cfg.types.clone();
         let format = serde_export_format(cfg.disable_serde_phases, cfg.enable_nuanced_types);
 
         Exporter::from(self)
@@ -61,7 +63,7 @@ impl LanguageExt for specta_typescript::JSDoc {
                     MAKE_EVENT_IMPL_JS,
                 )
             })
-            .export_to(path, &_cfg.types, format)
+            .export_to(path, &types, format)
     }
 }
 
