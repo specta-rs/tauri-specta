@@ -7,6 +7,7 @@ use specta_serde::Phase;
 use specta_tags::TransformPlan;
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
+use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
@@ -159,12 +160,9 @@ fn runtime(
         for command in &cfg.commands {
             validate_exported_command(command, exporter.types)?;
 
-            let command_name_escaped = serde_json::to_string(
-                &cfg.plugin_name
-                    .map(|plugin_name| format!("plugin|{plugin_name}|{}", command.name()).into())
-                    .unwrap_or_else(|| command.name().clone()),
-            )
-            .expect("failed to serialize string");
+            let command_name_escaped =
+                serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
+                    .expect("failed to serialize string");
 
             let arguments = command
                 .args()
@@ -351,12 +349,9 @@ fn runtime(
     if enabled_events {
         let mut s = Struct::named();
         for (name, (_, r)) in &cfg.events {
-            let event_name_escaped = serde_json::to_string(
-                &cfg.plugin_name
-                    .map(|plugin_name| format!("plugin:{plugin_name}:{name}"))
-                    .unwrap_or_else(|| name.to_string()),
-            )
-            .expect("failed to serialize string");
+            let event_name_escaped =
+                serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name))
+                    .expect("failed to serialize string");
 
             let mut field_ts = "makeEvent".to_string();
             if !jsdoc {
