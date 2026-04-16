@@ -13,7 +13,7 @@ export const commands = {
 	 *  WORLD
 	 *  !!!!
 	 */
-	helloWorld: (myName: string) => __TAURI_INVOKE<string>("hello_world", { myName }),
+	helloWorld: (myName: string) => __TAURI_INVOKE<number>("hello_world", { myName }),
 	goodbyeWorld: () => __TAURI_INVOKE<string>("goodbye_world"),
 	asyncHelloWorld: (myName: string) => __TAURI_INVOKE<string>("async_hello_world", { myName }),
 	hasError: () => typedError<string, number>(__TAURI_INVOKE("has_error")),

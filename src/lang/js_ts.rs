@@ -3,7 +3,7 @@ use std::{borrow::Cow, path::Path};
 use heck::ToLowerCamelCase;
 use specta::{
     Types,
-    datatype::{DataType, Field, Fields, Primitive, Reference, Struct},
+    datatype::{DataType, Field, Primitive, Reference, Struct},
 };
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
@@ -14,10 +14,9 @@ use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
 
-    fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let cfg = cfg.clone();
-        let types = resolve_types_for_export(&cfg)?;
-        let format = serde_export_format(cfg.disable_serde_phases);
+    fn export(self, _cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
+        let cfg = _cfg.clone();
+        let format = serde_export_format(cfg.disable_serde_phases, cfg.enable_nuanced_types);
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
@@ -35,17 +34,16 @@ impl LanguageExt for specta_typescript::Typescript {
                     MAKE_EVENT_IMPL_TS,
                 )
             })
-            .export_to(path, &types, format)
+            .export_to(path, &_cfg.types, format)
     }
 }
 
 impl LanguageExt for specta_typescript::JSDoc {
     type Error = Error;
 
-    fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let cfg = cfg.clone();
-        let types = resolve_types_for_export(&cfg)?;
-        let format = serde_export_format(cfg.disable_serde_phases);
+    fn export(self, _cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
+        let cfg = _cfg.clone();
+        let format = serde_export_format(cfg.disable_serde_phases, cfg.enable_nuanced_types);
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
@@ -63,45 +61,93 @@ impl LanguageExt for specta_typescript::JSDoc {
                     MAKE_EVENT_IMPL_JS,
                 )
             })
-            .export_to(path, &types, format)
+            .export_to(path, &_cfg.types, format)
     }
-}
-
-// TODO: Drop this
-fn resolve_types_for_export(cfg: &BuilderConfiguration) -> Result<Types, Error> {
-    let mut types = cfg.types.clone();
-
-    types.iter_mut(|ndt| {
-        rewrite_bigints_in_datatype(
-            &mut ndt.ty,
-            cfg.enable_nuanced_types,
-            !cfg.disable_serde_phases,
-        )
-    });
-
-    // let types = if cfg.disable_serde_phases {
-    //     specta_serde::apply(types)
-    // } else {
-    //     specta_serde::apply_phases(types)
-    // }
-    // .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
-
-    Ok(types)
 }
 
 fn serde_export_format(
     disable_serde_phases: bool,
+    enable_nuanced_types: bool,
 ) -> (
     for<'a> fn(&'a Types) -> Result<Cow<'a, Types>, specta_serde::FormatError>,
     for<'a> fn(&'a Types, &'a DataType) -> Result<Cow<'a, DataType>, specta_serde::FormatError>,
 ) {
     if disable_serde_phases {
-        (specta_serde::map_types, specta_serde::map_datatype)
+        if enable_nuanced_types {
+            (specta_serde::map_types, map_datatype_with_nuanced_bigints)
+        } else {
+            (
+                specta_serde::map_types,
+                map_datatype_with_non_nuanced_bigints,
+            )
+        }
+    } else if enable_nuanced_types {
+        (
+            specta_serde::map_phases_types,
+            map_phases_datatype_with_nuanced_bigints,
+        )
     } else {
         (
             specta_serde::map_phases_types,
-            specta_serde::map_phases_datatype,
+            map_phases_datatype_with_non_nuanced_bigints,
         )
+    }
+}
+
+fn map_datatype_with_nuanced_bigints<'a>(
+    types: &'a Types,
+    dt: &'a DataType,
+) -> Result<Cow<'a, DataType>, specta_serde::FormatError> {
+    let dt = specta_serde::map_datatype(types, dt)?;
+    Ok(rewrite_bigints_in_datatype(dt, true, false))
+}
+
+fn map_datatype_with_non_nuanced_bigints<'a>(
+    types: &'a Types,
+    dt: &'a DataType,
+) -> Result<Cow<'a, DataType>, specta_serde::FormatError> {
+    let dt = specta_serde::map_datatype(types, dt)?;
+    Ok(rewrite_bigints_in_datatype(dt, false, false))
+}
+
+fn map_phases_datatype_with_nuanced_bigints<'a>(
+    types: &'a Types,
+    dt: &'a DataType,
+) -> Result<Cow<'a, DataType>, specta_serde::FormatError> {
+    let dt = specta_serde::map_phases_datatype(types, dt)?;
+    Ok(rewrite_bigints_in_datatype(dt, true, true))
+}
+
+fn map_phases_datatype_with_non_nuanced_bigints<'a>(
+    types: &'a Types,
+    dt: &'a DataType,
+) -> Result<Cow<'a, DataType>, specta_serde::FormatError> {
+    let dt = specta_serde::map_phases_datatype(types, dt)?;
+    Ok(rewrite_bigints_in_datatype(dt, false, true))
+}
+
+fn rewrite_bigints_in_datatype<'a>(
+    dt: Cow<'a, DataType>,
+    nuanced: bool,
+    phased: bool,
+) -> Cow<'a, DataType> {
+    match dt.as_ref() {
+        DataType::Primitive(
+            Primitive::usize
+            | Primitive::isize
+            | Primitive::u64
+            | Primitive::i64
+            | Primitive::u128
+            | Primitive::i128,
+        ) => Cow::Owned(if !nuanced {
+            DataType::Primitive(Primitive::u32)
+        } else if phased {
+            specta_serde::phased(define("bigint | number").into(), define("bigint").into())
+        } else {
+            define("bigint | number").into()
+        }),
+        DataType::Primitive(Primitive::f128) => Cow::Owned(DataType::Primitive(Primitive::f64)),
+        _ => dt,
     }
 }
 
@@ -190,7 +236,7 @@ fn runtime(
                 .map(|(name, dt)| {
                     Ok((
                         name.to_lower_camel_case(),
-                        render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter, cfg)?,
+                        render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter)?,
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -244,7 +290,6 @@ fn runtime(
                             Phase::Serialize
                         },
                         &exporter,
-                        cfg,
                     )?);
                     invoke_ts.push_str(", ");
                     invoke_ts.push_str(&render_reference_dt_for_phase(
@@ -255,7 +300,6 @@ fn runtime(
                             Phase::Serialize
                         },
                         &exporter,
-                        cfg,
                     )?);
                     invoke_ts.push('>');
                 }
@@ -296,12 +340,9 @@ fn runtime(
                     invoke_ts.push_str(&match command.result() {
                         Some(dt) => Cow::Owned(render_reference_dt(
                             &specta_serde::select_phase_datatype(
-                                &rewrite_bigints_for_export(
-                                    extract_std_result(dt, exporter.types)
-                                        .map(|(ok, _)| ok)
-                                        .unwrap_or(dt),
-                                    cfg,
-                                ),
+                                extract_std_result(dt, exporter.types)
+                                    .map(|(ok, _)| ok)
+                                    .unwrap_or(dt),
                                 exporter.types,
                                 if output_transform.is_some() {
                                     Phase::Deserialize
@@ -472,81 +513,6 @@ fn runtime(
     Ok(Cow::Owned(out))
 }
 
-fn rewrite_bigints_in_datatype(dt: &mut DataType, nuanced: bool, phased: bool) {
-    fn rewrite_bigints_in_fields(fields: &mut Fields, nuanced: bool, phased: bool) {
-        match fields {
-            Fields::Unit => {}
-            Fields::Unnamed(fields) => {
-                for field in &mut fields.fields {
-                    if let Some(ty) = field.ty.as_mut() {
-                        rewrite_bigints_in_datatype(ty, nuanced, phased);
-                    }
-                }
-            }
-            Fields::Named(fields) => {
-                for (_, field) in &mut fields.fields {
-                    if let Some(ty) = field.ty.as_mut() {
-                        rewrite_bigints_in_datatype(ty, nuanced, phased);
-                    }
-                }
-            }
-        }
-    }
-
-    match dt {
-        DataType::Primitive(primitive) => match primitive {
-            Primitive::usize
-            | Primitive::isize
-            | Primitive::u64
-            | Primitive::i64
-            | Primitive::u128
-            | Primitive::i128 => {
-                *dt = if !nuanced {
-                    // TODO: This is temporary until we have official support for large number types in Tauri.
-                    DataType::Primitive(Primitive::u32)
-                } else if phased {
-                    specta_serde::phased(define("bigint | number").into(), define("bigint").into())
-                } else {
-                    define("bigint | number").into()
-                };
-            }
-            Primitive::f128 => {
-                *dt = DataType::Primitive(Primitive::f64);
-            }
-            _ => {}
-        },
-        DataType::List(list) => rewrite_bigints_in_datatype(&mut list.ty, nuanced, phased),
-        DataType::Map(map) => {
-            rewrite_bigints_in_datatype(map.key_ty_mut(), nuanced, phased);
-            rewrite_bigints_in_datatype(map.value_ty_mut(), nuanced, phased);
-        }
-        DataType::Struct(strct) => rewrite_bigints_in_fields(&mut strct.fields, nuanced, phased),
-        DataType::Enum(enm) => {
-            for (_, variant) in &mut enm.variants {
-                rewrite_bigints_in_fields(&mut variant.fields, nuanced, phased);
-            }
-        }
-        DataType::Tuple(tuple) => {
-            for item in &mut tuple.elements {
-                rewrite_bigints_in_datatype(item, nuanced, phased);
-            }
-        }
-        DataType::Nullable(inner) => rewrite_bigints_in_datatype(inner, nuanced, phased),
-        DataType::Reference(Reference::Named(reference)) => {
-            for (_, generic) in &mut reference.generics {
-                rewrite_bigints_in_datatype(generic, nuanced, phased);
-            }
-        }
-        DataType::Reference(Reference::Generic(_)) | DataType::Reference(Reference::Opaque(_)) => {}
-    }
-}
-
-fn rewrite_bigints_for_export(dt: &DataType, cfg: &BuilderConfiguration) -> DataType {
-    let mut dt = dt.clone();
-    rewrite_bigints_in_datatype(&mut dt, cfg.enable_nuanced_types, !cfg.disable_serde_phases);
-    dt
-}
-
 fn extract_std_result<'a>(
     dt: &'a DataType,
     types: &'a Types,
@@ -591,13 +557,8 @@ fn render_reference_dt_for_phase(
     dt: &DataType,
     phase: Phase,
     exporter: &FrameworkExporter,
-    cfg: &BuilderConfiguration,
 ) -> Result<String, Error> {
-    let dt = specta_serde::select_phase_datatype(
-        &rewrite_bigints_for_export(dt, cfg),
-        exporter.types,
-        phase,
-    );
+    let dt = specta_serde::select_phase_datatype(dt, exporter.types, phase);
     render_reference_dt(&dt, exporter)
 }
 

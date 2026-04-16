@@ -140,6 +140,7 @@ pub struct Testing {
 #[allow(deprecated)]
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
+        // .disable_serde_phases() // TODO
         .commands(tauri_specta::collect_commands![
             hello_world,
             goodbye_world,
