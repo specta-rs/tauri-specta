@@ -67,6 +67,7 @@ impl LanguageExt for specta_typescript::JSDoc {
     }
 }
 
+// TODO: Drop this
 fn resolve_types_for_export(cfg: &BuilderConfiguration) -> Result<Types, Error> {
     let mut types = cfg.types.clone();
 
@@ -78,12 +79,12 @@ fn resolve_types_for_export(cfg: &BuilderConfiguration) -> Result<Types, Error> 
         )
     });
 
-    let types = if cfg.disable_serde_phases {
-        specta_serde::apply(types)
-    } else {
-        specta_serde::apply_phases(types)
-    }
-    .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
+    // let types = if cfg.disable_serde_phases {
+    //     specta_serde::apply(types)
+    // } else {
+    //     specta_serde::apply_phases(types)
+    // }
+    // .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
 
     Ok(types)
 }
