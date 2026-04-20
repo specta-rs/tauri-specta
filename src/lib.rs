@@ -186,6 +186,7 @@ mod commands;
 mod event;
 mod lang;
 mod macros;
+mod name;
 
 pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
 pub use commands::Commands;
