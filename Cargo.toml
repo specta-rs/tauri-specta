@@ -79,3 +79,9 @@ tauri = { git = "https://github.com/tauri-apps/tauri", rev = "43063473188d453e48
 
 # https://github.com/rust-windowing/winit/commit/d815bc089c37ac525f2ce6f381e758911b273922
 dpi = { git = "https://github.com/rust-windowing/winit", rev = "b5252f136632aac27937ad00fbd6764f812d4922" }
+
+# TODO: Remove patches
+specta = { path = "/Users/oscar/Desktop/specta17/specta" }
+specta-typescript = { path = "/Users/oscar/Desktop/specta17/specta-typescript" }
+specta-serde = { path = "/Users/oscar/Desktop/specta17/specta-serde" }
+specta-tags = { path = "/Users/oscar/Desktop/specta17/specta-tags" }
