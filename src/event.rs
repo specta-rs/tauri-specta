@@ -9,6 +9,8 @@ use serde::{Serialize, de::DeserializeOwned};
 use specta::{Type, Types, datatype::Reference};
 use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
+use crate::name::resolve_tauri_event_name;
+
 /// A wrapper around the output of the `collect_commands` macro.
 ///
 /// This acts to seal the implementation details of the macro.
@@ -38,9 +40,7 @@ impl EventRegistry {
             .get(&TypeId::of::<E>())
             .unwrap_or_else(|| panic!("Event {} not found in registry!", E::NAME));
 
-        meta.plugin_name
-            .map(|plugin_name| format!("plugin:{plugin_name}:{}", E::NAME).into())
-            .unwrap_or_else(|| E::NAME.into())
+        resolve_tauri_event_name(meta.plugin_name, E::NAME)
     }
 
     pub fn get_or_manage<R: Runtime>(handle: &impl Manager<R>) -> tauri::State<'_, Self> {
