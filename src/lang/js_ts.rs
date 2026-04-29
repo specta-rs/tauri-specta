@@ -2,7 +2,7 @@ use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
 use specta::{
-    Types,
+    Format, Types,
     datatype::{DataType, Field, Primitive, Reference, Struct},
 };
 use specta_serde::Phase;
@@ -68,35 +68,27 @@ impl LanguageExt for specta_typescript::JSDoc {
     }
 }
 
-fn serde_export_format(
-    disable_serde_phases: bool,
-    enable_nuanced_types: bool,
-) -> (
-    impl for<'a> Fn(&'a Types) -> Result<Cow<'a, Types>, specta_typescript::FormatError>
-    + Send
-    + Sync
-    + 'static,
-    impl for<'a> Fn(
-        &'a Types,
-        &'a DataType,
-    ) -> Result<Cow<'a, DataType>, specta_typescript::FormatError>
-    + Send
-    + Sync
-    + 'static,
-) {
-    let (map_types, map_datatype) = if disable_serde_phases {
+fn serde_export_format(disable_serde_phases: bool, enable_nuanced_types: bool) -> Format {
+    let Format {
+        map_types,
+        map_type,
+        ..
+    } = if disable_serde_phases {
         specta_serde::format
     } else {
         specta_serde::format_phases
     };
 
-    (map_types, move |types: &Types, dt: &DataType| {
-        let dt = map_datatype(types, dt)?;
+    Format::new(map_types, |types, dt| {
+        // let dt = map_type(types, dt)?;
+
+        // TODO: Fix this
+        let dt = (specta_serde::format_phases.map_type)(types, dt)?;
 
         Ok(rewrite_bigints_in_datatype(
-            dt,
-            enable_nuanced_types,
-            !disable_serde_phases,
+            // TODO: Fix this
+            dt, true, true, // enable_nuanced_types,
+                 // !disable_serde_phases,
         ))
     })
 }
