@@ -37,7 +37,7 @@
 //!
 //! The follow is a minimal example of how to setup Tauri Specta with Typescript.
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! #![cfg_attr(
 //!     all(not(debug_assertions), target_os = "windows"),
 //!     windows_subsystem = "windows"
@@ -54,7 +54,7 @@
 //! }
 //!
 //! fn main() {
-//!     let mut builder = Builder::<tauri::Wry>::new()
+//!     let mut builder = Builder::new()
 //!         // Then register them (separated by a comma)
 //!         .commands(collect_commands![hello_world,]);
 //!
@@ -72,8 +72,7 @@
 //!
 //!             Ok(())
 //!         })
-//!         // on an actual app, remove the string argument
-//!         .run(tauri::generate_context!("tests/tauri.conf.json"))
+//!         .run(tauri::test::mock_context(tauri::test::noop_assets()))
 //!         .expect("error while running tauri application");
 //! }
 //! ```
@@ -83,7 +82,7 @@
 //! If your interested in using JSDoc instead of Typescript you can replace the [`specta_typescript::Typescript`](https://docs.rs/specta-typescript/latest/specta_typescript/struct.Typescript.html) struct
 //! with [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html) like the following:
 //!
-//! ```rust,ignore-windows
+//! ```rust
 //! use specta_typescript::JSDoc;
 //!
 //! let mut builder = tauri_specta::Builder::<tauri::Wry>::new();
@@ -105,7 +104,7 @@
 //! ## Custom types
 //!
 //! Similar to [`serde::Serialize`] you must put the [`specta::Type`] derive macro on your own types to allow Specta to understand your types. For example:
-//! ```rust,ignore-windows
+//! ```rust
 //! use serde::{Serialize, Deserialize};
 //! use specta::Type;
 //!
@@ -122,7 +121,7 @@
 //!
 //! You can also make events typesafe by following the following example:
 //!
-//! ```rust,ignore-windows
+//! ```rust,no_run
 //! use serde::{Serialize, Deserialize};
 //! use specta::Type;
 //! use tauri_specta::{Builder, collect_commands, collect_events, Event};
@@ -131,7 +130,7 @@
 //! #[derive(Serialize, Deserialize, Debug, Clone, Type, Event)]
 //! pub struct DemoEvent(String);
 //!
-//! let mut builder = Builder::<tauri::Wry>::new()
+//! let mut builder = Builder::new()
 //!         // and then register it to your builder
 //!         .events(collect_events![DemoEvent]);
 //!

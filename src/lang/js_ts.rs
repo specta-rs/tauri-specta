@@ -3,7 +3,7 @@ use std::{borrow::Cow, path::Path};
 use heck::ToLowerCamelCase;
 use specta::{
     Format, Types,
-    datatype::{DataType, Field, Primitive, Reference, Struct},
+    datatype::{DataType, Field, NamedReferenceType, Primitive, Reference, Struct},
 };
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
@@ -12,13 +12,50 @@ use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
+#[derive(Debug, Clone, Copy)]
+struct SerdeExportFormat {
+    disable_serde_phases: bool,
+    enable_nuanced_types: bool,
+}
+
+impl Format for SerdeExportFormat {
+    fn map_types(&'_ self, types: &Types) -> Result<Cow<'_, Types>, specta::FormatError> {
+        if self.disable_serde_phases {
+            specta_serde::Format.map_types(types)
+        } else {
+            specta_serde::PhasesFormat.map_types(types)
+        }
+    }
+
+    fn map_type(
+        &'_ self,
+        types: &Types,
+        dt: &DataType,
+    ) -> Result<Cow<'_, DataType>, specta::FormatError> {
+        let dt = if self.disable_serde_phases {
+            specta_serde::Format.map_type(types, dt)?
+        } else {
+            specta_serde::PhasesFormat.map_type(types, dt)?
+        };
+
+        Ok(rewrite_bigints_in_datatype(
+            dt,
+            self.enable_nuanced_types,
+            !self.disable_serde_phases,
+        ))
+    }
+}
+
 impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
         let types = cfg.types.clone();
-        let format = serde_export_format(cfg.disable_serde_phases, cfg.enable_nuanced_types);
+        let format = SerdeExportFormat {
+            disable_serde_phases: cfg.disable_serde_phases,
+            enable_nuanced_types: cfg.enable_nuanced_types,
+        };
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
@@ -46,7 +83,10 @@ impl LanguageExt for specta_typescript::JSDoc {
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
         let types = cfg.types.clone();
-        let format = serde_export_format(cfg.disable_serde_phases, cfg.enable_nuanced_types);
+        let format = SerdeExportFormat {
+            disable_serde_phases: cfg.disable_serde_phases,
+            enable_nuanced_types: cfg.enable_nuanced_types,
+        };
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
@@ -66,31 +106,6 @@ impl LanguageExt for specta_typescript::JSDoc {
             })
             .export_to(path, &types, format)
     }
-}
-
-fn serde_export_format(disable_serde_phases: bool, enable_nuanced_types: bool) -> Format {
-    let Format {
-        map_types,
-        map_type,
-        ..
-    } = if disable_serde_phases {
-        specta_serde::format
-    } else {
-        specta_serde::format_phases
-    };
-
-    Format::new(map_types, |types, dt| {
-        // let dt = map_type(types, dt)?;
-
-        // TODO: Fix this
-        let dt = (specta_serde::format_phases.map_type)(types, dt)?;
-
-        Ok(rewrite_bigints_in_datatype(
-            // TODO: Fix this
-            dt, true, true, // enable_nuanced_types,
-                 // !disable_serde_phases,
-        ))
-    })
 }
 
 fn rewrite_bigints_in_datatype(
@@ -479,10 +494,11 @@ fn extract_std_result<'a>(
     types: &'a Types,
 ) -> Option<(&'a DataType, &'a DataType)> {
     if let DataType::Reference(Reference::Named(r)) = dt
-        && let Some(ndt) = r.get(types)
+        && let Some(ndt) = types.get(r)
         && ndt.name == "Result"
         && (ndt.module_path == "std::result" || ndt.module_path == "core::result")
-        && let [(_, ok), (_, err), ..] = r.generics.as_slice()
+        && let NamedReferenceType::Reference { generics, .. } = &r.inner
+        && let [(_, ok), (_, err), ..] = generics.as_slice()
     {
         return Some((ok, err));
     }
@@ -492,8 +508,8 @@ fn extract_std_result<'a>(
 
 fn is_channel_type(dt: &DataType, types: &Types) -> bool {
     match dt {
-        DataType::Reference(Reference::Named(r)) => r
-            .get(types)
+        DataType::Reference(Reference::Named(r)) => types
+            .get(r)
             .map(|ndt| ndt.name == "TAURI_CHANNEL" && ndt.module_path.starts_with("tauri::"))
             .unwrap_or(false),
         _ => false,
@@ -527,11 +543,15 @@ fn render_reference_dt_for_phase(
 // Also handles Tauri channel references.
 fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt
-        && let Some(ndt) = r.get(exporter.types)
+        && let Some(ndt) = exporter.types.get(r)
         && ndt.name == "TAURI_CHANNEL"
         && ndt.module_path.starts_with("tauri::")
     {
-        let generic = if let Some((_, dt)) = r.generics.first() {
+        let generics = match &r.inner {
+            NamedReferenceType::Reference { generics, .. } => generics.as_slice(),
+            NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive => &[],
+        };
+        let generic = if let Some((_, dt)) = generics.first() {
             match &dt {
                 DataType::Reference(r) => exporter.reference(r)?,
                 dt => exporter.inline(dt)?,
