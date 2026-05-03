@@ -45,10 +45,10 @@ specta-tags = { workspace = true, optional = true }
 
 [workspace]
 members = [
-    "examples/app/src-tauri",
-    "examples/custom-plugin/app/src-tauri",
-    "examples/custom-plugin/plugin",
-    "macros",
+  "examples/app/src-tauri",
+  "examples/custom-plugin/app/src-tauri",
+  "examples/custom-plugin/plugin",
+  "macros",
 ]
 
 [workspace.lints.rust]
@@ -73,10 +73,7 @@ specta-serde = { version = "0.0.11" }
 specta-tags = { version = "0.0.0" }
 
 [patch.crates-io]
-#
-# `doc_auto_cfg` deprecation :(
-#
-tauri = { path = "/Users/oscar/Desktop/tauri/crates/tauri" }
+tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "9a16548f489f742df0f63799bf2a4c5acf405b6b" }
 
 # https://github.com/rust-windowing/winit/commit/d815bc089c37ac525f2ce6f381e758911b273922
 dpi = { git = "https://github.com/rust-windowing/winit", rev = "b5252f136632aac27937ad00fbd6764f812d4922" }

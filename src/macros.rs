@@ -42,7 +42,7 @@ macro_rules! __private_infer_command {
         use $crate::internal::CommandSignature as _;
 
         ($($command)+).into_command(
-            $crate::__private_command_definition!(($($command)+)),
+            $crate::__private_command_metadata!(($($command)+)),
             $types,
         )
     }};
@@ -50,22 +50,22 @@ macro_rules! __private_infer_command {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __private_command_definition {
+macro_rules! __private_command_metadata {
     (($($command:tt)+)) => {
-        $crate::__private_command_definition_inner!([] $($command)+)
+        $crate::__private_command_metadata_inner!([] $($command)+)
     };
 }
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __private_command_definition_inner {
+macro_rules! __private_command_metadata_inner {
     ([$($prefix:tt)*] $name:ident $(::<$($g:path),*>)?) => {
         $crate::internal::paste! {
-            $($prefix)* [<__cmd__ $name>]!(@definition)
+            $($prefix)* [<__cmd__ $name>]!(@metadata)
         }
     };
     ([$($prefix:tt)*] $head:ident :: $($tail:tt)+) => {
-        $crate::__private_command_definition_inner!([$($prefix)* $head ::] $($tail)+)
+        $crate::__private_command_metadata_inner!([$($prefix)* $head ::] $($tail)+)
     };
 }
 

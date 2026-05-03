@@ -68,7 +68,7 @@ pub trait CommandSignature<TMarker> {
     type Result;
     type ResultMarker;
 
-    fn into_command(self, definition: tauri::ipc::CommandDefinition, types: &mut Types) -> Command
+    fn into_command(self, metadata: tauri::ipc::CommandMetadata, types: &mut Types) -> Command
     where
         Self::Args: CommandArguments<Self::ArgMarkers>,
         Self::Result: CommandResult<Self::ResultMarker>;
@@ -175,8 +175,8 @@ fn top_level_unit_as_void(dt: DataType) -> Option<DataType> {
     }
 }
 
-fn deprecated_from_definition(
-    deprecated: Option<tauri::ipc::CommandDefinitionDeprecated>,
+fn deprecated_from_metadata(
+    deprecated: Option<tauri::ipc::CommandMetadataDeprecated>,
 ) -> Option<Deprecated> {
     deprecated.map(|deprecated| {
         let mut out = Deprecated::new();
@@ -187,12 +187,12 @@ fn deprecated_from_definition(
 }
 
 fn command_from_parts(
-    definition: tauri::ipc::CommandDefinition,
+    metadata: tauri::ipc::CommandMetadata,
     types: &mut Types,
     args: impl IntoIterator<Item = Option<DataType>>,
     result: Option<DataType>,
 ) -> Command {
-    let mut names = definition.arguments.iter();
+    let mut names = metadata.arguments.iter();
     let args = args
         .into_iter()
         .filter_map(|ty| ty.map(|ty| (names.next(), ty)))
@@ -207,11 +207,11 @@ fn command_from_parts(
     let _ = types;
 
     Command {
-        name: Cow::Borrowed(definition.name),
+        name: Cow::Borrowed(metadata.name),
         args,
         result,
-        docs: Cow::Borrowed(definition.docs),
-        deprecated: deprecated_from_definition(definition.deprecated),
+        docs: Cow::Borrowed(metadata.docs),
+        deprecated: deprecated_from_metadata(metadata.deprecated),
     }
 }
 
@@ -234,7 +234,7 @@ macro_rules! impl_command_signature {
 
             fn into_command(
                 self,
-                definition: tauri::ipc::CommandDefinition,
+                metadata: tauri::ipc::CommandMetadata,
                 types: &mut Types,
             ) -> Command
             where
@@ -243,7 +243,7 @@ macro_rules! impl_command_signature {
             {
                 let _ = self;
                 let result = Self::Result::to_datatype(types);
-                command_from_parts(definition, types, [], result)
+                command_from_parts(metadata, types, [], result)
             }
         }
     };
@@ -270,7 +270,7 @@ macro_rules! impl_command_signature {
 
             fn into_command(
                 self,
-                definition: tauri::ipc::CommandDefinition,
+                metadata: tauri::ipc::CommandMetadata,
                 types: &mut Types,
             ) -> Command
             where
@@ -280,7 +280,7 @@ macro_rules! impl_command_signature {
                 let _ = self;
                 let args = Self::Args::to_datatypes(types);
                 let result = Self::Result::to_datatype(types);
-                command_from_parts(definition, types, args, result)
+                command_from_parts(metadata, types, args, result)
             }
         }
     };

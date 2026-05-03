@@ -44,7 +44,7 @@ fn state(state: State<String>) -> String {
 }
 
 #[tauri::command]
-fn window(window: Window) -> String {
+fn window<R: tauri::Runtime>(window: Window<R>) -> String {
     format!("Hello, world!")
 }
 

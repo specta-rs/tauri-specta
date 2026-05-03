@@ -233,7 +233,7 @@ pub mod internal {
     /// called by `collect_commands` to infer one command's type metadata
     pub fn infer_command<F, M>(
         f: F,
-        definition: tauri::ipc::CommandDefinition,
+        metadata: tauri::ipc::CommandMetadata,
         types: &mut Types,
     ) -> Command
     where
@@ -241,7 +241,7 @@ pub mod internal {
         F::Args: crate::commands::CommandArguments<F::ArgMarkers>,
         F::Result: crate::commands::CommandResult<F::ResultMarker>,
     {
-        f.into_command(definition, types)
+        f.into_command(metadata, types)
     }
 
     /// called by `collect_events` to register events to an `Events`
