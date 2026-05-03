@@ -38,6 +38,16 @@ export const universalConstant = 42 as const;
 /* Types */
 namespace $s$ {
 
+	export namespace std {
+
+		export namespace result {
+			export type Result<T, E> = {
+				ok: T,
+				err: E,
+			};
+		}
+	}
+
 	export namespace tauri_specta_example_app {
 		export type Custom = string;
 
@@ -70,6 +80,7 @@ namespace $s$ {
 		}
 	}
 }
+export import std = $s$.std;
 export import tauri_specta_example_app = $s$.tauri_specta_example_app;
 
 /* Tauri Specta runtime */
