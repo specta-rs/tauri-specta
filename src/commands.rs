@@ -63,10 +63,33 @@ impl<R: Runtime> Clone for Commands<R> {
 
 #[doc(hidden)]
 pub trait CommandSignature<TMarker> {
-    fn into_command(self, definition: tauri::ipc::CommandDefinition, types: &mut Types) -> Command;
+    type Args;
+    type ArgMarkers;
+    type Result;
+    type ResultMarker;
+
+    fn into_command(self, definition: tauri::ipc::CommandDefinition, types: &mut Types) -> Command
+    where
+        Self::Args: CommandArguments<Self::ArgMarkers>,
+        Self::Result: CommandResult<Self::ResultMarker>;
 }
 
 #[doc(hidden)]
+#[diagnostic::on_unimplemented(
+    message = "one or more Tauri command arguments cannot be exported by specta",
+    note = "derive or implement `specta::Type` for frontend-visible command argument types",
+    note = "Tauri-injected arguments like `State`, `AppHandle`, `Window`, `Webview`, and `WebviewWindow` are ignored"
+)]
+pub trait CommandArguments<TMarker> {
+    fn to_datatypes(types: &mut Types) -> Vec<Option<DataType>>;
+}
+
+#[doc(hidden)]
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be exported as a Tauri command argument",
+    label = "this command argument is missing `specta::Type`",
+    note = "derive or implement `specta::Type` for `{Self}`"
+)]
 pub trait CommandArgument<TMarker> {
     fn to_datatype(types: &mut Types) -> Option<DataType>;
 }
@@ -114,6 +137,11 @@ impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::WebviewWindo
 }
 
 #[doc(hidden)]
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be exported as a Tauri command result",
+    label = "this command result is missing `specta::Type`",
+    note = "derive or implement `specta::Type` for `{Self}`"
+)]
 pub trait CommandResult<TMarker> {
     fn to_datatype(types: &mut Types) -> Option<DataType>;
 }
@@ -189,38 +217,69 @@ fn command_from_parts(
 
 macro_rules! impl_command_signature {
     () => {
+        impl CommandArguments<()> for () {
+            fn to_datatypes(_: &mut Types) -> Vec<Option<DataType>> {
+                Vec::new()
+            }
+        }
+
         impl<F, TResult, TResultMarker> CommandSignature<(TResult, TResultMarker)> for F
         where
             for<'a> &'a F: Fn() -> TResult,
-            TResult: CommandResult<TResultMarker>,
         {
+            type Args = ();
+            type ArgMarkers = ();
+            type Result = TResult;
+            type ResultMarker = TResultMarker;
+
             fn into_command(
                 self,
                 definition: tauri::ipc::CommandDefinition,
                 types: &mut Types,
-            ) -> Command {
+            ) -> Command
+            where
+                Self::Args: CommandArguments<Self::ArgMarkers>,
+                Self::Result: CommandResult<Self::ResultMarker>,
+            {
                 let _ = self;
-                let result = TResult::to_datatype(types);
+                let result = Self::Result::to_datatype(types);
                 command_from_parts(definition, types, [], result)
             }
         }
     };
     ($($ty:ident : $marker:ident),+) => {
         #[allow(non_snake_case)]
+        impl<$($ty, $marker),+> CommandArguments<($($marker,)+)> for ($($ty,)+)
+        where
+            $($ty: CommandArgument<$marker>,)+
+        {
+            fn to_datatypes(types: &mut Types) -> Vec<Option<DataType>> {
+                vec![$($ty::to_datatype(types)),+]
+            }
+        }
+
+        #[allow(non_snake_case)]
         impl<F, TResult, TResultMarker, $($ty, $marker),+> CommandSignature<($($ty, $marker,)+ TResult, TResultMarker)> for F
         where
             for<'a> &'a F: Fn($($ty),+) -> TResult,
-            $($ty: CommandArgument<$marker>,)+
-            TResult: CommandResult<TResultMarker>,
         {
+            type Args = ($($ty,)+);
+            type ArgMarkers = ($($marker,)+);
+            type Result = TResult;
+            type ResultMarker = TResultMarker;
+
             fn into_command(
                 self,
                 definition: tauri::ipc::CommandDefinition,
                 types: &mut Types,
-            ) -> Command {
+            ) -> Command
+            where
+                Self::Args: CommandArguments<Self::ArgMarkers>,
+                Self::Result: CommandResult<Self::ResultMarker>,
+            {
                 let _ = self;
-                let args = [$($ty::to_datatype(types)),+];
-                let result = TResult::to_datatype(types);
+                let args = Self::Args::to_datatypes(types);
+                let result = Self::Result::to_datatype(types);
                 command_from_parts(definition, types, args, result)
             }
         }

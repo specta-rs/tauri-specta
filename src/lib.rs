@@ -234,6 +234,8 @@ pub mod internal {
     ) -> Command
     where
         F: crate::commands::CommandSignature<M>,
+        F::Args: crate::commands::CommandArguments<F::ArgMarkers>,
+        F::Result: crate::commands::CommandResult<F::ResultMarker>,
     {
         f.into_command(definition, types)
     }
