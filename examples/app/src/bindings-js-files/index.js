@@ -10,9 +10,9 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	/**
-	 *  HELLO
-	 *  WORLD
-	 *  !!!!
+	 * HELLO
+	 * WORLD
+	 * !!!!
 	 * @param {string} myName
 	 * @returns {string} myName
 	 */

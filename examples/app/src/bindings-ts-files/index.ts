@@ -9,9 +9,9 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	/**
-	 *  HELLO
-	 *  WORLD
-	 *  !!!!
+	 * HELLO
+	 * WORLD
+	 * !!!!
 	 */
 	helloWorld: (myName: string) => __TAURI_INVOKE<string>("hello_world", { myName }),
 	goodbyeWorld: () => __TAURI_INVOKE<string>("goodbye_world"),
