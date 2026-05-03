@@ -19,7 +19,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
-derive = ["dep:tauri-specta-macros"]
+derive = []
 javascript = ["dep:specta-typescript", "dep:specta-tags"]
 typescript = ["dep:specta-typescript", "dep:specta-tags"]
 
@@ -30,7 +30,7 @@ workspace = true
 # Public
 specta = { workspace = true }
 specta-typescript = { workspace = true, optional = true }
-tauri-specta-macros = { version = "=2.0.0-rc.24", optional = true, path = "./macros" }
+tauri-specta-macros = { version = "=2.0.0-rc.24", path = "./macros" }
 serde = "1"
 serde_json = "1"
 thiserror = "2"

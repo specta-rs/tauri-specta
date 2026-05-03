@@ -35,29 +35,17 @@
 ///     ]);
 /// ```
 ///
+#[doc(hidden)]
 #[macro_export]
-macro_rules! collect_commands {
-    ($($b:ident $(:: $($p:ident)? $(<$($g:path),*>)? )* ),* $(,)?) => {
-        // We strip generics (::<...>) from being parsed to Tauri as it doesn't support them.
-        $crate::internal::command(
-            ::tauri::generate_handler![$($b $($(::$p)? )* ),*],
-            {
-                fn export(types: &mut ::specta::Types) -> ::std::vec::Vec<$crate::Command> {
-                    ::std::vec![
-                        $(
-                            $crate::internal::infer_command(
-                                $b $($(::$p)? $(::<$($g),*>)? )*,
-                                $crate::__private_command_definition!(($b $($(::$p)? $(::<$($g),*>)? )*)),
-                                types,
-                            )
-                        ),*
-                    ]
-                }
+macro_rules! __private_infer_command {
+    (($($command:tt)+), $types:expr) => {{
+        use $crate::internal::CommandSignature as _;
 
-                export
-            },
+        ($($command)+).into_command(
+            $crate::__private_command_definition!(($($command)+)),
+            $types,
         )
-    };
+    }};
 }
 
 #[doc(hidden)]

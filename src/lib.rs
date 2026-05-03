@@ -191,6 +191,7 @@ pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
 pub use commands::{Command, CommandArg, Commands};
 pub use event::{Event, Events, TypedEvent};
 pub use lang::LanguageExt;
+pub use tauri_specta_macros::collect_commands;
 
 /// Implements the [`Event`](trait@crate::Event) trait for a struct.
 ///
@@ -217,6 +218,9 @@ pub mod internal {
 
     #[doc(hidden)]
     pub use paste::paste;
+
+    #[doc(hidden)]
+    pub use crate::commands::CommandSignature;
 
     /// called by `collect_commands` to construct `Commands`
     pub fn command<R: Runtime, F>(f: F, types: fn(&mut Types) -> Vec<Command>) -> Commands<R>
