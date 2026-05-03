@@ -1,6 +1,6 @@
 /// Collect commands and their types.
 ///
-/// This is a combination of Tauri's [`generate_handler`](tauri::generate_handler) and Specta's [`collect_functions`](specta::function),
+/// This is a combination of Tauri's [`generate_handler`](tauri::generate_handler) and Tauri Specta's command inference,
 /// returning a [`Commands`](crate::Commands) struct that can be passed to [`Builder::commands`](crate::Builder::commands).
 ///
 /// # Usage
@@ -8,20 +8,17 @@
 /// use tauri_specta::{collect_commands,Builder};
 ///
 /// #[tauri::command]
-/// #[specta::specta] // < You must annotate your commands
 /// fn hello_world(my_name: String) -> String {
 ///     format!("Hello, {my_name}! You've been greeted from Rust!")
 /// }
 ///
 /// #[tauri::command]
-/// #[specta::specta] // < You must annotate your commands
 /// fn generic_command<R: tauri::Runtime>(my_name: tauri::AppHandle<R>) -> String {
 ///     format!("You've been greeted from a generic Rust function!")
 /// }
 ///
 /// mod hello {
 ///     #[tauri::command]
-///     #[specta::specta] // < You must annotate your commands
 ///     pub fn world() -> String {
 ///         format!("Hello world")
 ///     }
@@ -44,8 +41,43 @@ macro_rules! collect_commands {
         // We strip generics (::<...>) from being parsed to Tauri as it doesn't support them.
         $crate::internal::command(
             ::tauri::generate_handler![$($b $($(::$p)? )* ),*],
-            ::specta::function::collect_functions![$($b $($(::$p)? $(::<$($g),*>)? )* ),*],
+            {
+                fn export(types: &mut ::specta::Types) -> ::std::vec::Vec<$crate::Command> {
+                    ::std::vec![
+                        $(
+                            $crate::internal::infer_command(
+                                $b $($(::$p)? $(::<$($g),*>)? )*,
+                                $crate::__private_command_definition!(($b $($(::$p)? $(::<$($g),*>)? )*)),
+                                types,
+                            )
+                        ),*
+                    ]
+                }
+
+                export
+            },
         )
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __private_command_definition {
+    (($($command:tt)+)) => {
+        $crate::__private_command_definition_inner!([] $($command)+)
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __private_command_definition_inner {
+    ([$($prefix:tt)*] $name:ident $(::<$($g:path),*>)?) => {
+        $crate::internal::paste! {
+            $($prefix)* [<__cmd__ $name>]!(@definition)
+        }
+    };
+    ([$($prefix:tt)*] $head:ident :: $($tail:tt)+) => {
+        $crate::__private_command_definition_inner!([$($prefix)* $head ::] $($tail)+)
     };
 }
 

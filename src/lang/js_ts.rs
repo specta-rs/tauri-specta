@@ -2,13 +2,13 @@ use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
 use specta::ResolvedTypes;
-use specta::datatype::{DataType, Field, Fields, Function, Primitive, Reference, Struct};
+use specta::datatype::{DataType, Field, Fields, Primitive, Reference, Struct};
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
 
-use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
-use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
+use crate::name::resolve_tauri_event_name;
+use crate::{BuilderConfiguration, Command, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
@@ -116,17 +116,18 @@ fn runtime(
     let is_channel_used = cfg.commands.iter().any(|command| {
         // Check if any argument is a Channel
         command
-            .args()
-            .iter()
-            .any(|(_, dt)| is_channel_type(dt, exporter.types))
+                .args
+                .iter()
+                .any(|arg| is_channel_type(&arg.ty, exporter.types))
             // Check if result contains a Channel
-            || command.result().is_some_and(|dt| is_channel_type(dt, exporter.types))
+            || command.result.as_ref().is_some_and(|dt| is_channel_type(dt, exporter.types))
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling == ErrorHandlingMode::Result
         && cfg.commands.iter().any(|command| {
             command
-                .result()
+                .result
+                .as_ref()
                 .and_then(|dt| extract_std_result(dt, exporter.types))
                 .is_some()
         });
@@ -161,16 +162,15 @@ fn runtime(
             validate_exported_command(command, exporter.types)?;
 
             let command_name_escaped =
-                serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
-                    .expect("failed to serialize string");
+                serde_json::to_string(&command.name).expect("failed to serialize string");
 
             let arguments = command
-                .args()
+                .args
                 .iter()
-                .map(|(name, dt)| {
+                .map(|arg| {
                     Ok((
-                        name.to_lower_camel_case(),
-                        render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter, cfg)?,
+                        arg.name.to_lower_camel_case(),
+                        render_reference_dt_for_phase(&arg.ty, Phase::Deserialize, &exporter, cfg)?,
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -188,15 +188,15 @@ fn runtime(
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let arguments_invoke_obj = if command.args().is_empty() {
+            let arguments_invoke_obj = if command.args.is_empty() {
                 Default::default()
             } else {
                 format!(
                     ", {{ {} }}",
                     command
-                        .args()
+                        .args
                         .iter()
-                        .map(|(name, _)| name.to_lower_camel_case())
+                        .map(|arg| arg.name.to_lower_camel_case())
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -205,7 +205,7 @@ fn runtime(
             let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
 
             let body = if cfg.error_handling == ErrorHandlingMode::Result
-                && let Some(result) = command.result()
+                && let Some(result) = command.result.as_ref()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
             {
                 let ok_transform =
@@ -264,16 +264,17 @@ fn runtime(
             } else {
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
                 let output_dt = command
-                    .result()
+                    .result
+                    .as_ref()
                     .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
-                    .or(command.result());
+                    .or(command.result.as_ref());
 
                 if !jsdoc {
                     let output_transform = output_dt
                         .and_then(|dt| render_result_transform_for_phase(dt, "v", &exporter, cfg));
 
                     invoke_ts.push('<');
-                    invoke_ts.push_str(&match command.result() {
+                    invoke_ts.push_str(&match command.result.as_ref() {
                         Some(dt) => Cow::Owned(render_reference_dt(
                             &specta_serde::select_phase_datatype(
                                 &rewrite_bigints_for_export(
@@ -307,9 +308,9 @@ fn runtime(
             };
 
             let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
-            field.set_deprecated(command.deprecated().cloned());
+            field.set_deprecated(command.deprecated.clone());
             field.set_docs({
-                let mut docs = command.docs().to_string();
+                let mut docs = command.docs.to_string();
 
                 if jsdoc {
                     if !docs.is_empty() {
@@ -333,7 +334,10 @@ fn runtime(
 
                 docs.into()
             });
-            s = s.field(command.name().to_lower_camel_case(), field);
+            s = s.field(
+                command_binding_name(&command.name).to_lower_camel_case(),
+                field,
+            );
         }
 
         out.push_str("\n/** Commands */");
@@ -526,27 +530,27 @@ fn rewrite_bigints_for_export(dt: &DataType, cfg: &BuilderConfiguration) -> Data
     dt
 }
 
-fn validate_exported_command(command: &Function, types: &ResolvedTypes) -> Result<(), Error> {
-    for (position, (name, dt)) in command.args().iter().enumerate() {
-        specta_serde::validate(dt, types).map_err(|err| {
+fn validate_exported_command(command: &Command, types: &ResolvedTypes) -> Result<(), Error> {
+    for (position, arg) in command.args.iter().enumerate() {
+        specta_serde::validate(&arg.ty, types).map_err(|err| {
             Error::framework(
                 format!(
                     "Specta Serde validation failed for command '{}' param #{} ('{}')",
-                    command.name(),
+                    command.name,
                     position + 1,
-                    name
+                    arg.name
                 ),
                 err,
             )
         })?;
     }
 
-    if let Some(result) = command.result() {
+    if let Some(result) = command.result.as_ref() {
         specta_serde::validate(result, types).map_err(|err| {
             Error::framework(
                 format!(
                     "Specta Serde validation failed for command '{}' result",
-                    command.name()
+                    command.name
                 ),
                 err,
             )
@@ -554,6 +558,10 @@ fn validate_exported_command(command: &Function, types: &ResolvedTypes) -> Resul
     }
 
     Ok(())
+}
+
+fn command_binding_name(name: &str) -> &str {
+    name.split_once('|').map_or(name, |(_, name)| name)
 }
 
 fn extract_std_result<'a>(

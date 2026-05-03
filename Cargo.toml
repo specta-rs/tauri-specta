@@ -28,13 +28,14 @@ workspace = true
 
 [dependencies]
 # Public
-specta = { workspace = true, features = ["function"] }
+specta = { workspace = true }
 specta-typescript = { workspace = true, optional = true }
 tauri-specta-macros = { version = "=2.0.0-rc.24", optional = true, path = "./macros" }
 serde = "1"
 serde_json = "1"
 thiserror = "2"
 tauri = { version = "2", default-features = false, features = ["specta"] }
+paste = "1"
 
 
 # Private
@@ -75,7 +76,7 @@ specta-tags = { version = "0.0.0" }
 #
 # `doc_auto_cfg` deprecation :(
 #
-tauri = { git = "https://github.com/tauri-apps/tauri", rev = "43063473188d453e480ca9797d6096936558f096" }
+tauri = { path = "/Users/oscar/Desktop/tauri/crates/tauri" }
 
 # https://github.com/rust-windowing/winit/commit/d815bc089c37ac525f2ce6f381e758911b273922
 dpi = { git = "https://github.com/rust-windowing/winit", rev = "b5252f136632aac27937ad00fbd6764f812d4922" }

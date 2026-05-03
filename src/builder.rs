@@ -1,11 +1,8 @@
 use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
 
-use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
+use crate::{Command, Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
 use serde::Serialize;
-use specta::{
-    Type, Types,
-    datatype::{Function, Reference},
-};
+use specta::{Type, Types, datatype::Reference};
 use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// The mode which the error handling is done in the bindings.
@@ -96,7 +93,7 @@ pub struct BuilderConfiguration {
     /// Plugin name used when generating bindings for plugin commands.
     pub plugin_name: Option<&'static str>,
     /// Commands registered on the builder.
-    pub commands: Vec<Function>,
+    pub commands: Vec<Command>,
     /// Error handling mode used by generated bindings.
     pub error_handling: ErrorHandlingMode,
     /// Event names mapped to their type metadata.
@@ -155,7 +152,6 @@ impl<R: Runtime> Builder<R> {
     /// use tauri_specta::{Builder, collect_commands};
     ///
     /// #[tauri::command]
-    /// #[specta::specta]
     /// fn hello_world(my_name: String) -> String {
     ///     format!("Hello, {my_name}! You've been greeted from Rust!")
     /// }

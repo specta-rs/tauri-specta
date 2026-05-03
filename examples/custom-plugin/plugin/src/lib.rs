@@ -6,7 +6,6 @@ use tauri_specta::*;
 
 /// Adds two numbers, returning the result.
 #[tauri::command]
-#[specta::specta]
 fn add_numbers(a: i32, b: i32) -> i32 {
     a + b
 }
@@ -51,11 +50,7 @@ mod test {
     #[test]
     fn export_types() {
         builder::<tauri::Wry>()
-            .export(
-                specta_typescript::Typescript::default()
-                    .formatter(specta_typescript::formatter::prettier),
-                "./bindings.ts",
-            )
+            .export(specta_typescript::Typescript::default(), "./bindings.ts")
             .expect("failed to export specta types");
     }
 }
