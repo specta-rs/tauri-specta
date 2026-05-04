@@ -3,7 +3,7 @@ use std::{borrow::Cow, path::Path};
 use heck::ToLowerCamelCase;
 use specta::{
     Format, Types,
-    datatype::{DataType, Field, NamedReferenceType, Primitive, Reference, Struct},
+    datatype::{DataType, Field, Fields, NamedReferenceType, Primitive, Reference, Struct},
 };
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
@@ -453,11 +453,7 @@ fn runtime(
     }
 
     // User types
-    let types = filter_unused_std_result_exports(
-        exporter.render_types()?,
-        exporter.types,
-        out.contains("Result<"),
-    );
+    let types = filter_unused_std_result_exports(exporter.render_types()?, cfg, exporter.types);
     if !types.is_empty() {
         out.push_str("\n/* Types */");
         if !types.starts_with('\n') {
@@ -512,8 +508,8 @@ fn extract_std_result<'a>(
 
 fn filter_unused_std_result_exports(
     types: Cow<'static, str>,
+    cfg: &BuilderConfiguration,
     collected_types: &Types,
-    result_is_used_before_types: bool,
 ) -> Cow<'static, str> {
     let mut has_std_result = false;
     for ndt in collected_types.into_unsorted_iter() {
@@ -528,7 +524,7 @@ fn filter_unused_std_result_exports(
         return types;
     }
 
-    if result_is_used_before_types || types.matches("Result<").count() > 1 {
+    if is_std_result_used_after_command_result_flattening(cfg, collected_types) {
         return types;
     }
 
@@ -563,6 +559,91 @@ fn filter_unused_std_result_exports(
 
 fn is_std_result_type(module_path: &str) -> bool {
     module_path == "std::result" || module_path == "core::result"
+}
+
+fn is_std_result_used_after_command_result_flattening(
+    cfg: &BuilderConfiguration,
+    types: &Types,
+) -> bool {
+    cfg.commands.iter().any(|command| {
+        command
+            .args()
+            .iter()
+            .any(|(_, dt)| datatype_contains_std_result(dt, types))
+            || command.result().is_some_and(|dt| {
+                if let Some((ok, err)) = extract_std_result(dt, types) {
+                    datatype_contains_std_result(ok, types)
+                        || datatype_contains_std_result(err, types)
+                } else {
+                    datatype_contains_std_result(dt, types)
+                }
+            })
+    }) || cfg
+        .events
+        .values()
+        .any(|(_, r)| datatype_contains_std_result(&DataType::Reference(r.clone()), types))
+        || types.into_unsorted_iter().any(|ndt| {
+            if ndt.name == "Result" && is_std_result_type(&ndt.module_path) {
+                false
+            } else {
+                ndt.ty
+                    .as_ref()
+                    .is_some_and(|dt| datatype_contains_std_result(dt, types))
+            }
+        })
+}
+
+fn datatype_contains_std_result(dt: &DataType, types: &Types) -> bool {
+    match dt {
+        DataType::Primitive(_) | DataType::Generic(_) => false,
+        DataType::List(list) => datatype_contains_std_result(&list.ty, types),
+        DataType::Map(map) => {
+            datatype_contains_std_result(map.key_ty(), types)
+                || datatype_contains_std_result(map.value_ty(), types)
+        }
+        DataType::Struct(s) => fields_contain_std_result(&s.fields, types),
+        DataType::Enum(e) => e
+            .variants
+            .iter()
+            .any(|(_, variant)| fields_contain_std_result(&variant.fields, types)),
+        DataType::Tuple(tuple) => tuple
+            .elements
+            .iter()
+            .any(|dt| datatype_contains_std_result(dt, types)),
+        DataType::Nullable(dt) => datatype_contains_std_result(dt, types),
+        DataType::Intersection(dts) => dts.iter().any(|dt| datatype_contains_std_result(dt, types)),
+        DataType::Reference(Reference::Named(r)) => {
+            let generic_contains_result = match &r.inner {
+                NamedReferenceType::Reference { generics, .. } => generics
+                    .iter()
+                    .any(|(_, dt)| datatype_contains_std_result(dt, types)),
+                NamedReferenceType::Inline { dt, .. } => datatype_contains_std_result(dt, types),
+                NamedReferenceType::Recursive => false,
+            };
+
+            generic_contains_result
+                || types
+                    .get(r)
+                    .is_some_and(|ndt| ndt.name == "Result" && is_std_result_type(&ndt.module_path))
+        }
+        DataType::Reference(Reference::Opaque(_)) => false,
+    }
+}
+
+fn fields_contain_std_result(fields: &Fields, types: &Types) -> bool {
+    match fields {
+        Fields::Unit => false,
+        Fields::Unnamed(fields) => fields
+            .fields
+            .iter()
+            .filter_map(|field| field.ty.as_ref())
+            .any(|dt| datatype_contains_std_result(dt, types)),
+        Fields::Named(fields) => fields
+            .fields
+            .iter()
+            .filter_map(|(_, field)| field.ty.as_ref())
+            .any(|dt| datatype_contains_std_result(dt, types)),
+    }
 }
 
 fn is_channel_type(dt: &DataType, types: &Types) -> bool {
