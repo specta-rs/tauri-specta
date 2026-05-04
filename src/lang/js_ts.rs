@@ -2,8 +2,10 @@ use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
 use specta::{
-    Format, NamedDataType, Types,
-    datatype::{DataType, Field, Fields, NamedReferenceType, Primitive, Reference, Struct},
+    Format, Types,
+    datatype::{
+        DataType, Field, Fields, NamedDataType, NamedReferenceType, Primitive, Reference, Struct,
+    },
 };
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
@@ -573,10 +575,7 @@ fn datatype_contains_std_result(dt: &DataType, types: &Types) -> bool {
                 NamedReferenceType::Recursive => false,
             };
 
-            generic_contains_result
-                || types
-                    .get(r)
-                    .is_some_and(is_result_ndt)
+            generic_contains_result || types.get(r).is_some_and(is_result_ndt)
         }
         DataType::Reference(Reference::Opaque(_)) => false,
     }
