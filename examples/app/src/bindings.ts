@@ -60,15 +60,10 @@ export type PhaseSpecificRename_Serialize = {
 	serialized_value: string,
 };
 
-export type Result<T, E> = {
-	ok: T,
-	err: E,
-};
 
 export type Testing = {
 	a: string,
 };
-
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
     try {

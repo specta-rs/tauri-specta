@@ -41,10 +41,6 @@ namespace $s$ {
 	export namespace std {
 
 		export namespace result {
-			export type Result<T, E> = {
-				ok: T,
-				err: E,
-			};
 		}
 	}
 
@@ -82,7 +78,6 @@ namespace $s$ {
 }
 export import std = $s$.std;
 export import tauri_specta_example_app = $s$.tauri_specta_example_app;
-
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
     try {

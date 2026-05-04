@@ -453,7 +453,11 @@ fn runtime(
     }
 
     // User types
-    let types = exporter.render_types()?;
+    let types = filter_unused_std_result_exports(
+        exporter.render_types()?,
+        exporter.types,
+        out.contains("Result<"),
+    );
     if !types.is_empty() {
         out.push_str("\n/* Types */");
         if !types.starts_with('\n') {
@@ -496,7 +500,7 @@ fn extract_std_result<'a>(
     if let DataType::Reference(Reference::Named(r)) = dt
         && let Some(ndt) = types.get(r)
         && ndt.name == "Result"
-        && (ndt.module_path == "std::result" || ndt.module_path == "core::result")
+        && is_std_result_type(&ndt.module_path)
         && let NamedReferenceType::Reference { generics, .. } = &r.inner
         && let [(_, ok), (_, err), ..] = generics.as_slice()
     {
@@ -504,6 +508,61 @@ fn extract_std_result<'a>(
     }
 
     None
+}
+
+fn filter_unused_std_result_exports(
+    types: Cow<'static, str>,
+    collected_types: &Types,
+    result_is_used_before_types: bool,
+) -> Cow<'static, str> {
+    let mut has_std_result = false;
+    for ndt in collected_types.into_unsorted_iter() {
+        if ndt.name == "Result" && ndt.ty.is_some() {
+            if is_std_result_type(&ndt.module_path) {
+                has_std_result = true;
+            }
+        }
+    }
+
+    if !has_std_result {
+        return types;
+    }
+
+    if result_is_used_before_types || types.matches("Result<").count() > 1 {
+        return types;
+    }
+
+    let mut skipping_result = false;
+    let mut removed_result = false;
+    let filtered = types
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("export type Result<") || trimmed.starts_with("type Result<") {
+                removed_result = true;
+                skipping_result = !trimmed.ends_with(';');
+                return false;
+            }
+
+            if skipping_result {
+                skipping_result = !trimmed.ends_with(';');
+                return false;
+            }
+
+            true
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if removed_result {
+        Cow::Owned(filtered)
+    } else {
+        types
+    }
+}
+
+fn is_std_result_type(module_path: &str) -> bool {
+    module_path == "std::result" || module_path == "core::result"
 }
 
 fn is_channel_type(dt: &DataType, types: &Types) -> bool {
