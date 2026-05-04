@@ -453,7 +453,7 @@ fn runtime(
     }
 
     // User types
-    let types = filter_unused_std_result_exports(exporter.render_types()?, cfg, exporter.types);
+    let types = exporter.render_types()?;
     if !types.is_empty() {
         out.push_str("\n/* Types */");
         if !types.starts_with('\n') {
@@ -504,57 +504,6 @@ fn extract_std_result<'a>(
     }
 
     None
-}
-
-fn filter_unused_std_result_exports(
-    types: Cow<'static, str>,
-    cfg: &BuilderConfiguration,
-    collected_types: &Types,
-) -> Cow<'static, str> {
-    let mut has_std_result = false;
-    for ndt in collected_types.into_unsorted_iter() {
-        if ndt.name == "Result" && ndt.ty.is_some() {
-            if is_std_result_type(&ndt.module_path) {
-                has_std_result = true;
-            }
-        }
-    }
-
-    if !has_std_result {
-        return types;
-    }
-
-    if is_std_result_used_after_command_result_flattening(cfg, collected_types) {
-        return types;
-    }
-
-    let mut skipping_result = false;
-    let mut removed_result = false;
-    let filtered = types
-        .lines()
-        .filter(|line| {
-            let trimmed = line.trim_start();
-            if trimmed.starts_with("export type Result<") || trimmed.starts_with("type Result<") {
-                removed_result = true;
-                skipping_result = !trimmed.ends_with(';');
-                return false;
-            }
-
-            if skipping_result {
-                skipping_result = !trimmed.ends_with(';');
-                return false;
-            }
-
-            true
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    if removed_result {
-        Cow::Owned(filtered)
-    } else {
-        types
-    }
 }
 
 fn hide_unused_std_result_type(cfg: &BuilderConfiguration, mut types: Types) -> Types {
