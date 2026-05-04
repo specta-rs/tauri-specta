@@ -95,13 +95,6 @@ export const universalConstant = 42;
 	* @property {string} serialized_value
 	*
 	* @typedef {{
-	*		ok: T,
-	*		err: E,
-	*	}} Result<T, E>
-	* @property {T} ok
-	* @property {E} err
-	*
-	* @typedef {{
 	*		a: string,
 	*	}} Testing
 	* @property {string} a

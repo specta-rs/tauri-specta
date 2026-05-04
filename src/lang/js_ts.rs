@@ -51,7 +51,7 @@ impl LanguageExt for specta_typescript::Typescript {
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
-        let types = cfg.types.clone();
+        let types = hide_unused_std_result_type(&cfg, cfg.types.clone());
         let format = SerdeExportFormat {
             disable_serde_phases: cfg.disable_serde_phases,
             enable_nuanced_types: cfg.enable_nuanced_types,
@@ -82,7 +82,7 @@ impl LanguageExt for specta_typescript::JSDoc {
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
-        let types = cfg.types.clone();
+        let types = hide_unused_std_result_type(&cfg, cfg.types.clone());
         let format = SerdeExportFormat {
             disable_serde_phases: cfg.disable_serde_phases,
             enable_nuanced_types: cfg.enable_nuanced_types,
@@ -555,6 +555,20 @@ fn filter_unused_std_result_exports(
     } else {
         types
     }
+}
+
+fn hide_unused_std_result_type(cfg: &BuilderConfiguration, mut types: Types) -> Types {
+    if is_std_result_used_after_command_result_flattening(cfg, &types) {
+        return types;
+    }
+
+    types.iter_mut(|ndt| {
+        if ndt.name == "Result" && is_std_result_type(&ndt.module_path) {
+            ndt.ty = None;
+        }
+    });
+
+    types
 }
 
 fn is_std_result_type(module_path: &str) -> bool {

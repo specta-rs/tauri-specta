@@ -38,12 +38,6 @@ export const universalConstant = 42 as const;
 /* Types */
 namespace $s$ {
 
-	export namespace std {
-
-		export namespace result {
-		}
-	}
-
 	export namespace tauri_specta_example_app {
 		export type Custom = string;
 
@@ -76,8 +70,8 @@ namespace $s$ {
 		}
 	}
 }
-export import std = $s$.std;
 export import tauri_specta_example_app = $s$.tauri_specta_example_app;
+
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
     try {
