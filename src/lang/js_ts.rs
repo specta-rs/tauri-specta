@@ -13,50 +13,13 @@ use specta_util::Remapper;
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
-#[derive(Debug, Clone, Copy)]
-struct SerdeExportFormat {
-    disable_serde_phases: bool,
-    enable_nuanced_types: bool,
-}
-
-impl Format for SerdeExportFormat {
-    fn map_types(&'_ self, types: &Types) -> Result<Cow<'_, Types>, specta::FormatError> {
-        if self.disable_serde_phases {
-            specta_serde::Format.map_types(types)
-        } else {
-            specta_serde::PhasesFormat.map_types(types)
-        }
-    }
-
-    fn map_type(
-        &'_ self,
-        types: &Types,
-        dt: &DataType,
-    ) -> Result<Cow<'_, DataType>, specta::FormatError> {
-        let dt = if self.disable_serde_phases {
-            specta_serde::Format.map_type(types, dt)?
-        } else {
-            specta_serde::PhasesFormat.map_type(types, dt)?
-        };
-
-        Ok(rewrite_bigints_in_datatype(
-            dt,
-            self.enable_nuanced_types,
-            !self.disable_serde_phases,
-        ))
-    }
-}
-
 impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
         let types = hide_unused_std_result_type(&cfg, cfg.types.clone());
-        let format = SerdeExportFormat {
-            disable_serde_phases: cfg.disable_serde_phases,
-            enable_nuanced_types: cfg.enable_nuanced_types,
-        };
+        let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
@@ -84,10 +47,7 @@ impl LanguageExt for specta_typescript::JSDoc {
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
         let types = hide_unused_std_result_type(&cfg, cfg.types.clone());
-        let format = SerdeExportFormat {
-            disable_serde_phases: cfg.disable_serde_phases,
-            enable_nuanced_types: cfg.enable_nuanced_types,
-        };
+        let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
@@ -107,42 +67,6 @@ impl LanguageExt for specta_typescript::JSDoc {
             })
             .export_to(path, &types, format)
     }
-}
-
-fn rewrite_bigints_in_datatype(
-    dt: Cow<'_, DataType>,
-    nuanced: bool,
-    phased: bool,
-) -> Cow<'_, DataType> {
-    let dt = dt.into_owned();
-    let replacement = if !nuanced {
-        DataType::Primitive(Primitive::u32)
-    } else if phased {
-        specta_serde::phased(define("bigint | number").into(), define("bigint").into())
-    } else {
-        define("bigint | number").into()
-    };
-
-    let mut remapper = Remapper::new();
-    for primitive in [
-        Primitive::usize,
-        Primitive::isize,
-        Primitive::u64,
-        Primitive::i64,
-        Primitive::u128,
-        Primitive::i128,
-    ] {
-        remapper = remapper.rule(DataType::Primitive(primitive), replacement.clone());
-    }
-
-    Cow::Owned(
-        remapper
-            .rule(
-                DataType::Primitive(Primitive::f128),
-                DataType::Primitive(Primitive::f64),
-            )
-            .remap_dt(dt),
-    )
 }
 
 fn runtime(
@@ -501,6 +425,69 @@ fn runtime(
     Ok(Cow::Owned(out))
 }
 
+/// Applies `specta_serde` format + also remaps `DataType`'s and does other transformations!
+#[derive(Debug, Clone)]
+struct SpectaFormat {
+    disable_serde_phases: bool,
+    remapper: Remapper,
+}
+
+impl SpectaFormat {
+    fn new(cfg: &BuilderConfiguration) -> Self {
+        let replacement = if !cfg.enable_nuanced_types {
+            DataType::Primitive(Primitive::u32)
+        } else if !cfg.disable_serde_phases {
+            specta_serde::phased(define("bigint | number").into(), define("bigint").into())
+        } else {
+            define("bigint | number").into()
+        };
+
+        let mut remapper = Remapper::new();
+        for primitive in [
+            Primitive::usize,
+            Primitive::isize,
+            Primitive::u64,
+            Primitive::i64,
+            Primitive::u128,
+            Primitive::i128,
+        ] {
+            remapper = remapper.rule(DataType::Primitive(primitive), replacement.clone());
+        }
+
+        Self {
+            disable_serde_phases: cfg.disable_serde_phases,
+            remapper: remapper.rule(
+                DataType::Primitive(Primitive::f128),
+                DataType::Primitive(Primitive::f64),
+            ),
+        }
+    }
+}
+
+impl Format for SpectaFormat {
+    fn map_types(&'_ self, types: &Types) -> Result<Cow<'_, Types>, specta::FormatError> {
+        if self.disable_serde_phases {
+            specta_serde::Format.map_types(types)
+        } else {
+            specta_serde::PhasesFormat.map_types(types)
+        }
+    }
+
+    fn map_type(
+        &'_ self,
+        types: &Types,
+        dt: &DataType,
+    ) -> Result<Cow<'_, DataType>, specta::FormatError> {
+        let dt = if self.disable_serde_phases {
+            specta_serde::Format.map_type(types, dt)?
+        } else {
+            specta_serde::PhasesFormat.map_type(types, dt)?
+        };
+
+        Ok(Cow::Owned(self.remapper.remap_dt(dt.into_owned())))
+    }
+}
+
 fn extract_std_result<'a>(
     dt: &'a DataType,
     types: &'a Types,
@@ -519,7 +506,34 @@ fn extract_std_result<'a>(
 }
 
 fn hide_unused_std_result_type(cfg: &BuilderConfiguration, mut types: Types) -> Types {
-    if is_std_result_used_after_command_result_flattening(cfg, &types) {
+    let is_std_result_used_after_command_result_flattening = cfg.commands.iter().any(|command| {
+        command
+            .args()
+            .iter()
+            .any(|(_, dt)| datatype_contains_std_result(dt, &types))
+            || command.result().is_some_and(|dt| {
+                if let Some((ok, err)) = extract_std_result(dt, &types) {
+                    datatype_contains_std_result(ok, &types)
+                        || datatype_contains_std_result(err, &types)
+                } else {
+                    datatype_contains_std_result(dt, &types)
+                }
+            })
+    }) || cfg
+        .events
+        .values()
+        .any(|(_, r)| datatype_contains_std_result(&DataType::Reference(r.clone()), &types))
+        || types.into_unsorted_iter().any(|ndt| {
+            if ndt.name == "Result" && is_std_result_type(&ndt.module_path) {
+                false
+            } else {
+                ndt.ty
+                    .as_ref()
+                    .is_some_and(|dt| datatype_contains_std_result(dt, &types))
+            }
+        });
+
+    if is_std_result_used_after_command_result_flattening {
         return types;
     }
 
@@ -530,42 +544,6 @@ fn hide_unused_std_result_type(cfg: &BuilderConfiguration, mut types: Types) -> 
     });
 
     types
-}
-
-fn is_std_result_type(module_path: &str) -> bool {
-    module_path == "std::result" || module_path == "core::result"
-}
-
-fn is_std_result_used_after_command_result_flattening(
-    cfg: &BuilderConfiguration,
-    types: &Types,
-) -> bool {
-    cfg.commands.iter().any(|command| {
-        command
-            .args()
-            .iter()
-            .any(|(_, dt)| datatype_contains_std_result(dt, types))
-            || command.result().is_some_and(|dt| {
-                if let Some((ok, err)) = extract_std_result(dt, types) {
-                    datatype_contains_std_result(ok, types)
-                        || datatype_contains_std_result(err, types)
-                } else {
-                    datatype_contains_std_result(dt, types)
-                }
-            })
-    }) || cfg
-        .events
-        .values()
-        .any(|(_, r)| datatype_contains_std_result(&DataType::Reference(r.clone()), types))
-        || types.into_unsorted_iter().any(|ndt| {
-            if ndt.name == "Result" && is_std_result_type(&ndt.module_path) {
-                false
-            } else {
-                ndt.ty
-                    .as_ref()
-                    .is_some_and(|dt| datatype_contains_std_result(dt, types))
-            }
-        })
 }
 
 fn datatype_contains_std_result(dt: &DataType, types: &Types) -> bool {
@@ -619,6 +597,10 @@ fn fields_contain_std_result(fields: &Fields, types: &Types) -> bool {
             .filter_map(|(_, field)| field.ty.as_ref())
             .any(|dt| datatype_contains_std_result(dt, types)),
     }
+}
+
+fn is_std_result_type(module_path: &str) -> bool {
+    module_path == "std::result" || module_path == "core::result"
 }
 
 fn is_channel_type(dt: &DataType, types: &Types) -> bool {
