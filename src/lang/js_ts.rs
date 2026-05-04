@@ -2,7 +2,7 @@ use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
 use specta::{
-    Format, Types,
+    Format, NamedDataType, Types,
     datatype::{DataType, Field, Fields, NamedReferenceType, Primitive, Reference, Struct},
 };
 use specta_serde::Phase;
@@ -494,8 +494,7 @@ fn extract_std_result<'a>(
 ) -> Option<(&'a DataType, &'a DataType)> {
     if let DataType::Reference(Reference::Named(r)) = dt
         && let Some(ndt) = types.get(r)
-        && ndt.name == "Result"
-        && is_std_result_type(&ndt.module_path)
+        && is_result_ndt(ndt)
         && let NamedReferenceType::Reference { generics, .. } = &r.inner
         && let [(_, ok), (_, err), ..] = generics.as_slice()
     {
@@ -524,7 +523,7 @@ fn hide_unused_std_result_type(cfg: &BuilderConfiguration, mut types: Types) -> 
         .values()
         .any(|(_, r)| datatype_contains_std_result(&DataType::Reference(r.clone()), &types))
         || types.into_unsorted_iter().any(|ndt| {
-            if ndt.name == "Result" && is_std_result_type(&ndt.module_path) {
+            if is_result_ndt(ndt) {
                 false
             } else {
                 ndt.ty
@@ -538,7 +537,7 @@ fn hide_unused_std_result_type(cfg: &BuilderConfiguration, mut types: Types) -> 
     }
 
     types.iter_mut(|ndt| {
-        if ndt.name == "Result" && is_std_result_type(&ndt.module_path) {
+        if is_result_ndt(ndt) {
             ndt.ty = None;
         }
     });
@@ -577,7 +576,7 @@ fn datatype_contains_std_result(dt: &DataType, types: &Types) -> bool {
             generic_contains_result
                 || types
                     .get(r)
-                    .is_some_and(|ndt| ndt.name == "Result" && is_std_result_type(&ndt.module_path))
+                    .is_some_and(is_result_ndt)
         }
         DataType::Reference(Reference::Opaque(_)) => false,
     }
@@ -599,8 +598,8 @@ fn fields_contain_std_result(fields: &Fields, types: &Types) -> bool {
     }
 }
 
-fn is_std_result_type(module_path: &str) -> bool {
-    module_path == "std::result" || module_path == "core::result"
+fn is_result_ndt(ndt: &NamedDataType) -> bool {
+    ndt.name == "Result" && matches!(&*ndt.module_path, "std::result" | "core::result")
 }
 
 fn is_channel_type(dt: &DataType, types: &Types) -> bool {
