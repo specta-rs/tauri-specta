@@ -73,17 +73,9 @@ specta-typescript = { version = "0.0.11" }
 specta-serde = { version = "0.0.11" }
 specta-tags = { version = "0.0.0" }
 
-[patch.crates-io]
-#
-# `doc_auto_cfg` deprecation :(
-#
-tauri = { git = "https://github.com/tauri-apps/tauri", rev = "43063473188d453e480ca9797d6096936558f096" }
-
-# https://github.com/rust-windowing/winit/commit/d815bc089c37ac525f2ce6f381e758911b273922
-dpi = { git = "https://github.com/rust-windowing/winit", rev = "b5252f136632aac27937ad00fbd6764f812d4922" }
-
 # TODO: Remove patches
-specta = { git = "https://github.com/specta-rs/specta.git", rev = "3d0aaf4845513726fc99d5cf6fa3bd392bcccabf" }
-specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "3d0aaf4845513726fc99d5cf6fa3bd392bcccabf" }
-specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "3d0aaf4845513726fc99d5cf6fa3bd392bcccabf" }
-specta-tags = { git = "https://github.com/specta-rs/specta.git", rev = "3d0aaf4845513726fc99d5cf6fa3bd392bcccabf" }
+[patch.crates-io]
+specta = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }
+specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }
+specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }
+specta-tags = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }

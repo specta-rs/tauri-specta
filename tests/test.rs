@@ -1,4 +1,4 @@
-#![allow(unused)]
+#![allow(missing_docs, unused)]
 
 use serde::Serialize;
 use specta::{Type, specta};
