@@ -41,7 +41,23 @@ export const commands = {
 	 * @returns {string} myName
 	 */
 	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
-	/** @returns {string} myName */
+	/**
+	 * @param {SpecialTypes_Deserialize} input
+	 * @returns {string} myName
+	 */
+	specialTypes: (input) => __TAURI_INVOKE("special_types", { input }),
+	/**
+	 * @param {Channel<bigint>} channel
+	 * @returns {string} myName
+	 */
+	specialTypesWChannel: (channel) => __TAURI_INVOKE("special_types_w_channel", { channel }),
+	/**
+	 * @returns {string} myName
+	 */
+	emitEventWithBigint: () => __TAURI_INVOKE("emit_event_with_bigint"),
+	/**
+	 * @returns {string} myName
+	 */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	/** @returns {string} myName */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
@@ -94,6 +110,32 @@ export const universalConstant = 42;
 	*	}} PhaseSpecificRename_Serialize
 	* @property {string} serialized_value
 	*
+	* @typedef {SpecialTypes_Serialize | SpecialTypes_Deserialize} SpecialTypes
+	* @property {SpecialTypes_Serialize} Serialize
+	* @property {SpecialTypes_Deserialize} Deserialize
+	*
+	* @typedef {{
+	*		u128_max: bigint,
+	*		u128_min: bigint,
+	*		i128_max: bigint,
+	*		i128_min: bigint,
+	*	}} SpecialTypes_Deserialize
+	* @property {bigint} u128_max
+	* @property {bigint} u128_min
+	* @property {bigint} i128_max
+	* @property {bigint} i128_min
+	*
+	* @typedef {{
+	*		u128_max: bigint | number,
+	*		u128_min: bigint | number,
+	*		i128_max: bigint | number,
+	*		i128_min: bigint | number,
+	*	}} SpecialTypes_Serialize
+	* @property {bigint | number} u128_max
+	* @property {bigint | number} u128_min
+	* @property {bigint | number} i128_max
+	* @property {bigint | number} i128_min
+	*
 	* @typedef {{
 	*		a: string,
 	*	}} Testing
@@ -142,4 +184,3 @@ function makeEvent(name) {
 
     return Object.assign(fn, base);
 }
-

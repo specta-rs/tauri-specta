@@ -22,6 +22,9 @@ export const commands = {
 	deprecated: () => __TAURI_INVOKE<void>("deprecated"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
 	phaseSpecificRename: (input: PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
+	specialTypes: (input: SpecialTypes_Deserialize) => __TAURI_INVOKE<[SpecialTypes_Serialize, SpecialTypes_Serialize]>("special_types", { input }),
+	specialTypesWChannel: (channel: Channel<bigint>) => __TAURI_INVOKE<void>("special_types_w_channel", { channel }),
+	emitEventWithBigint: () => __TAURI_INVOKE<void>("emit_event_with_bigint"),
 	typesafeErrorsUsingThiserror: () => typedError<null, MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 };
@@ -58,6 +61,22 @@ export type PhaseSpecificRename_Deserialize = {
 
 export type PhaseSpecificRename_Serialize = {
 	serialized_value: string,
+};
+
+export type SpecialTypes = SpecialTypes_Serialize | SpecialTypes_Deserialize;
+
+export type SpecialTypes_Deserialize = {
+	u128_max: bigint,
+	u128_min: bigint,
+	i128_max: bigint,
+	i128_min: bigint,
+};
+
+export type SpecialTypes_Serialize = {
+	u128_max: bigint | number,
+	u128_min: bigint | number,
+	i128_max: bigint | number,
+	i128_min: bigint | number,
 };
 
 export type Testing = {

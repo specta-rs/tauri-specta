@@ -19,6 +19,22 @@ export type PhaseSpecificRename_Serialize = {
 	serialized_value: string,
 };
 
+export type SpecialTypes = SpecialTypes_Serialize | SpecialTypes_Deserialize;
+
+export type SpecialTypes_Deserialize = {
+	u128_max: bigint,
+	u128_min: bigint,
+	i128_max: bigint,
+	i128_min: bigint,
+};
+
+export type SpecialTypes_Serialize = {
+	u128_max: bigint | number,
+	u128_min: bigint | number,
+	i128_max: bigint | number,
+	i128_min: bigint | number,
+};
+
 export type Testing = {
 	a: string,
 };

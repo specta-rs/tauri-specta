@@ -83,3 +83,8 @@ specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "b2
 specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
 specta-tags = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
 specta-util = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
+
+# TODO: This should be optional?
+# `otbeaumont/bigint` branch
+# tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "c1d13daf34ce881e248c06a7bccc31bc1f39afd4" }
+tauri = { path = "/Users/oscar/Desktop/tauri/crates/tauri" }

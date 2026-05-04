@@ -45,7 +45,23 @@ export const commands = {
 	 * @returns {string} myName
 	 */
 	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
-	/** @returns {string} myName */
+	/**
+	 * @param {tauri_specta_example_app.SpecialTypes_Deserialize} input
+	 * @returns {string} myName
+	 */
+	specialTypes: (input) => __TAURI_INVOKE("special_types", { input }),
+	/**
+	 * @param {Channel<bigint>} channel
+	 * @returns {string} myName
+	 */
+	specialTypesWChannel: (channel) => __TAURI_INVOKE("special_types_w_channel", { channel }),
+	/**
+	 * @returns {string} myName
+	 */
+	emitEventWithBigint: () => __TAURI_INVOKE("emit_event_with_bigint"),
+	/**
+	 * @returns {string} myName
+	 */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	/** @returns {string} myName */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
