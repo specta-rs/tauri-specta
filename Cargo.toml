@@ -40,6 +40,7 @@ tauri = { version = "2", default-features = false, features = ["specta"] }
 heck = "0.5"
 specta-serde = { workspace = true }
 specta-tags = { workspace = true, optional = true }
+specta-util = { workspace = true }
 
 [dev-dependencies]
 tauri = { version = "2", default-features = false, features = ["test", "wry"] }
@@ -73,10 +74,12 @@ specta = { version = "=2.0.0-rc.24", features = ["derive"] }
 specta-typescript = { version = "0.0.11" }
 specta-serde = { version = "0.0.11" }
 specta-tags = { version = "0.0.0" }
+specta-util = { version = "0.0.11" }
 
 # TODO: Remove patches
 [patch.crates-io]
-specta = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }
-specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }
-specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }
-specta-tags = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }
+specta = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
+specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
+specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
+specta-tags = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
+specta-util = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }

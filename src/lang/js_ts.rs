@@ -8,6 +8,7 @@ use specta::{
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
+use specta_util::Remapper;
 
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
@@ -113,24 +114,35 @@ fn rewrite_bigints_in_datatype(
     nuanced: bool,
     phased: bool,
 ) -> Cow<'_, DataType> {
-    match dt.as_ref() {
-        DataType::Primitive(
-            Primitive::usize
-            | Primitive::isize
-            | Primitive::u64
-            | Primitive::i64
-            | Primitive::u128
-            | Primitive::i128,
-        ) => Cow::Owned(if !nuanced {
-            DataType::Primitive(Primitive::u32)
-        } else if phased {
-            specta_serde::phased(define("bigint | number").into(), define("bigint").into())
-        } else {
-            define("bigint | number").into()
-        }),
-        DataType::Primitive(Primitive::f128) => Cow::Owned(DataType::Primitive(Primitive::f64)),
-        _ => dt,
+    let dt = dt.into_owned();
+    let replacement = if !nuanced {
+        DataType::Primitive(Primitive::u32)
+    } else if phased {
+        specta_serde::phased(define("bigint | number").into(), define("bigint").into())
+    } else {
+        define("bigint | number").into()
+    };
+
+    let mut remapper = Remapper::new();
+    for primitive in [
+        Primitive::usize,
+        Primitive::isize,
+        Primitive::u64,
+        Primitive::i64,
+        Primitive::u128,
+        Primitive::i128,
+    ] {
+        remapper = remapper.rule(DataType::Primitive(primitive), replacement.clone());
     }
+
+    Cow::Owned(
+        remapper
+            .rule(
+                DataType::Primitive(Primitive::f128),
+                DataType::Primitive(Primitive::f64),
+            )
+            .remap_dt(dt),
+    )
 }
 
 fn runtime(
