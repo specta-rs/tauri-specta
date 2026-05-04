@@ -1,12 +1,12 @@
 use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
 
-use crate::{event::EventRegistryMeta, Commands, EventRegistry, Events, LanguageExt};
+use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
 use serde::Serialize;
 use specta::{
-    datatype::{Function, Reference},
     Type, Types,
+    datatype::{Function, Reference},
 };
-use tauri::{ipc::Invoke, Manager, Runtime};
+use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// The mode which the error handling is done in the bindings.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
@@ -28,12 +28,12 @@ pub enum ErrorHandlingMode {
 ///
 /// You can extend this example by calling other methods on the builder to configure your application further.
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use tauri_specta::{collect_commands, collect_events, Builder};
 /// use specta_typescript::Typescript;
 ///
 ///
-/// let mut builder = <Builder>::new()
+/// let mut builder = Builder::new()
 ///     .commands(collect_commands![])
 ///     .events(collect_events![]);
 ///
@@ -49,19 +49,18 @@ pub enum ErrorHandlingMode {
 ///
 ///         Ok(())
 ///     })
-///     // on an actual app, remove the string argument
-///     .run(tauri::generate_context!("tests/tauri.conf.json"))
+///     .run(tauri::test::mock_context(tauri::test::noop_assets()))
 ///     .expect("error while running tauri application");
 /// ```
 ///
 /// # Exporting using JSDoc
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use tauri_specta::{collect_commands,collect_events,Builder};
-/// use specta_jsdoc::JSDoc;
+/// use specta_typescript::JSDoc;
 ///
 ///
-/// let mut builder = <Builder>::new()
+/// let mut builder = Builder::new()
 ///     .commands(collect_commands![])
 ///     .events(collect_events![]);
 ///
@@ -78,13 +77,12 @@ pub enum ErrorHandlingMode {
 ///
 ///         Ok(())
 ///     })
-///     // on an actual app, remove the string argument
-///     .run(tauri::generate_context!("tests/tauri.conf.json"))
+///     .run(tauri::test::mock_context(tauri::test::noop_assets()))
 ///     .expect("error while running tauri application");
 /// ```
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct Builder<R: Runtime = tauri::Wry> {
+pub struct Builder<R: Runtime> {
     commands: Commands<R>,
     cfg: BuilderConfiguration,
 }
@@ -151,7 +149,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use tauri_specta::{Builder, collect_commands};
     ///
     /// #[tauri::command]
@@ -176,7 +174,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use serde::{Serialize, Deserialize};
     /// use specta::Type;
     /// use tauri_specta::{Builder, collect_events, Event};
@@ -201,7 +199,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use tauri_specta::Builder;
     /// use serde::{Serialize, Deserialize};
     /// use specta::Type;
@@ -224,7 +222,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use tauri_specta::Builder;
     /// use specta::{Type, Types};
     ///
@@ -241,7 +239,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use tauri_specta::Builder;
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().constant("CONSTANT_NAME","ANY_CONSTANT_VALUE");
@@ -318,10 +316,10 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
     /// use tauri_specta::{Builder, collect_events};
     ///
-    /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![]);
+    /// let mut builder = Builder::new().events(collect_events![]);
     ///
     /// tauri::Builder::default()
     ///     .setup(move |app| {
@@ -329,8 +327,7 @@ impl<R: Runtime> Builder<R> {
     ///
     ///         Ok(())
     ///     })
-    ///     // on an actual app, remove the string argument
-    ///     .run(tauri::generate_context!("tests/tauri.conf.json"))
+    ///     .run(tauri::test::mock_context(tauri::test::noop_assets()))
     ///     .expect("error while running tauri application");
     /// ```
     pub fn mount_events(&self, handle: &impl Manager<R>) {
@@ -350,7 +347,7 @@ impl<R: Runtime> Builder<R> {
     /// Export the bindings to the filesystem using the provided exporter.
     ///
     /// # Example
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use tauri_specta::{Builder, collect_commands, collect_events};
     /// use specta_typescript::Typescript;
     ///

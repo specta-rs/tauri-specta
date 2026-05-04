@@ -200,6 +200,8 @@ fn main() {
     let builder = Builder::<tauri::Wry>::new()
         // TODO: You shouldn't enable this unless you know what you're doing!
         .unstable_nuanced_types()
+        // This can be used if you don't want per-phase (Serialize/Deserialize) types.
+        // .disable_serde_phases()
         .commands(tauri_specta::collect_commands![
             hello_world,
             goodbye_world,

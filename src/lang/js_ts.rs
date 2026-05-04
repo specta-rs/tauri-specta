@@ -1,12 +1,18 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
-use specta::ResolvedTypes;
-use specta::datatype::{DataType, Field, Fields, Function, Primitive, Reference, Struct};
+use specta::{
+    Format, Types,
+    datatype::{
+        DataType, Field, Fields, NamedDataType, NamedReferenceType, Primitive, Reference, Struct,
+    },
+};
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
 use specta_typescript::{Error, Exporter, FrameworkExporter, define};
+use specta_util::Remapper;
 
+use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
@@ -14,7 +20,8 @@ impl LanguageExt for specta_typescript::Typescript {
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
-        let types = resolve_types_for_export(&cfg)?;
+        let types = hide_unused_std_result_type(&cfg, cfg.types.clone());
+        let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
@@ -32,7 +39,7 @@ impl LanguageExt for specta_typescript::Typescript {
                     MAKE_EVENT_IMPL_TS,
                 )
             })
-            .export_to(path, &types)
+            .export_to(path, &types, format)
     }
 }
 
@@ -41,7 +48,8 @@ impl LanguageExt for specta_typescript::JSDoc {
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
-        let types = resolve_types_for_export(&cfg)?;
+        let types = hide_unused_std_result_type(&cfg, cfg.types.clone());
+        let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
@@ -59,29 +67,8 @@ impl LanguageExt for specta_typescript::JSDoc {
                     MAKE_EVENT_IMPL_JS,
                 )
             })
-            .export_to(path, &types)
+            .export_to(path, &types, format)
     }
-}
-
-fn resolve_types_for_export(cfg: &BuilderConfiguration) -> Result<ResolvedTypes, Error> {
-    let mut types = cfg.types.clone();
-
-    types.iter_mut(|ndt| {
-        rewrite_bigints_in_datatype(
-            ndt.ty_mut(),
-            cfg.enable_nuanced_types,
-            !cfg.disable_serde_phases,
-        )
-    });
-
-    let types = if cfg.disable_serde_phases {
-        specta_serde::apply(types)
-    } else {
-        specta_serde::apply_phases(types)
-    }
-    .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
-
-    Ok(types)
 }
 
 fn runtime(
@@ -100,14 +87,13 @@ fn runtime(
     if let Some(ndt) = cfg
         .types
         .into_unsorted_iter()
-        .find(|ndt| RESERVED_NDT_NAMES.contains(&&**ndt.name()))
+        .find(|ndt| RESERVED_NDT_NAMES.contains(&&*ndt.name))
     {
         return Err(Error::framework(
             "",
             format!(
                 "User defined type '{}' defined in {} must be renamed so it doesn't conflict with Tauri Specta runtime.",
-                ndt.name(),
-                ndt.location()
+                ndt.name, ndt.location
             ),
         ));
     }
@@ -157,14 +143,9 @@ fn runtime(
     if enabled_commands {
         let mut s = Struct::named();
         for command in &cfg.commands {
-            validate_exported_command(command, exporter.types)?;
-
-            let command_name_escaped = serde_json::to_string(
-                &cfg.plugin_name
-                    .map(|plugin_name| format!("plugin|{plugin_name}|{}", command.name()).into())
-                    .unwrap_or_else(|| command.name().clone()),
-            )
-            .expect("failed to serialize string");
+            let command_name_escaped =
+                serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
+                    .expect("failed to serialize string");
 
             let arguments = command
                 .args()
@@ -172,7 +153,7 @@ fn runtime(
                 .map(|(name, dt)| {
                     Ok((
                         name.to_lower_camel_case(),
-                        render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter, cfg)?,
+                        render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter)?,
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -226,7 +207,6 @@ fn runtime(
                             Phase::Serialize
                         },
                         &exporter,
-                        cfg,
                     )?);
                     invoke_ts.push_str(", ");
                     invoke_ts.push_str(&render_reference_dt_for_phase(
@@ -237,7 +217,6 @@ fn runtime(
                             Phase::Serialize
                         },
                         &exporter,
-                        cfg,
                     )?);
                     invoke_ts.push('>');
                 }
@@ -278,12 +257,9 @@ fn runtime(
                     invoke_ts.push_str(&match command.result() {
                         Some(dt) => Cow::Owned(render_reference_dt(
                             &specta_serde::select_phase_datatype(
-                                &rewrite_bigints_for_export(
-                                    extract_std_result(dt, exporter.types)
-                                        .map(|(ok, _)| ok)
-                                        .unwrap_or(dt),
-                                    cfg,
-                                ),
+                                extract_std_result(dt, exporter.types)
+                                    .map(|(ok, _)| ok)
+                                    .unwrap_or(dt),
                                 exporter.types,
                                 if output_transform.is_some() {
                                     Phase::Deserialize
@@ -309,8 +285,8 @@ fn runtime(
             };
 
             let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
-            field.set_deprecated(command.deprecated().cloned());
-            field.set_docs({
+            field.deprecated = command.deprecated().cloned();
+            field.docs = {
                 let mut docs = command.docs().to_string();
 
                 if jsdoc {
@@ -334,7 +310,7 @@ fn runtime(
                 }
 
                 docs.into()
-            });
+            };
             s = s.field(command.name().to_lower_camel_case(), field);
         }
 
@@ -351,12 +327,9 @@ fn runtime(
     if enabled_events {
         let mut s = Struct::named();
         for (name, (_, r)) in &cfg.events {
-            let event_name_escaped = serde_json::to_string(
-                &cfg.plugin_name
-                    .map(|plugin_name| format!("plugin:{plugin_name}:{name}"))
-                    .unwrap_or_else(|| name.to_string()),
-            )
-            .expect("failed to serialize string");
+            let event_name_escaped =
+                serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name))
+                    .expect("failed to serialize string");
 
             let mut field_ts = "makeEvent".to_string();
             if !jsdoc {
@@ -370,13 +343,11 @@ fn runtime(
 
             let mut field = Field::new(define(field_ts).into());
             if jsdoc {
-                field.set_docs(
-                    format!(
-                        "@type {{ReturnType<typeof makeEvent<{}>>}}",
-                        exporter.reference(r)?
-                    )
-                    .into(),
-                );
+                field.docs = format!(
+                    "@type {{ReturnType<typeof makeEvent<{}>>}}",
+                    exporter.reference(r)?
+                )
+                .into();
             }
             s = s.field(name.to_lower_camel_case(), field);
         }
@@ -456,120 +427,78 @@ fn runtime(
     Ok(Cow::Owned(out))
 }
 
-fn rewrite_bigints_in_datatype(dt: &mut DataType, nuanced: bool, phased: bool) {
-    fn rewrite_bigints_in_fields(fields: &mut Fields, nuanced: bool, phased: bool) {
-        match fields {
-            Fields::Unit => {}
-            Fields::Unnamed(fields) => {
-                for field in fields.fields_mut() {
-                    if let Some(ty) = field.ty_mut() {
-                        rewrite_bigints_in_datatype(ty, nuanced, phased);
-                    }
-                }
-            }
-            Fields::Named(fields) => {
-                for (_, field) in fields.fields_mut() {
-                    if let Some(ty) = field.ty_mut() {
-                        rewrite_bigints_in_datatype(ty, nuanced, phased);
-                    }
-                }
-            }
-        }
-    }
+/// Applies `specta_serde` format + also remaps `DataType`'s and does other transformations!
+#[derive(Debug, Clone)]
+struct SpectaFormat {
+    disable_serde_phases: bool,
+    remapper: Remapper,
+}
 
-    match dt {
-        DataType::Primitive(primitive) => match primitive {
-            Primitive::usize
-            | Primitive::isize
-            | Primitive::u64
-            | Primitive::i64
-            | Primitive::u128
-            | Primitive::i128 => {
-                *dt = if !nuanced {
-                    // TODO: This is temporary until we have official support for large number types in Tauri.
-                    DataType::Primitive(Primitive::u32)
-                } else if phased {
-                    specta_serde::phased(define("bigint | number").into(), define("bigint").into())
-                } else {
-                    define("bigint | number").into()
-                };
-            }
-            Primitive::f128 => {
-                *dt = DataType::Primitive(Primitive::f64);
-            }
-            _ => {}
-        },
-        DataType::List(list) => rewrite_bigints_in_datatype(list.ty_mut(), nuanced, phased),
-        DataType::Map(map) => {
-            rewrite_bigints_in_datatype(map.key_ty_mut(), nuanced, phased);
-            rewrite_bigints_in_datatype(map.value_ty_mut(), nuanced, phased);
+impl SpectaFormat {
+    fn new(cfg: &BuilderConfiguration) -> Self {
+        let replacement = if !cfg.enable_nuanced_types {
+            DataType::Primitive(Primitive::u32)
+        } else if !cfg.disable_serde_phases {
+            specta_serde::phased(define("bigint | number").into(), define("bigint").into())
+        } else {
+            define("bigint | number").into()
+        };
+
+        let mut remapper = Remapper::new();
+        for primitive in [
+            Primitive::usize,
+            Primitive::isize,
+            Primitive::u64,
+            Primitive::i64,
+            Primitive::u128,
+            Primitive::i128,
+        ] {
+            remapper = remapper.rule(DataType::Primitive(primitive), replacement.clone());
         }
-        DataType::Struct(strct) => rewrite_bigints_in_fields(strct.fields_mut(), nuanced, phased),
-        DataType::Enum(enm) => {
-            for (_, variant) in enm.variants_mut() {
-                rewrite_bigints_in_fields(variant.fields_mut(), nuanced, phased);
-            }
+
+        Self {
+            disable_serde_phases: cfg.disable_serde_phases,
+            remapper: remapper.rule(
+                DataType::Primitive(Primitive::f128),
+                DataType::Primitive(Primitive::f64),
+            ),
         }
-        DataType::Tuple(tuple) => {
-            for item in tuple.elements_mut() {
-                rewrite_bigints_in_datatype(item, nuanced, phased);
-            }
-        }
-        DataType::Nullable(inner) => rewrite_bigints_in_datatype(inner, nuanced, phased),
-        DataType::Reference(Reference::Named(reference)) => {
-            for (_, generic) in reference.generics_mut() {
-                rewrite_bigints_in_datatype(generic, nuanced, phased);
-            }
-        }
-        DataType::Reference(Reference::Generic(_)) | DataType::Reference(Reference::Opaque(_)) => {}
     }
 }
 
-fn rewrite_bigints_for_export(dt: &DataType, cfg: &BuilderConfiguration) -> DataType {
-    let mut dt = dt.clone();
-    rewrite_bigints_in_datatype(&mut dt, cfg.enable_nuanced_types, !cfg.disable_serde_phases);
-    dt
-}
-
-fn validate_exported_command(command: &Function, types: &ResolvedTypes) -> Result<(), Error> {
-    for (position, (name, dt)) in command.args().iter().enumerate() {
-        specta_serde::validate(dt, types).map_err(|err| {
-            Error::framework(
-                format!(
-                    "Specta Serde validation failed for command '{}' param #{} ('{}')",
-                    command.name(),
-                    position + 1,
-                    name
-                ),
-                err,
-            )
-        })?;
+impl Format for SpectaFormat {
+    fn map_types(&'_ self, types: &Types) -> Result<Cow<'_, Types>, specta::FormatError> {
+        if self.disable_serde_phases {
+            specta_serde::Format.map_types(types)
+        } else {
+            specta_serde::PhasesFormat.map_types(types)
+        }
     }
 
-    if let Some(result) = command.result() {
-        specta_serde::validate(result, types).map_err(|err| {
-            Error::framework(
-                format!(
-                    "Specta Serde validation failed for command '{}' result",
-                    command.name()
-                ),
-                err,
-            )
-        })?;
-    }
+    fn map_type(
+        &'_ self,
+        types: &Types,
+        dt: &DataType,
+    ) -> Result<Cow<'_, DataType>, specta::FormatError> {
+        let dt = if self.disable_serde_phases {
+            specta_serde::Format.map_type(types, dt)?
+        } else {
+            specta_serde::PhasesFormat.map_type(types, dt)?
+        };
 
-    Ok(())
+        Ok(Cow::Owned(self.remapper.remap_dt(dt.into_owned())))
+    }
 }
 
 fn extract_std_result<'a>(
     dt: &'a DataType,
-    types: &'a ResolvedTypes,
+    types: &'a Types,
 ) -> Option<(&'a DataType, &'a DataType)> {
     if let DataType::Reference(Reference::Named(r)) = dt
-        && let Some(ndt) = r.get(types.as_types())
-        && ndt.name() == "Result"
-        && (ndt.module_path() == "std::result" || ndt.module_path() == "core::result")
-        && let [(_, ok), (_, err), ..] = r.generics()
+        && let Some(ndt) = types.get(r)
+        && is_result_ndt(ndt)
+        && let NamedReferenceType::Reference { generics, .. } = &r.inner
+        && let [(_, ok), (_, err), ..] = generics.as_slice()
     {
         return Some((ok, err));
     }
@@ -577,11 +506,106 @@ fn extract_std_result<'a>(
     None
 }
 
-fn is_channel_type(dt: &DataType, types: &ResolvedTypes) -> bool {
+fn hide_unused_std_result_type(cfg: &BuilderConfiguration, mut types: Types) -> Types {
+    let is_std_result_used_after_command_result_flattening = cfg.commands.iter().any(|command| {
+        command
+            .args()
+            .iter()
+            .any(|(_, dt)| datatype_contains_std_result(dt, &types))
+            || command.result().is_some_and(|dt| {
+                if let Some((ok, err)) = extract_std_result(dt, &types) {
+                    datatype_contains_std_result(ok, &types)
+                        || datatype_contains_std_result(err, &types)
+                } else {
+                    datatype_contains_std_result(dt, &types)
+                }
+            })
+    }) || cfg
+        .events
+        .values()
+        .any(|(_, r)| datatype_contains_std_result(&DataType::Reference(r.clone()), &types))
+        || types.into_unsorted_iter().any(|ndt| {
+            if is_result_ndt(ndt) {
+                false
+            } else {
+                ndt.ty
+                    .as_ref()
+                    .is_some_and(|dt| datatype_contains_std_result(dt, &types))
+            }
+        });
+
+    if is_std_result_used_after_command_result_flattening {
+        return types;
+    }
+
+    types.iter_mut(|ndt| {
+        if is_result_ndt(ndt) {
+            ndt.ty = None;
+        }
+    });
+
+    types
+}
+
+fn datatype_contains_std_result(dt: &DataType, types: &Types) -> bool {
     match dt {
-        DataType::Reference(Reference::Named(r)) => r
-            .get(types.as_types())
-            .map(|ndt| ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::"))
+        DataType::Primitive(_) | DataType::Generic(_) => false,
+        DataType::List(list) => datatype_contains_std_result(&list.ty, types),
+        DataType::Map(map) => {
+            datatype_contains_std_result(map.key_ty(), types)
+                || datatype_contains_std_result(map.value_ty(), types)
+        }
+        DataType::Struct(s) => fields_contain_std_result(&s.fields, types),
+        DataType::Enum(e) => e
+            .variants
+            .iter()
+            .any(|(_, variant)| fields_contain_std_result(&variant.fields, types)),
+        DataType::Tuple(tuple) => tuple
+            .elements
+            .iter()
+            .any(|dt| datatype_contains_std_result(dt, types)),
+        DataType::Nullable(dt) => datatype_contains_std_result(dt, types),
+        DataType::Intersection(dts) => dts.iter().any(|dt| datatype_contains_std_result(dt, types)),
+        DataType::Reference(Reference::Named(r)) => {
+            let generic_contains_result = match &r.inner {
+                NamedReferenceType::Reference { generics, .. } => generics
+                    .iter()
+                    .any(|(_, dt)| datatype_contains_std_result(dt, types)),
+                NamedReferenceType::Inline { dt, .. } => datatype_contains_std_result(dt, types),
+                NamedReferenceType::Recursive => false,
+            };
+
+            generic_contains_result || types.get(r).is_some_and(is_result_ndt)
+        }
+        DataType::Reference(Reference::Opaque(_)) => false,
+    }
+}
+
+fn fields_contain_std_result(fields: &Fields, types: &Types) -> bool {
+    match fields {
+        Fields::Unit => false,
+        Fields::Unnamed(fields) => fields
+            .fields
+            .iter()
+            .filter_map(|field| field.ty.as_ref())
+            .any(|dt| datatype_contains_std_result(dt, types)),
+        Fields::Named(fields) => fields
+            .fields
+            .iter()
+            .filter_map(|(_, field)| field.ty.as_ref())
+            .any(|dt| datatype_contains_std_result(dt, types)),
+    }
+}
+
+fn is_result_ndt(ndt: &NamedDataType) -> bool {
+    ndt.name == "Result" && matches!(&*ndt.module_path, "std::result" | "core::result")
+}
+
+fn is_channel_type(dt: &DataType, types: &Types) -> bool {
+    match dt {
+        DataType::Reference(Reference::Named(r)) => types
+            .get(r)
+            .map(|ndt| ndt.name == "TAURI_CHANNEL" && ndt.module_path.starts_with("tauri::"))
             .unwrap_or(false),
         _ => false,
     }
@@ -605,13 +629,8 @@ fn render_reference_dt_for_phase(
     dt: &DataType,
     phase: Phase,
     exporter: &FrameworkExporter,
-    cfg: &BuilderConfiguration,
 ) -> Result<String, Error> {
-    let dt = specta_serde::select_phase_datatype(
-        &rewrite_bigints_for_export(dt, cfg),
-        exporter.types,
-        phase,
-    );
+    let dt = specta_serde::select_phase_datatype(dt, exporter.types, phase);
     render_reference_dt(&dt, exporter)
 }
 
@@ -619,11 +638,15 @@ fn render_reference_dt_for_phase(
 // Also handles Tauri channel references.
 fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt
-        && let Some(ndt) = r.get(exporter.types.as_types())
-        && ndt.name() == "TAURI_CHANNEL"
-        && ndt.module_path().starts_with("tauri::")
+        && let Some(ndt) = exporter.types.get(r)
+        && ndt.name == "TAURI_CHANNEL"
+        && ndt.module_path.starts_with("tauri::")
     {
-        let generic = if let Some((_, dt)) = r.generics().first() {
+        let generics = match &r.inner {
+            NamedReferenceType::Reference { generics, .. } => generics.as_slice(),
+            NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive => &[],
+        };
+        let generic = if let Some((_, dt)) = generics.first() {
             match &dt {
                 DataType::Reference(r) => exporter.reference(r)?,
                 dt => exporter.inline(dt)?,
@@ -678,17 +701,19 @@ async function typedError(result) {
 
 const TYPED_ERROR_ASSERTION_TS: &str = "const _assertTypedErrorFollowsContract: <T, E>(result: Promise<T>) => Promise<any> = typedError;";
 
-const MAKE_EVENT_IMPL_TS: &str = r#"function makeEvent<T>(name: string) {
+const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
+
+function makeEvent<T>(name: string) {
     const base = {
         listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, cb),
         once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, cb),
-        emit: ((payload: T) => __TAURI_EVENT.emit(name, payload) as unknown) as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
+        emit: ((payload: T) => __TAURI_EVENT.emit(name, payload) as unknown) as EventEmit<T>
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
         listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, cb),
         once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, cb),
-        emit: ((payload: T) => target.emit(name, payload) as unknown) as (T extends null ? () => Promise<void> : (payload: T) => Promise<void>)
+        emit: ((payload: T) => target.emit(name, payload) as unknown) as EventEmit<T>
     });
 
     return Object.assign(fn, base);

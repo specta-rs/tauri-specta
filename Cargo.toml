@@ -34,19 +34,23 @@ tauri-specta-macros = { version = "=2.0.0-rc.24", optional = true, path = "./mac
 serde = "1"
 serde_json = "1"
 thiserror = "2"
-tauri = { workspace = true, features = ["specta"] }
+tauri = { version = "2", default-features = false, features = ["specta"] }
 
 # Private
 heck = "0.5"
 specta-serde = { workspace = true }
 specta-tags = { workspace = true, optional = true }
+specta-util = { workspace = true }
+
+[dev-dependencies]
+tauri = { version = "2", default-features = false, features = ["test", "wry"] }
 
 [workspace]
 members = [
-    "examples/app/src-tauri",
-    "examples/custom-plugin/app/src-tauri",
-    "examples/custom-plugin/plugin",
-    "macros",
+  "examples/app/src-tauri",
+  "examples/custom-plugin/app/src-tauri",
+  "examples/custom-plugin/plugin",
+  "macros",
 ]
 
 [workspace.lints.rust]
@@ -56,6 +60,7 @@ missing_docs = { level = "warn", priority = -1 }
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = { level = "allow", priority = 1 }
 unwrap_used = { level = "warn", priority = -1 }
 panic = { level = "warn", priority = -1 }
 todo = { level = "warn", priority = -1 }
@@ -69,13 +74,15 @@ specta = { version = "=2.0.0-rc.24", features = ["derive"] }
 specta-typescript = { version = "0.0.11" }
 specta-serde = { version = "0.0.11" }
 specta-tags = { version = "0.0.0" }
+specta-util = { version = "0.0.11" }
 
 # TODO: Remove patches
 [patch.crates-io]
-specta = { path = "/Users/oscar/Desktop/specta17/specta" }
-specta-typescript = { path = "/Users/oscar/Desktop/specta17/specta-typescript" }
-specta-serde = { path = "/Users/oscar/Desktop/specta17/specta-serde" }
-specta-tags = { path = "/Users/oscar/Desktop/specta17/specta-tags" }
+specta = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
+specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
+specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
+specta-tags = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
+specta-util = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
 
 # TODO: This should be optional?
 # `otbeaumont/bigint` branch
