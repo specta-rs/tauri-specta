@@ -36,18 +36,20 @@ serde_json = "1"
 thiserror = "2"
 tauri = { version = "2", default-features = false, features = ["specta"] }
 
-
 # Private
 heck = "0.5"
 specta-serde = { workspace = true }
 specta-tags = { workspace = true, optional = true }
 
+[dev-dependencies]
+tauri = { version = "2", default-features = false, features = ["test", "wry"] }
+
 [workspace]
 members = [
-    "examples/app/src-tauri",
-    "examples/custom-plugin/app/src-tauri",
-    "examples/custom-plugin/plugin",
-    "macros",
+  "examples/app/src-tauri",
+  "examples/custom-plugin/app/src-tauri",
+  "examples/custom-plugin/plugin",
+  "macros",
 ]
 
 [workspace.lints.rust]
@@ -57,6 +59,7 @@ missing_docs = { level = "warn", priority = -1 }
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = { level = "allow", priority = 1 }
 unwrap_used = { level = "warn", priority = -1 }
 panic = { level = "warn", priority = -1 }
 todo = { level = "warn", priority = -1 }
@@ -71,11 +74,9 @@ specta-typescript = { version = "0.0.11" }
 specta-serde = { version = "0.0.11" }
 specta-tags = { version = "0.0.0" }
 
+# TODO: Remove patches
 [patch.crates-io]
-#
-# `doc_auto_cfg` deprecation :(
-#
-tauri = { git = "https://github.com/tauri-apps/tauri", rev = "43063473188d453e480ca9797d6096936558f096" }
-
-# https://github.com/rust-windowing/winit/commit/d815bc089c37ac525f2ce6f381e758911b273922
-dpi = { git = "https://github.com/rust-windowing/winit", rev = "b5252f136632aac27937ad00fbd6764f812d4922" }
+specta = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }
+specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }
+specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }
+specta-tags = { git = "https://github.com/specta-rs/specta.git", rev = "13acf5d7d78a9b03b2df6371a6a7a6b688f6c9b7" }

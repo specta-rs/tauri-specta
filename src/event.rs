@@ -94,7 +94,7 @@ macro_rules! make_handler {
 /// #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 /// pub struct MyEvent(String);
 ///
-/// fn use_event(app_handle: AppHandle) {
+/// fn use_event(app_handle: AppHandle<tauri::Wry>) {
 ///     MyEvent::listen(&app_handle, |event| {
 ///         dbg!(event.payload);
 ///     });

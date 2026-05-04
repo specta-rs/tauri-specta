@@ -13,26 +13,18 @@ export const commands = {
 	 * @returns {string} myName
 	 */
 	helloWorld: (myName) => __TAURI_INVOKE("hello_world", { myName }),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {string} myName */
 	goodbyeWorld: () => __TAURI_INVOKE("goodbye_world"),
 	/**
 	 * @param {string} myName
 	 * @returns {string} myName
 	 */
 	asyncHelloWorld: (myName) => __TAURI_INVOKE("async_hello_world", { myName }),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {string} myName */
 	hasError: () => typedError(__TAURI_INVOKE("has_error")),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {string} myName */
 	someStruct: () => __TAURI_INVOKE("some_struct"),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {string} myName */
 	generic: () => __TAURI_INVOKE("generic"),
 	/**
 	 * @returns {string} myName
@@ -49,25 +41,17 @@ export const commands = {
 	 * @returns {string} myName
 	 */
 	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {string} myName */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {string} myName */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 };
 
 /** Events */
 export const events = {
-	/**
-	 * @type {ReturnType<typeof makeEvent<EmptyEvent>>}
-	 */
+	/** @type {ReturnType<typeof makeEvent<EmptyEvent>>} */
 	emptyEvent: makeEvent("empty-event"),
-	/**
-	 * @type {ReturnType<typeof makeEvent<DemoEvent>>}
-	 */
+	/** @type {ReturnType<typeof makeEvent<DemoEvent>>} */
 	myDemoEvent: makeEvent("myDemoEvent"),
 };
 

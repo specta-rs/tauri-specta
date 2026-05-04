@@ -1,8 +1,8 @@
-#![allow(unused)]
+#![allow(missing_docs, unused)]
 
 use serde::Serialize;
 use specta::{Type, specta};
-use tauri::{State, Window};
+use tauri::{Runtime, State, Window};
 
 // Test different combinations of results
 
@@ -52,7 +52,7 @@ fn state(state: State<String>) -> String {
 
 #[tauri::command]
 #[specta]
-fn window(window: Window) -> String {
+fn window<R: Runtime>(window: Window<R>) -> String {
     format!("Hello, world!")
 }
 
