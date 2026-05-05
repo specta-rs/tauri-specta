@@ -55,13 +55,9 @@ export const commands = {
 	 * @returns {string} myName
 	 */
 	specialTypesWChannel: (channel) => __TAURI_INVOKE("special_types_w_channel", { channel }),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {string} myName */
 	emitEventWithBigint: () => __TAURI_INVOKE("emit_event_with_bigint"),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {string} myName */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	/** @returns {string} myName */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
@@ -71,6 +67,8 @@ export const commands = {
 export const events = {
 	/** @type {ReturnType<typeof makeEvent<tauri_specta_example_app.EmptyEvent>>} */
 	emptyEvent: makeEvent("empty-event"),
+	/** @type {ReturnType<typeof makeEvent<tauri_specta_example_app.EventWithBigInt_Serialize>>} */
+	eventWithBigInt: makeEvent("event-with-big-int"),
 	/** @type {ReturnType<typeof makeEvent<tauri_specta_example_app.DemoEvent>>} */
 	myDemoEvent: makeEvent("myDemoEvent"),
 };

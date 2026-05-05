@@ -34,7 +34,7 @@ tauri-specta-macros = { version = "=2.0.0-rc.24", optional = true, path = "./mac
 serde = "1"
 serde_json = "1"
 thiserror = "2"
-tauri = { version = "2", default-features = false, features = ["specta"] }
+tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "c1d13daf34ce881e248c06a7bccc31bc1f39afd4", default-features = false, features = ["specta"] }
 
 # Private
 heck = "0.5"
@@ -43,13 +43,10 @@ specta-tags = { workspace = true, optional = true }
 specta-util = { workspace = true }
 
 [dev-dependencies]
-tauri = { version = "2", default-features = false, features = ["test", "wry"] }
+tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "c1d13daf34ce881e248c06a7bccc31bc1f39afd4", default-features = false, features = ["test", "wry"] }
 
 [workspace]
 members = [
-  "examples/app/src-tauri",
-  "examples/custom-plugin/app/src-tauri",
-  "examples/custom-plugin/plugin",
   "macros",
 ]
 
@@ -67,24 +64,11 @@ todo = { level = "warn", priority = -1 }
 panic_in_result_fn = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
-tauri = { version = "2" }
+tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "c1d13daf34ce881e248c06a7bccc31bc1f39afd4" }
 tauri-build = { version = "2" }
 tauri-plugin = { version = "2" }
-specta = { version = "=2.0.0-rc.24", features = ["derive"] }
-specta-typescript = { version = "0.0.11" }
-specta-serde = { version = "0.0.11" }
-specta-tags = { version = "0.0.0" }
-specta-util = { version = "0.0.11" }
-
-# TODO: Remove patches
-[patch.crates-io]
-specta = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
+specta = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab", features = ["derive"] }
 specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
 specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
 specta-tags = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
 specta-util = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
-
-# TODO: This should be optional?
-# `otbeaumont/bigint` branch
-# tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "c1d13daf34ce881e248c06a7bccc31bc1f39afd4" }
-tauri = { path = "/Users/oscar/Desktop/tauri/crates/tauri" }

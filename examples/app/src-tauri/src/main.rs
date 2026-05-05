@@ -6,7 +6,10 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use specta_typescript::Typescript;
-use tauri::{AppHandle, ipc::Channel};
+use tauri::{
+    AppHandle, Emitter, Webview, Window,
+    ipc::{Channel, InvokeBody, InvokeResponseBody, Request},
+};
 use tauri_specta::*;
 use thiserror::Error;
 
@@ -68,6 +71,9 @@ struct SpecialTypes {
     u128_min: u128,
     i128_max: i128,
     i128_min: i128,
+    nan: f64,
+    infinity: f64,
+    negative_infinity: f64,
     // bytes: bytes::Bytes,
     // #[specta(type = specta_typescript::Bytes)] // TODO
     // bytes_from_vec: Vec<u8>,
@@ -96,6 +102,9 @@ fn special_types(input: SpecialTypes) -> (SpecialTypes, SpecialTypes) {
             u128_min: u128::MIN,
             i128_max: i128::MAX,
             i128_min: i128::MIN,
+            nan: f64::NAN,
+            infinity: f64::INFINITY,
+            negative_infinity: f64::NEG_INFINITY,
             // bytes: vec![1, 2, 3, 4].into(),
             // bytes_from_vec: vec![1, 2, 3, 4],
             // date: chrono::Utc::now().date_naive(),
@@ -107,6 +116,10 @@ fn special_types(input: SpecialTypes) -> (SpecialTypes, SpecialTypes) {
 #[tauri::command]
 #[specta::specta]
 fn special_types_w_channel(channel: Channel<u128>) {
+    println!(
+        "CHANNEL FROM RUST ASSERTIONS: {}",
+        u128::MAX == 340282366920938463463374607431768211455u128
+    );
     channel.send(u128::MAX).unwrap();
 }
 
@@ -218,7 +231,11 @@ fn main() {
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
         ])
-        .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
+        .events(tauri_specta::collect_events![
+            crate::DemoEvent,
+            EmptyEvent,
+            EventWithBigInt
+        ])
         .typ::<Custom>()
         .typ::<Testing>()
         .constant("universalConstant", 42);
@@ -275,6 +292,13 @@ fn main() {
 
             EmptyEvent::listen(app, |_| {
                 println!("Got event from frontend!!");
+            });
+
+            EventWithBigInt::listen(app, |event| {
+                println!(
+                    "EVENT FROM JS ASSERTIONS: {}",
+                    event.payload.0 == u128::MAX
+                );
             });
 
             Ok(())

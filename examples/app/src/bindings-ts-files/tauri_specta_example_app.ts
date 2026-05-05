@@ -5,6 +5,12 @@ export type DemoEvent = string;
 
 export type EmptyEvent = null;
 
+export type EventWithBigInt = EventWithBigInt_Serialize | EventWithBigInt_Deserialize;
+
+export type EventWithBigInt_Deserialize = bigint;
+
+export type EventWithBigInt_Serialize = bigint | number;
+
 export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
 
 export type MyError2 = { type: "IoError"; data: string };
@@ -26,6 +32,9 @@ export type SpecialTypes_Deserialize = {
 	u128_min: bigint,
 	i128_max: bigint,
 	i128_min: bigint,
+	nan: number,
+	infinity: number,
+	negative_infinity: number,
 };
 
 export type SpecialTypes_Serialize = {
@@ -33,6 +42,9 @@ export type SpecialTypes_Serialize = {
 	u128_min: bigint | number,
 	i128_max: bigint | number,
 	i128_min: bigint | number,
+	nan: number,
+	infinity: number,
+	negative_infinity: number,
 };
 
 export type Testing = {

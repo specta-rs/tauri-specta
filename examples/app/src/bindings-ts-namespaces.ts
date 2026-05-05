@@ -32,6 +32,7 @@ export const commands = {
 /** Events */
 export const events = {
 	emptyEvent: makeEvent<$s$.tauri_specta_example_app.EmptyEvent>("empty-event"),
+	eventWithBigInt: makeEvent<$s$.tauri_specta_example_app.EventWithBigInt_Serialize>("event-with-big-int"),
 	myDemoEvent: makeEvent<$s$.tauri_specta_example_app.DemoEvent>("myDemoEvent"),
 };
 
@@ -47,6 +48,12 @@ namespace $s$ {
 		export type DemoEvent = string;
 
 		export type EmptyEvent = null;
+
+		export type EventWithBigInt = $s$.tauri_specta_example_app.EventWithBigInt_Serialize | $s$.tauri_specta_example_app.EventWithBigInt_Deserialize;
+
+		export type EventWithBigInt_Deserialize = bigint;
+
+		export type EventWithBigInt_Serialize = bigint | number;
 
 		export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
 
@@ -69,6 +76,9 @@ namespace $s$ {
 			u128_min: bigint,
 			i128_max: bigint,
 			i128_min: bigint,
+			nan: number,
+			infinity: number,
+			negative_infinity: number,
 		};
 
 		export type SpecialTypes_Serialize = {
@@ -76,6 +86,9 @@ namespace $s$ {
 			u128_min: bigint | number,
 			i128_max: bigint | number,
 			i128_min: bigint | number,
+			nan: number,
+			infinity: number,
+			negative_infinity: number,
 		};
 
 		export type Testing = {

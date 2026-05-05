@@ -51,13 +51,9 @@ export const commands = {
 	 * @returns {string} myName
 	 */
 	specialTypesWChannel: (channel) => __TAURI_INVOKE("special_types_w_channel", { channel }),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {string} myName */
 	emitEventWithBigint: () => __TAURI_INVOKE("emit_event_with_bigint"),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {string} myName */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	/** @returns {string} myName */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
@@ -67,6 +63,8 @@ export const commands = {
 export const events = {
 	/** @type {ReturnType<typeof makeEvent<EmptyEvent>>} */
 	emptyEvent: makeEvent("empty-event"),
+	/** @type {ReturnType<typeof makeEvent<EventWithBigInt_Serialize>>} */
+	eventWithBigInt: makeEvent("event-with-big-int"),
 	/** @type {ReturnType<typeof makeEvent<DemoEvent>>} */
 	myDemoEvent: makeEvent("myDemoEvent"),
 };
@@ -83,6 +81,16 @@ export const universalConstant = 42;
 	* @property {string} "0"
 	*
 	* @typedef {null} EmptyEvent
+	*
+	* @typedef {EventWithBigInt_Serialize | EventWithBigInt_Deserialize} EventWithBigInt
+	* @property {EventWithBigInt_Serialize} Serialize
+	* @property {EventWithBigInt_Deserialize} Deserialize
+	*
+	* @typedef {bigint} EventWithBigInt_Deserialize
+	* @property {bigint} "0"
+	*
+	* @typedef {bigint | number} EventWithBigInt_Serialize
+	* @property {bigint | number} "0"
 	*
 	* @typedef {{ type: "IoError" } | { type: "AnotherError"; data: string }} MyError
 	* @property {{ type: "IoError" }} IoError
@@ -119,22 +127,34 @@ export const universalConstant = 42;
 	*		u128_min: bigint,
 	*		i128_max: bigint,
 	*		i128_min: bigint,
+	*		nan: number,
+	*		infinity: number,
+	*		negative_infinity: number,
 	*	}} SpecialTypes_Deserialize
 	* @property {bigint} u128_max
 	* @property {bigint} u128_min
 	* @property {bigint} i128_max
 	* @property {bigint} i128_min
+	* @property {number} nan
+	* @property {number} infinity
+	* @property {number} negative_infinity
 	*
 	* @typedef {{
 	*		u128_max: bigint | number,
 	*		u128_min: bigint | number,
 	*		i128_max: bigint | number,
 	*		i128_min: bigint | number,
+	*		nan: number,
+	*		infinity: number,
+	*		negative_infinity: number,
 	*	}} SpecialTypes_Serialize
 	* @property {bigint | number} u128_max
 	* @property {bigint | number} u128_min
 	* @property {bigint | number} i128_max
 	* @property {bigint | number} i128_min
+	* @property {number} nan
+	* @property {number} infinity
+	* @property {number} negative_infinity
 	*
 	* @typedef {{
 	*		a: string,
@@ -184,3 +204,4 @@ function makeEvent(name) {
 
     return Object.assign(fn, base);
 }
+

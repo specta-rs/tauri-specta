@@ -35,6 +35,7 @@ export const commands = {
 /** Events */
 export const events = {
 	emptyEvent: makeEvent<tauri_specta_example_app.EmptyEvent>("empty-event"),
+	eventWithBigInt: makeEvent<tauri_specta_example_app.EventWithBigInt_Serialize>("event-with-big-int"),
 	myDemoEvent: makeEvent<tauri_specta_example_app.DemoEvent>("myDemoEvent"),
 };
 

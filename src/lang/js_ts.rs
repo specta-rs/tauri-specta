@@ -9,7 +9,7 @@ use specta::{
 };
 use specta_serde::Phase;
 use specta_tags::TransformPlan;
-use specta_typescript::{Error, Exporter, FrameworkExporter, define};
+use specta_typescript::{Error, Exporter, FrameworkExporter, define, primitives};
 use specta_util::Remapper;
 
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
@@ -153,7 +153,7 @@ fn runtime(
                 .map(|(name, dt)| {
                     Ok((
                         name.to_lower_camel_case(),
-                        render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter)?,
+                        render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter, cfg)?,
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -207,6 +207,7 @@ fn runtime(
                             Phase::Serialize
                         },
                         &exporter,
+                        cfg,
                     )?);
                     invoke_ts.push_str(", ");
                     invoke_ts.push_str(&render_reference_dt_for_phase(
@@ -217,6 +218,7 @@ fn runtime(
                             Phase::Serialize
                         },
                         &exporter,
+                        cfg,
                     )?);
                     invoke_ts.push('>');
                 }
@@ -255,12 +257,20 @@ fn runtime(
 
                     invoke_ts.push('<');
                     invoke_ts.push_str(&match command.result() {
-                        Some(dt) => Cow::Owned(render_reference_dt(
-                            &specta_serde::select_phase_datatype(
-                                extract_std_result(dt, exporter.types)
-                                    .map(|(ok, _)| ok)
-                                    .unwrap_or(dt),
-                                exporter.types,
+                        Some(dt) => Cow::Owned(render_phase_selected_dt(
+                            &remap_phase_primitives(
+                                specta_serde::select_phase_datatype(
+                                    extract_std_result(dt, exporter.types)
+                                        .map(|(ok, _)| ok)
+                                        .unwrap_or(dt),
+                                    exporter.types,
+                                    if output_transform.is_some() {
+                                        Phase::Deserialize
+                                    } else {
+                                        Phase::Serialize
+                                    },
+                                ),
+                                cfg,
                                 if output_transform.is_some() {
                                     Phase::Deserialize
                                 } else {
@@ -334,7 +344,12 @@ fn runtime(
             let mut field_ts = "makeEvent".to_string();
             if !jsdoc {
                 field_ts.push('<');
-                field_ts.push_str(&exporter.reference(r)?);
+                field_ts.push_str(&render_reference_dt_for_phase(
+                    &DataType::Reference(r.clone()),
+                    Phase::Serialize,
+                    &exporter,
+                    cfg,
+                )?);
                 field_ts.push('>');
             }
             field_ts.push('(');
@@ -345,7 +360,12 @@ fn runtime(
             if jsdoc {
                 field.docs = format!(
                     "@type {{ReturnType<typeof makeEvent<{}>>}}",
-                    exporter.reference(r)?
+                    render_reference_dt_for_phase(
+                        &DataType::Reference(r.clone()),
+                        Phase::Serialize,
+                        &exporter,
+                        cfg,
+                    )?
                 )
                 .into();
             }
@@ -458,20 +478,53 @@ impl SpectaFormat {
 
         Self {
             disable_serde_phases: cfg.disable_serde_phases,
-            remapper: remapper.rule(
-                DataType::Primitive(Primitive::f128),
-                DataType::Primitive(Primitive::f64),
-            ),
+            remapper,
         }
     }
+}
+
+fn remap_phase_primitives(dt: DataType, cfg: &BuilderConfiguration, phase: Phase) -> DataType {
+    let replacement = if !cfg.enable_nuanced_types {
+        DataType::Primitive(Primitive::u32)
+    } else if cfg.disable_serde_phases {
+        define("bigint | number").into()
+    } else {
+        match phase {
+            Phase::Serialize => define("bigint | number").into(),
+            Phase::Deserialize => define("bigint").into(),
+        }
+    };
+
+    let mut remapper = Remapper::new();
+    for primitive in [
+        Primitive::usize,
+        Primitive::isize,
+        Primitive::u64,
+        Primitive::i64,
+        Primitive::u128,
+        Primitive::i128,
+    ] {
+        remapper = remapper.rule(DataType::Primitive(primitive), replacement.clone());
+    }
+
+    remapper
+        .rule(
+            DataType::Primitive(Primitive::f128),
+            DataType::Primitive(Primitive::f64),
+        )
+        .remap_dt(dt)
 }
 
 impl Format for SpectaFormat {
     fn map_types(&'_ self, types: &Types) -> Result<Cow<'_, Types>, specta::FormatError> {
         if self.disable_serde_phases {
-            specta_serde::Format.map_types(types)
+            let types = specta_serde::Format.map_types(types)?.into_owned();
+            Ok(Cow::Owned(self.remapper.remap_types(types)))
         } else {
-            specta_serde::PhasesFormat.map_types(types)
+            let types = self.remapper.remap_types(types.clone());
+            Ok(Cow::Owned(
+                specta_serde::PhasesFormat.map_types(&types)?.into_owned(),
+            ))
         }
     }
 
@@ -481,12 +534,16 @@ impl Format for SpectaFormat {
         dt: &DataType,
     ) -> Result<Cow<'_, DataType>, specta::FormatError> {
         let dt = if self.disable_serde_phases {
-            specta_serde::Format.map_type(types, dt)?
+            let dt = specta_serde::Format.map_type(types, dt)?.into_owned();
+            self.remapper.remap_dt(dt)
         } else {
-            specta_serde::PhasesFormat.map_type(types, dt)?
+            let dt = self.remapper.remap_dt(dt.clone());
+            specta_serde::PhasesFormat
+                .map_type(types, &dt)?
+                .into_owned()
         };
 
-        Ok(Cow::Owned(self.remapper.remap_dt(dt.into_owned())))
+        Ok(Cow::Owned(dt))
     }
 }
 
@@ -629,14 +686,16 @@ fn render_reference_dt_for_phase(
     dt: &DataType,
     phase: Phase,
     exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
 ) -> Result<String, Error> {
     let dt = specta_serde::select_phase_datatype(dt, exporter.types, phase);
-    render_reference_dt(&dt, exporter)
+    let dt = remap_phase_primitives(dt, cfg, phase);
+    render_phase_selected_dt(&dt, exporter)
 }
 
-// Render a `DataType` as a reference (or fallback to inline).
+// Render a phase-selected `DataType` without applying the exporter format again.
 // Also handles Tauri channel references.
-fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
+fn render_phase_selected_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt
         && let Some(ndt) = exporter.types.get(r)
         && ndt.name == "TAURI_CHANNEL"
@@ -648,8 +707,8 @@ fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<St
         };
         let generic = if let Some((_, dt)) = generics.first() {
             match &dt {
-                DataType::Reference(r) => exporter.reference(r)?,
-                dt => exporter.inline(dt)?,
+                DataType::Reference(r) => primitives::reference(&exporter, exporter.types, r)?,
+                dt => primitives::inline(&exporter, exporter.types, dt)?,
             }
             .into()
         } else {
@@ -658,8 +717,8 @@ fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<St
         Ok(format!("Channel<{generic}>"))
     } else {
         match &dt {
-            DataType::Reference(r) => exporter.reference(r),
-            dt => exporter.inline(dt),
+            DataType::Reference(r) => primitives::reference(&exporter, exporter.types, r),
+            dt => primitives::inline(&exporter, exporter.types, dt),
         }
     }
 }

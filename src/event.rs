@@ -7,7 +7,7 @@ use std::{
 
 use serde::{Serialize, de::DeserializeOwned};
 use specta::{Type, Types, datatype::Reference};
-use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
+use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime, ipc::InvokeResponseBody};
 
 use crate::name::resolve_tauri_event_name;
 
@@ -65,7 +65,8 @@ macro_rules! make_handler {
         move |event| {
             $handler(TypedEvent {
                 id: event.id(),
-                payload: serde_json::from_str(event.payload())
+                payload: InvokeResponseBody::Json(event.payload().to_string())
+                    .deserialize()
                     .expect("Failed to deserialize event payload"),
             });
         }
