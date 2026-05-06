@@ -8,8 +8,9 @@ use specta::{
     },
 };
 use specta_serde::Phase;
-use specta_tags::TransformPlan;
-use specta_typescript::{Error, Exporter, FrameworkExporter, define};
+use specta_typescript::{
+    Error, Exporter, FrameworkExporter, define, rich_types::RichTypesConfiguration,
+};
 use specta_util::Remapper;
 
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
@@ -285,9 +286,9 @@ fn runtime(
             };
 
             let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
-            field.deprecated = command.deprecated().cloned();
+            field.deprecated = command.deprecated.clone();
             field.docs = {
-                let mut docs = command.docs().to_string();
+                let mut docs = command.docs.to_string();
 
                 if jsdoc {
                     if !docs.is_empty() {
@@ -363,7 +364,7 @@ fn runtime(
         out.push_str("\n/* Constants */");
 
         let mut constants = cfg.constants.iter().collect::<Vec<_>>();
-        constants.sort_by(|(a, _), (b, _)| a.cmp(b));
+        constants.sort_by_key(|(a, _)| *a);
         for (name, value) in constants.iter() {
             let mut as_constt = None;
             // `as const` isn't supported in JS so are conditional on that.
@@ -621,8 +622,13 @@ fn render_result_transform_for_phase(
         return None;
     }
 
-    let mapped = TransformPlan::analyze(dt, exporter.types).map(input);
-    (mapped != input).then(|| mapped.into_owned())
+    let mut rich_types = RichTypesConfiguration::empty();
+    rich_types.enable_lossless_bigint();
+
+    rich_types
+        .apply(exporter.types, dt, input)
+        .map(|(_, mapped)| mapped)
+        .filter(|mapped| mapped != input)
 }
 
 fn render_reference_dt_for_phase(
