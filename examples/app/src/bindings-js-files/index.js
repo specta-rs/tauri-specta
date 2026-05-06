@@ -50,10 +50,10 @@ export const commands = {
 	/** @returns {string} myName */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 	/**
-	 * @param {tauri_specta_example_app.RichTypes} arg
+	 * @param {tauri_specta_example_app.SemanticTypes} arg
 	 * @returns {string} myName
 	 */
-	richTypes: (arg) => __TAURI_INVOKE("rich_types", { arg: ({...arg,bytes:[...arg.bytes]}) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
+	semanticTypes: (arg) => __TAURI_INVOKE("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
 };
 
 /** Events */

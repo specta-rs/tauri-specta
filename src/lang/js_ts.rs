@@ -8,7 +8,7 @@ use specta::{
     },
 };
 use specta_serde::Phase;
-use specta_typescript::{Error, Exporter, FrameworkExporter, RichTypesConfiguration, define};
+use specta_typescript::{Error, Exporter, FrameworkExporter, define, semantic};
 use specta_util::Remapper;
 
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
@@ -80,8 +80,10 @@ fn runtime(
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
-    let rich_types_runtime_types = rich_types_runtime_types(cfg)?;
-    let rich_types_runtime_types = rich_types_runtime_types.as_ref().unwrap_or(exporter.types);
+    let semantic_types_runtime_types = semantic_types_runtime_types(cfg)?;
+    let semantic_types_runtime_types = semantic_types_runtime_types
+        .as_ref()
+        .unwrap_or(exporter.types);
 
     let mut out = String::new();
 
@@ -160,7 +162,7 @@ fn runtime(
                             Phase::Serialize,
                             &exporter,
                             &cfg,
-                            rich_types_runtime_types,
+                            semantic_types_runtime_types,
                         )?,
                     ))
                 })
@@ -195,7 +197,7 @@ fn runtime(
                                 &name,
                                 &exporter,
                                 cfg,
-                                rich_types_runtime_types,
+                                semantic_types_runtime_types,
                             );
 
                             value.map_or(name.clone(), |value| format!("{name}: {value}"))
@@ -211,21 +213,21 @@ fn runtime(
                 && let Some(result) = command.result()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
             {
-                let ok_rich_type = has_rich_type_for_phase(
+                let ok_semantic_type = has_semantic_type_for_phase(
                     dt_ok,
                     Phase::Deserialize,
                     "v.data",
                     &exporter,
                     cfg,
-                    rich_types_runtime_types,
+                    semantic_types_runtime_types,
                 );
-                let err_rich_type = has_rich_type_for_phase(
+                let err_semantic_type = has_semantic_type_for_phase(
                     dt_err,
                     Phase::Deserialize,
                     "v.error",
                     &exporter,
                     cfg,
-                    rich_types_runtime_types,
+                    semantic_types_runtime_types,
                 );
                 let ok_transform = render_result_transform_for_phase(
                     dt_ok,
@@ -233,7 +235,7 @@ fn runtime(
                     "v.data",
                     &exporter,
                     cfg,
-                    rich_types_runtime_types,
+                    semantic_types_runtime_types,
                 );
                 let err_transform = render_result_transform_for_phase(
                     dt_err,
@@ -241,7 +243,7 @@ fn runtime(
                     "v.error",
                     &exporter,
                     cfg,
-                    rich_types_runtime_types,
+                    semantic_types_runtime_types,
                 );
 
                 let mut invoke_ts = "typedError".to_string();
@@ -249,7 +251,7 @@ fn runtime(
                     invoke_ts.push('<');
                     invoke_ts.push_str(&render_reference_dt_for_phase(
                         dt_ok,
-                        if ok_rich_type {
+                        if ok_semantic_type {
                             Phase::Deserialize
                         } else {
                             Phase::Serialize
@@ -257,12 +259,12 @@ fn runtime(
                         Phase::Deserialize,
                         &exporter,
                         cfg,
-                        rich_types_runtime_types,
+                        semantic_types_runtime_types,
                     )?);
                     invoke_ts.push_str(", ");
                     invoke_ts.push_str(&render_reference_dt_for_phase(
                         dt_err,
-                        if err_rich_type {
+                        if err_semantic_type {
                             Phase::Deserialize
                         } else {
                             Phase::Serialize
@@ -270,7 +272,7 @@ fn runtime(
                         Phase::Deserialize,
                         &exporter,
                         cfg,
-                        rich_types_runtime_types,
+                        semantic_types_runtime_types,
                     )?);
                     invoke_ts.push('>');
                 }
@@ -304,14 +306,14 @@ fn runtime(
                     .or(command.result());
 
                 if !jsdoc {
-                    let output_rich_type = output_dt.is_some_and(|dt| {
-                        has_rich_type_for_phase(
+                    let output_semantic_type = output_dt.is_some_and(|dt| {
+                        has_semantic_type_for_phase(
                             dt,
                             Phase::Deserialize,
                             "v",
                             &exporter,
                             cfg,
-                            rich_types_runtime_types,
+                            semantic_types_runtime_types,
                         )
                     });
                     invoke_ts.push('<');
@@ -320,7 +322,7 @@ fn runtime(
                             extract_std_result(dt, exporter.types)
                                 .map(|(ok, _)| ok)
                                 .unwrap_or(dt),
-                            if output_rich_type {
+                            if output_semantic_type {
                                 Phase::Deserialize
                             } else {
                                 Phase::Serialize
@@ -328,7 +330,7 @@ fn runtime(
                             Phase::Deserialize,
                             &exporter,
                             cfg,
-                            rich_types_runtime_types,
+                            semantic_types_runtime_types,
                         )?),
                         None => Cow::Borrowed("void"),
                     });
@@ -343,7 +345,7 @@ fn runtime(
                         "v",
                         &exporter,
                         cfg,
-                        rich_types_runtime_types,
+                        semantic_types_runtime_types,
                     )
                 {
                     format!("{invoke_ts}.then((v) => ({mapped} as typeof v))")
@@ -408,7 +410,7 @@ fn runtime(
                     Phase::Deserialize,
                     &exporter,
                     cfg,
-                    rich_types_runtime_types,
+                    semantic_types_runtime_types,
                 )?);
                 field_ts.push('>');
             }
@@ -426,7 +428,7 @@ fn runtime(
                         Phase::Deserialize,
                         &exporter,
                         cfg,
-                        rich_types_runtime_types,
+                        semantic_types_runtime_types,
                     )?
                 )
                 .into();
@@ -513,7 +515,7 @@ fn runtime(
 #[derive(Debug, Clone)]
 struct SpectaFormat {
     disable_serde_phases: bool,
-    rich_types: Option<RichTypesConfiguration>,
+    semantic_types: Option<semantic::Configuration>,
     remapper: Remapper,
 }
 
@@ -542,7 +544,7 @@ impl SpectaFormat {
 
         Self {
             disable_serde_phases: cfg.disable_serde_phases,
-            rich_types: cfg.rich_types.clone(),
+            semantic_types: cfg.semantic_types.clone(),
             remapper,
         }
     }
@@ -556,10 +558,10 @@ impl Format for SpectaFormat {
             specta_serde::PhasesFormat.map_types(types)
         }?;
 
-        Ok(match &self.rich_types {
-            Some(rich_types) => Cow::Owned(
+        Ok(match &self.semantic_types {
+            Some(semantic_types) => Cow::Owned(
                 self.remapper
-                    .remap_types(rich_types.apply_types(&types).into_owned()),
+                    .remap_types(semantic_types.apply_types(&types).into_owned()),
             ),
             None => Cow::Owned(self.remapper.remap_types(types.into_owned())),
         })
@@ -707,56 +709,62 @@ fn render_result_transform_for_phase(
     input: &str,
     _exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
-    rich_types_runtime_types: &Types,
+    semantic_types_runtime_types: &Types,
 ) -> Option<String> {
-    apply_rich_type_for_phase(dt, phase, input, rich_types_runtime_types, cfg)
+    apply_semantic_type_for_phase(dt, phase, input, semantic_types_runtime_types, cfg)
         .map(|(_, mapped)| mapped)
         .filter(|mapped| mapped != input)
 }
 
-fn has_rich_type_for_phase(
+fn has_semantic_type_for_phase(
     dt: &DataType,
     phase: Phase,
     input: &str,
     _exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
-    rich_types_runtime_types: &Types,
+    semantic_types_runtime_types: &Types,
 ) -> bool {
-    apply_rich_type_for_phase(dt, phase, input, rich_types_runtime_types, cfg).is_some()
+    apply_semantic_type_for_phase(dt, phase, input, semantic_types_runtime_types, cfg).is_some()
 }
 
 fn render_reference_dt_for_phase(
     dt: &DataType,
     serde_phase: Phase,
-    rich_type_phase: Phase,
+    semantic_type_phase: Phase,
     exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
-    rich_types_runtime_types: &Types,
+    semantic_types_runtime_types: &Types,
 ) -> Result<String, Error> {
     let dt = specta_serde::select_phase_datatype(dt, exporter.types, serde_phase);
-    let dt = apply_rich_type_for_phase(&dt, rich_type_phase, "v", rich_types_runtime_types, cfg)
-        .and_then(|(dt, _)| dt)
-        .unwrap_or(dt);
+    let dt = apply_semantic_type_for_phase(
+        &dt,
+        semantic_type_phase,
+        "v",
+        semantic_types_runtime_types,
+        cfg,
+    )
+    .and_then(|(dt, _)| dt)
+    .unwrap_or(dt);
 
     render_reference_dt(&dt, exporter)
 }
 
-fn apply_rich_type_for_phase(
+fn apply_semantic_type_for_phase(
     dt: &DataType,
     phase: Phase,
     input: &str,
     types: &Types,
     cfg: &BuilderConfiguration,
 ) -> Option<(Option<DataType>, String)> {
-    let rich_types = cfg.rich_types.as_ref()?;
+    let semantic_types = cfg.semantic_types.as_ref()?;
     match phase {
-        Phase::Serialize => rich_types.apply_serialize(types, dt, input),
-        Phase::Deserialize => rich_types.apply_deserialize(types, dt, input),
+        Phase::Serialize => semantic_types.apply_serialize(types, dt, input),
+        Phase::Deserialize => semantic_types.apply_deserialize(types, dt, input),
     }
 }
 
-fn rich_types_runtime_types(cfg: &BuilderConfiguration) -> Result<Option<Types>, Error> {
-    if cfg.rich_types.is_none() {
+fn semantic_types_runtime_types(cfg: &BuilderConfiguration) -> Result<Option<Types>, Error> {
+    if cfg.semantic_types.is_none() {
         return Ok(None);
     }
 
@@ -766,7 +774,7 @@ fn rich_types_runtime_types(cfg: &BuilderConfiguration) -> Result<Option<Types>,
     } else {
         specta_serde::PhasesFormat.map_types(&types)
     }
-    .map_err(|err| Error::framework("failed to format rich types runtime types", err))?;
+    .map_err(|err| Error::framework("failed to format semantic types runtime types", err))?;
 
     Ok(Some(types.into_owned()))
 }

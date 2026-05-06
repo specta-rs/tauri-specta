@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use specta_typescript::{RichTypesConfiguration, Typescript};
+use specta_typescript::{Typescript, semantic};
 use tauri_specta::*;
 use thiserror::Error;
 
@@ -121,7 +121,7 @@ fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
 }
 
 #[derive(Debug, Serialize, Deserialize, Type)]
-pub struct RichTypes {
+pub struct SemanticTypes {
     date: chrono::DateTime<chrono::Utc>,
     bytes: bytes::Bytes,
     url: url::Url,
@@ -129,7 +129,7 @@ pub struct RichTypes {
 
 #[tauri::command]
 #[specta::specta]
-fn rich_types(arg: RichTypes) -> RichTypes {
+fn semantic_types(arg: SemanticTypes) -> SemanticTypes {
     println!("{arg:?}");
     arg
 }
@@ -154,8 +154,8 @@ pub struct Testing {
 #[allow(deprecated)]
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
-        // TODO: Explain this
-        .rich_types(RichTypesConfiguration::default())
+        // This enables `Date`, `Uint8Array`, and `URL` for supported types.
+        .semantic_types(semantic::Configuration::default())
         // This can be used if you don't want per-phase (Serialize/Deserialize) types.
         // .disable_serde_phases()
         .commands(tauri_specta::collect_commands![
@@ -170,7 +170,7 @@ fn main() {
             phase_specific_rename,
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
-            rich_types,
+            semantic_types,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .typ::<Custom>()

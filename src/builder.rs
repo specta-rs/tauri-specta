@@ -7,7 +7,7 @@ use specta::{
     datatype::{Function, Reference},
 };
 #[cfg(any(feature = "javascript", feature = "typescript"))]
-use specta_typescript::RichTypesConfiguration;
+use specta_typescript::semantic;
 use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// The mode which the error handling is done in the bindings.
@@ -107,9 +107,9 @@ pub struct BuilderConfiguration {
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
     /// Implementation source used for typed frontend error helpers.
     pub typed_error_impl: Cow<'static, str>,
-    /// Rich type handling configuration for supported exporters.
+    /// Semantic type handling configuration for supported exporters.
     #[cfg(any(feature = "javascript", feature = "typescript"))]
-    pub rich_types: Option<RichTypesConfiguration>,
+    pub semantic_types: Option<semantic::Configuration>,
     /// Whether BigInt-style types should be exported as TypeScript `number`.
     #[cfg(any(feature = "javascript", feature = "typescript"))]
     pub dangerously_cast_bigints_to_number: bool,
@@ -288,14 +288,14 @@ impl<R: Runtime> Builder<R> {
         self
     }
 
-    /// Enable rich frontend type handling for exported bindings.
+    /// Enable semantic frontend type handling for exported bindings.
     ///
     /// This opts into runtime transforms and type remapping for transport-specific
-    /// shapes such as bigints or custom rich types.
+    /// shapes such as bigints or custom semantic types.
     ///
     #[cfg(any(feature = "javascript", feature = "typescript"))]
-    pub fn rich_types(mut self, rich_types: RichTypesConfiguration) -> Self {
-        self.cfg.rich_types = Some(rich_types);
+    pub fn semantic_types(mut self, semantic_types: semantic::Configuration) -> Self {
+        self.cfg.semantic_types = Some(semantic_types);
         self
     }
 
