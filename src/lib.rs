@@ -4,25 +4,17 @@
 //!
 //! <section class="warning">
 //!
-//! Tauri Specta v2 is still in beta, and requires using [Tauri v2](https://tauri.app) and [Specta v2](https://github.com/specta-rs/specta) lands as stable.
+//! Tauri Specta v2 is still in beta, and requires using [Specta v2 beta](https://github.com/specta-rs/specta) until it lands as stable.
 //!
-//! It is really important you use `=` in your versions to ensure your project will not break after future updates!
+//! During the beta period, it is really important you use `=` before your Specta version to ensure your project will not break after future updates!
 //!
 //! </section>
 //!
 //! To get started run the following commands to add the required dependencies to your `Cargo.toml`:
 //!
 //! ```sh
-//! # Always required
-//! cargo add tauri@2.0 specta@=2.0.0-rc.21
-//!
-//! # Typescript
-//! cargo add specta-typescript@0.0.9
-//! cargo add tauri-specta@=2.0.0-rc.21 --features derive,typescript
-//!
-//! # JSDoc
-//! cargo add specta-jsdoc@0.0.9
-//! cargo add tauri-specta@=2.0.0-rc.21 --features derive,javascript
+//! cargo add tauri@2.0 specta@=2.0.0-rc.25 specta-typescript@0.0.12
+//! cargo add tauri-specta@=2.0.0-rc.25 --features derive,typescript,javascript # `javascript` for JSDoc, `typescript` for Typescript
 //! ```
 //!
 //! ## Features
@@ -172,6 +164,52 @@
 //! ```
 //!
 //! Refer to [`Event`] for all the possible methods for listening and emitting events.
+//!
+//! ## Phase-specific types
+//!
+//! By default Tauri Specta emits phase-specific types. This means for a Rust type,
+//! you will receive 3 Typescript types like:
+//! ```ts
+//! export type MyType_Serialize = ...;
+//! export type MyType_Deserialize = ...;
+//! export type MyType = MyType_Serialize | MyType_Deserialize;
+//! ```
+//!
+//! Tauri Specta will specialize and use the `_Serialize` type for command arguments,
+//! and the `_Deserialize` type for command results. The union type remains for you to use.
+//!
+//! This allows proper type narrowing on Serde attributes which aren't uniformly applied.
+//!
+//! Refer to [`specta_serde::PhasesFormat`] for more information.
+//!
+//! If you do not want separate serialize/deserialize shapes, you can disable it via [`Builder::disable_serde_phases`].
+//!
+//! ## Semantic frontend types
+//!
+//! Tauri Specta supports enabling [Semantic Types](specta_typescript::semantic).
+//! This enables you to support richer types which have a non-JSON runtime shape for example [`Date`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date), [`Uint8Array`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array), or [`URL`](https://developer.mozilla.org/en-US/docs/Web/API/URL).
+//!
+//! To enable this feature pass in a configuration, like the following:
+//! ```rs
+//! use specta_typescript::semantic;
+//!
+//! tauri_specta::Builder::new()
+//!     // This will enable the built-in rules. Refer to the `semantic` module docs for more information.
+//!     .semantic_types(semantic::Types::default())
+//!     // ...
+//! #;
+//! ```
+//!
+//! Checkout the [`semantic`](specta_typescript::semantic) module docs for more information.
+//!
+//! ## BigInt handling
+//!
+//! By default Specta Typescript forbids exporting large integer types as they will be truncated by the webview.
+//!
+//! [Checkout](specta_typescript::Error#bigint-forbidden) the official Specta guidance on your options to resolve this issue.
+//!
+//! If you would like to opt-in to the dangerous behavior of truncating your integers,
+//! you can use [`Builder::dangerously_cast_bigints_to_number`] but we do not recommend it!
 //!
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(

@@ -30,6 +30,24 @@
 	* @property {string} serialized_value
 	*
 	* @typedef {{
+	*		date: Date,
+	*		bytes: Uint8Array,
+	*		url: URL,
+	*	}} SemanticTypes
+	* @property {Date} date
+	* @property {Uint8Array} bytes
+	* @property {URL} url
+	*
+	* @typedef {{
+	*		date: Date,
+	*		bytes: Uint8Array,
+	*		url: URL,
+	*	}} SemanticTypesEvent
+	* @property {Date} date
+	* @property {Uint8Array} bytes
+	* @property {URL} url
+	*
+	* @typedef {{
 	*		a: string,
 	*	}} Testing
 	* @property {string} a

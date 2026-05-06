@@ -2996,19 +2996,20 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "2.0.0-rc.24"
-source = "git+https://github.com/specta-rs/specta.git?rev=b258d952768088f75381adebcfb5230ee7a625ab#b258d952768088f75381adebcfb5230ee7a625ab"
+source = "git+https://github.com/specta-rs/specta.git?rev=755023833dcc2594079b15b9627bbcc417018580#755023833dcc2594079b15b9627bbcc417018580"
 dependencies = [
  "bytes",
  "chrono",
  "paste",
  "rustc_version",
  "specta-macros",
+ "url",
 ]
 
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.24"
-source = "git+https://github.com/specta-rs/specta.git?rev=b258d952768088f75381adebcfb5230ee7a625ab#b258d952768088f75381adebcfb5230ee7a625ab"
+source = "git+https://github.com/specta-rs/specta.git?rev=755023833dcc2594079b15b9627bbcc417018580#755023833dcc2594079b15b9627bbcc417018580"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -3019,26 +3020,16 @@ dependencies = [
 [[package]]
 name = "specta-serde"
 version = "0.0.11"
-source = "git+https://github.com/specta-rs/specta.git?rev=b258d952768088f75381adebcfb5230ee7a625ab#b258d952768088f75381adebcfb5230ee7a625ab"
+source = "git+https://github.com/specta-rs/specta.git?rev=755023833dcc2594079b15b9627bbcc417018580#755023833dcc2594079b15b9627bbcc417018580"
 dependencies = [
  "specta",
  "specta-macros",
 ]
 
 [[package]]
-name = "specta-tags"
-version = "0.0.0"
-source = "git+https://github.com/specta-rs/specta.git?rev=b258d952768088f75381adebcfb5230ee7a625ab#b258d952768088f75381adebcfb5230ee7a625ab"
-dependencies = [
- "serde",
- "serde_json",
- "specta",
-]
-
-[[package]]
 name = "specta-typescript"
 version = "0.0.11"
-source = "git+https://github.com/specta-rs/specta.git?rev=b258d952768088f75381adebcfb5230ee7a625ab#b258d952768088f75381adebcfb5230ee7a625ab"
+source = "git+https://github.com/specta-rs/specta.git?rev=755023833dcc2594079b15b9627bbcc417018580#755023833dcc2594079b15b9627bbcc417018580"
 dependencies = [
  "specta",
 ]
@@ -3046,7 +3037,7 @@ dependencies = [
 [[package]]
 name = "specta-util"
 version = "0.0.11"
-source = "git+https://github.com/specta-rs/specta.git?rev=b258d952768088f75381adebcfb5230ee7a625ab#b258d952768088f75381adebcfb5230ee7a625ab"
+source = "git+https://github.com/specta-rs/specta.git?rev=755023833dcc2594079b15b9627bbcc417018580#755023833dcc2594079b15b9627bbcc417018580"
 dependencies = [
  "specta",
 ]
@@ -3439,7 +3430,6 @@ dependencies = [
  "serde_json",
  "specta",
  "specta-serde",
- "specta-tags",
  "specta-typescript",
  "specta-util",
  "tauri",
@@ -3462,6 +3452,7 @@ dependencies = [
  "tauri-plugin-os",
  "tauri-specta",
  "thiserror 2.0.18",
+ "url",
 ]
 
 [[package]]
