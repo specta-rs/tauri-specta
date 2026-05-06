@@ -294,7 +294,7 @@ fn runtime(
                         (None, None) => "v".to_string(),
                     };
 
-                    format!("{invoke_ts}.then((v) => {mapper})")
+                    format!("{invoke_ts}.then((v) => ({mapper} as typeof v))")
                 }
             } else {
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
@@ -346,7 +346,7 @@ fn runtime(
                         rich_types_runtime_types,
                     )
                 {
-                    format!("{invoke_ts}.then((v) => {mapped})")
+                    format!("{invoke_ts}.then((v) => ({mapped} as typeof v))")
                 } else {
                     invoke_ts
                 }

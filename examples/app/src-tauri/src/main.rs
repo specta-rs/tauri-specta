@@ -123,6 +123,7 @@ fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
 #[derive(Debug, Serialize, Deserialize, Type)]
 pub struct RichTypes {
     date: chrono::DateTime<chrono::Utc>,
+    bytes: bytes::Bytes,
 }
 
 #[tauri::command]

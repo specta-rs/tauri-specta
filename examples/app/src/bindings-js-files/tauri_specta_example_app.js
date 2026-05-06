@@ -31,8 +31,10 @@
 	*
 	* @typedef {{
 	*		date: Date,
+	*		bytes: Uint8Array,
 	*	}} RichTypes
 	* @property {Date} date
+	* @property {Uint8Array} bytes
 	*
 	* @typedef {{
 	*		a: string,

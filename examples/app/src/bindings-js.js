@@ -49,7 +49,7 @@ export const commands = {
 	 * @param {RichTypes} arg
 	 * @returns {string} myName
 	 */
-	richTypes: (arg) => __TAURI_INVOKE("rich_types", { arg }).then((v) => ({...v,date:new Date(v.date)})),
+	richTypes: (arg) => __TAURI_INVOKE("rich_types", { arg: ({...arg,bytes:[...arg.bytes]}) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes)}) as typeof v)),
 };
 
 /** Events */
@@ -101,8 +101,10 @@ export const universalConstant = 42;
 	*
 	* @typedef {{
 	*		date: Date,
+	*		bytes: Uint8Array,
 	*	}} RichTypes
 	* @property {Date} date
+	* @property {Uint8Array} bytes
 	*
 	* @typedef {{
 	*		a: string,

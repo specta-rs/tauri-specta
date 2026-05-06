@@ -21,6 +21,7 @@ export type PhaseSpecificRename_Serialize = {
 
 export type RichTypes = {
 	date: Date,
+	bytes: Uint8Array,
 };
 
 export type Testing = {
