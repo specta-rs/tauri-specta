@@ -421,7 +421,88 @@ fn runtime(
                         docs.push('\n');
                     }
 
-                    docs.push_str("@returns {string} myName");
+                    let returns = if cfg.error_handling == ErrorHandlingMode::Result
+                        && let Some(result) = command.result()
+                        && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
+                    {
+                        let ok_semantic_type = has_semantic_type_for_phase(
+                            dt_ok,
+                            Phase::Deserialize,
+                            "v.data",
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        );
+                        let err_semantic_type = has_semantic_type_for_phase(
+                            dt_err,
+                            Phase::Deserialize,
+                            "v.error",
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        );
+                        let ok = render_reference_dt_for_phase(
+                            dt_ok,
+                            if ok_semantic_type {
+                                Phase::Deserialize
+                            } else {
+                                Phase::Serialize
+                            },
+                            Phase::Deserialize,
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        )?;
+                        let err = render_reference_dt_for_phase(
+                            dt_err,
+                            if err_semantic_type {
+                                Phase::Deserialize
+                            } else {
+                                Phase::Serialize
+                            },
+                            Phase::Deserialize,
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        )?;
+
+                        format!(
+                            "{{ status: \"ok\"; data: {ok} }} | {{ status: \"error\"; error: {err} }}"
+                        )
+                    } else {
+                        let output_dt = command
+                            .result()
+                            .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
+                            .or(command.result());
+                        let output_semantic_type = output_dt.is_some_and(|dt| {
+                            has_semantic_type_for_phase(
+                                dt,
+                                Phase::Deserialize,
+                                "v",
+                                &exporter,
+                                cfg,
+                                semantic_types_runtime_types,
+                            )
+                        });
+
+                        match output_dt {
+                            Some(dt) => render_reference_dt_for_phase(
+                                dt,
+                                if output_semantic_type {
+                                    Phase::Deserialize
+                                } else {
+                                    Phase::Serialize
+                                },
+                                Phase::Deserialize,
+                                &exporter,
+                                cfg,
+                                semantic_types_runtime_types,
+                            )?,
+                            None => "void".to_string(),
+                        }
+                    };
+
+                    docs.push_str(&format!("@returns {{Promise<{returns}>}}"));
                 }
 
                 docs.into()

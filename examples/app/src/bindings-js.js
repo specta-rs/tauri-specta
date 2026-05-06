@@ -10,45 +10,45 @@ export const commands = {
 	 *  WORLD
 	 *  !!!!
 	 * @param {string} myName
-	 * @returns {string} myName
+	 * @returns {Promise<string>}
 	 */
 	helloWorld: (myName) => __TAURI_INVOKE("hello_world", { myName }),
-	/** @returns {string} myName */
+	/** @returns {Promise<string>} */
 	goodbyeWorld: () => __TAURI_INVOKE("goodbye_world"),
 	/**
 	 * @param {string} myName
-	 * @returns {string} myName
+	 * @returns {Promise<string>}
 	 */
 	asyncHelloWorld: (myName) => __TAURI_INVOKE("async_hello_world", { myName }),
-	/** @returns {string} myName */
+	/** @returns {Promise<{ status: "ok"; data: string } | { status: "error"; error: number }>} */
 	hasError: () => typedError(__TAURI_INVOKE("has_error")),
-	/** @returns {string} myName */
+	/** @returns {Promise<MyStruct>} */
 	someStruct: () => __TAURI_INVOKE("some_struct"),
-	/** @returns {string} myName */
+	/** @returns {Promise<void>} */
 	generic: () => __TAURI_INVOKE("generic"),
 	/**
-	 * @returns {string} myName
+	 * @returns {Promise<void>}
 	 * @deprecated This is a deprecated function
 	 */
 	deprecated: () => __TAURI_INVOKE("deprecated"),
 	/**
 	 * @param {Channel<number>} channel
-	 * @returns {string} myName
+	 * @returns {Promise<void>}
 	 */
 	withChannel: (channel) => __TAURI_INVOKE("with_channel", { channel }),
 	/**
 	 * @param {PhaseSpecificRename_Deserialize} input
-	 * @returns {string} myName
+	 * @returns {Promise<PhaseSpecificRename_Serialize>}
 	 */
 	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
-	/** @returns {string} myName */
+	/** @returns {Promise<{ status: "ok"; data: null } | { status: "error"; error: MyError }>} */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
-	/** @returns {string} myName */
+	/** @returns {Promise<{ status: "ok"; data: null } | { status: "error"; error: MyError2 }>} */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 	/**
 	 * @param {SemanticTypes} arg
 	 * @param {Channel<SemanticTypes>} channel
-	 * @returns {string} myName
+	 * @returns {Promise<SemanticTypes>}
 	 */
 	semanticTypes: (arg, channel) => __TAURI_INVOKE("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel: mapChannel(channel, (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})) }).then((v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})),
 };
