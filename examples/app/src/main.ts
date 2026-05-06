@@ -40,6 +40,14 @@ const channel = new Channel<{ date: Date; bytes: Uint8Array; url: URL }>();
 
 channel.onmessage = (message) => {
   console.log("semanticTypes channel", message);
+  console.log(
+    "SEMANTIC CHANNEL ASSERTIONS",
+    message.date instanceof Date && message.date.getTime() === date.getTime(),
+    message.bytes instanceof Uint8Array &&
+      message.bytes.length === bytes.length &&
+      message.bytes.every((v, i) => v === bytes[i]),
+    message.url instanceof URL && message.url.href === url.href,
+  );
 };
 
 events.semanticTypesEvent.listen((event) => {

@@ -50,7 +50,7 @@ export const commands = {
 	 * @param {Channel<SemanticTypes>} channel
 	 * @returns {string} myName
 	 */
-	semanticTypes: (arg, channel) => __TAURI_INVOKE("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
+	semanticTypes: (arg, channel) => __TAURI_INVOKE("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel: mapChannel(channel, (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
 };
 
 /** Events */
@@ -127,6 +127,18 @@ export const universalConstant = 42;
 	*/
 
 /* Tauri Specta runtime */
+/**
+ * @template T
+ * @param {Channel<T>} channel
+ * @param {(payload: any) => T} deserialize
+ * @returns {Channel<T>}
+ */
+function mapChannel(channel, deserialize) {
+    const onmessage = channel.onmessage;
+    channel.onmessage = (payload) => onmessage(deserialize(payload));
+    return channel;
+}
+
 /**
   * @template T
   * @template E

@@ -24,7 +24,7 @@ export const commands = {
 	phaseSpecificRename: (input: $s$.tauri_specta_example_app.PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<$s$.tauri_specta_example_app.PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
 	typesafeErrorsUsingThiserror: () => typedError<null, $s$.tauri_specta_example_app.MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, $s$.tauri_specta_example_app.MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
-	semanticTypes: (arg: $s$.tauri_specta_example_app.SemanticTypes, channel: Channel<$s$.tauri_specta_example_app.SemanticTypes>) => __TAURI_INVOKE<$s$.tauri_specta_example_app.SemanticTypes>("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
+	semanticTypes: (arg: $s$.tauri_specta_example_app.SemanticTypes, channel: Channel<$s$.tauri_specta_example_app.SemanticTypes>) => __TAURI_INVOKE<$s$.tauri_specta_example_app.SemanticTypes>("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel: mapChannel(channel, (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
 };
 
 /** Events */
@@ -87,6 +87,12 @@ namespace $s$ {
 export import tauri_specta_example_app = $s$.tauri_specta_example_app;
 
 /* Tauri Specta runtime */
+function mapChannel<T>(channel: Channel<T>, deserialize: (payload: any) => T): Channel<T> {
+    const onmessage = channel.onmessage;
+    channel.onmessage = (payload) => onmessage(deserialize(payload));
+    return channel;
+}
+
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
     try {
         return { status: "ok", data: await result };

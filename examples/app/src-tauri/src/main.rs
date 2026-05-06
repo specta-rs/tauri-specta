@@ -131,9 +131,10 @@ pub struct SemanticTypes {
 #[specta::specta]
 fn semantic_types(
     arg: SemanticTypes,
-    _channel: tauri::ipc::Channel<SemanticTypes>,
+    channel: tauri::ipc::Channel<SemanticTypes>,
 ) -> SemanticTypes {
     println!("{arg:?}");
+    channel.send(arg.clone()).ok();
     arg
 }
 

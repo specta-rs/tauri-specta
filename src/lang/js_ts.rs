@@ -36,6 +36,7 @@ impl LanguageExt for specta_typescript::Typescript {
                     },
                     TYPED_ERROR_ASSERTION_TS,
                     MAKE_EVENT_IMPL_TS,
+                    MAP_CHANNEL_IMPL_TS,
                 )
             })
             .export_to(path, &types, format)
@@ -64,6 +65,7 @@ impl LanguageExt for specta_typescript::JSDoc {
                     },
                     "",
                     MAKE_EVENT_IMPL_JS,
+                    MAP_CHANNEL_IMPL_JS,
                 )
             })
             .export_to(path, &types, format)
@@ -77,6 +79,7 @@ fn runtime(
     typed_error_impl: &str,
     typed_error_assertion: &str,
     make_event_impl: &str,
+    map_channel_impl: &str,
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
@@ -109,6 +112,21 @@ fn runtime(
             .any(|(_, dt)| is_channel_type(dt, exporter.types))
             // Check if result contains a Channel
             || command.result().is_some_and(|dt| is_channel_type(dt, exporter.types))
+    });
+    let is_channel_transform_used = cfg.commands.iter().any(|command| {
+        command.args().iter().any(|(_, dt)| {
+            channel_generic_type(dt, exporter.types).is_some_and(|dt| {
+                render_result_transform_for_phase(
+                    dt,
+                    Phase::Deserialize,
+                    "v",
+                    &exporter,
+                    cfg,
+                    semantic_types_runtime_types,
+                )
+                .is_some()
+            })
+        })
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling == ErrorHandlingMode::Result
@@ -191,14 +209,29 @@ fn runtime(
                         .iter()
                         .map(|(name, dt)| {
                             let name = name.to_lower_camel_case();
-                            let value = render_result_transform_for_phase(
-                                dt,
-                                Phase::Serialize,
-                                &name,
-                                &exporter,
-                                cfg,
-                                semantic_types_runtime_types,
-                            );
+                            let value = if let Some(generic) = channel_generic_type(dt, exporter.types)
+                            {
+                                render_result_transform_for_phase(
+                                    generic,
+                                    Phase::Deserialize,
+                                    "v",
+                                    &exporter,
+                                    cfg,
+                                    semantic_types_runtime_types,
+                                )
+                                .map(|transform| {
+                                    format!("mapChannel({name}, (v) => {transform})")
+                                })
+                            } else {
+                                render_result_transform_for_phase(
+                                    dt,
+                                    Phase::Serialize,
+                                    &name,
+                                    &exporter,
+                                    cfg,
+                                    semantic_types_runtime_types,
+                                )
+                            };
 
                             value.map_or(name.clone(), |value| format!("{name}: {value}"))
                         })
@@ -517,9 +550,16 @@ fn runtime(
     }
 
     // Runtime
-    if has_typed_error || enabled_events {
+    if has_typed_error || enabled_events || is_channel_transform_used {
         out.push_str("\n/* Tauri Specta runtime */\n");
 
+        if is_channel_transform_used {
+            out.push_str(map_channel_impl);
+            out.push('\n');
+            if has_typed_error || enabled_events {
+                out.push('\n');
+            }
+        }
         if has_typed_error {
             out.push_str(typed_error_impl);
             out.push('\n');
@@ -726,12 +766,20 @@ fn is_result_ndt(ndt: &NamedDataType) -> bool {
 }
 
 fn is_channel_type(dt: &DataType, types: &Types) -> bool {
-    match dt {
-        DataType::Reference(Reference::Named(r)) => types
-            .get(r)
-            .map(|ndt| ndt.name == "TAURI_CHANNEL" && ndt.module_path.starts_with("tauri::"))
-            .unwrap_or(false),
-        _ => false,
+    channel_generic_type(dt, types).is_some()
+}
+
+fn channel_generic_type<'a>(dt: &'a DataType, types: &Types) -> Option<&'a DataType> {
+    let DataType::Reference(Reference::Named(r)) = dt else {
+        return None;
+    };
+    let ndt = types.get(r)?;
+    if ndt.name != "TAURI_CHANNEL" || !ndt.module_path.starts_with("tauri::") {
+        return None;
+    }
+    match &r.inner {
+        NamedReferenceType::Reference { generics, .. } => generics.first().map(|(_, dt)| dt),
+        NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive => None,
     }
 }
 
@@ -856,6 +904,7 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "__TAURI_INVOKE",
     "typedError",
     "makeEvent",
+    "mapChannel",
 ];
 
 const FRAMEWORK_HEADER: &str =
@@ -868,6 +917,24 @@ const TYPED_ERROR_IMPL_TS: &str = r#"async function typedError<T, E>(result: Pro
         if (e instanceof Error) throw e;
         return { status: "error", error: e as any };
     }
+}"#;
+
+const MAP_CHANNEL_IMPL_TS: &str = r#"function mapChannel<T>(channel: Channel<T>, deserialize: (payload: any) => T): Channel<T> {
+    const onmessage = channel.onmessage;
+    channel.onmessage = (payload) => onmessage(deserialize(payload));
+    return channel;
+}"#;
+
+const MAP_CHANNEL_IMPL_JS: &str = r#"/**
+ * @template T
+ * @param {Channel<T>} channel
+ * @param {(payload: any) => T} deserialize
+ * @returns {Channel<T>}
+ */
+function mapChannel(channel, deserialize) {
+    const onmessage = channel.onmessage;
+    channel.onmessage = (payload) => onmessage(deserialize(payload));
+    return channel;
 }"#;
 
 const TYPED_ERROR_IMPL_JS: &str = r#"/**
