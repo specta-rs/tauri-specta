@@ -77,12 +77,7 @@ specta-util = { version = "0.0.11" }
 
 # TODO: Remove patches
 [patch.crates-io]
-# specta = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
-# specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
-# specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
-# specta-util = { git = "https://github.com/specta-rs/specta.git", rev = "b258d952768088f75381adebcfb5230ee7a625ab" }
-
-specta = { path = "/Users/oscar/files/specta/specta" }
-specta-typescript = { path = "/Users/oscar/files/specta/specta-typescript" }
-specta-serde = { path = "/Users/oscar/files/specta/specta-serde" }
-specta-util = { path = "/Users/oscar/files/specta/specta-util" }
+specta = { git = "https://github.com/specta-rs/specta.git", rev = "755023833dcc2594079b15b9627bbcc417018580" }
+specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "755023833dcc2594079b15b9627bbcc417018580" }
+specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "755023833dcc2594079b15b9627bbcc417018580" }
+specta-util = { git = "https://github.com/specta-rs/specta.git", rev = "755023833dcc2594079b15b9627bbcc417018580" }
