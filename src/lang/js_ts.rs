@@ -209,7 +209,8 @@ fn runtime(
                         .iter()
                         .map(|(name, dt)| {
                             let name = name.to_lower_camel_case();
-                            let value = if let Some(generic) = channel_generic_type(dt, exporter.types)
+                            let value = if let Some(generic) =
+                                channel_generic_type(dt, exporter.types)
                             {
                                 render_result_transform_for_phase(
                                     generic,
@@ -219,9 +220,8 @@ fn runtime(
                                     cfg,
                                     semantic_types_runtime_types,
                                 )
-                                .map(|transform| {
-                                    format!("mapChannel({name}, (v) => {transform})")
-                                })
+                                .map(|transform| jsdoc_transform(transform, "v", jsdoc))
+                                .map(|transform| format!("mapChannel({name}, (v) => {transform})"))
                             } else {
                                 render_result_transform_for_phase(
                                     dt,
@@ -231,6 +231,7 @@ fn runtime(
                                     cfg,
                                     semantic_types_runtime_types,
                                 )
+                                .map(|transform| jsdoc_transform(transform, &name, jsdoc))
                             };
 
                             value.map_or(name.clone(), |value| format!("{name}: {value}"))
@@ -269,7 +270,8 @@ fn runtime(
                     &exporter,
                     cfg,
                     semantic_types_runtime_types,
-                );
+                )
+                .map(|transform| jsdoc_transform(transform, "v.data", jsdoc));
                 let err_transform = render_result_transform_for_phase(
                     dt_err,
                     Phase::Deserialize,
@@ -277,7 +279,8 @@ fn runtime(
                     &exporter,
                     cfg,
                     semantic_types_runtime_types,
-                );
+                )
+                .map(|transform| jsdoc_transform(transform, "v.error", jsdoc));
 
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
@@ -329,7 +332,11 @@ fn runtime(
                         (None, None) => "v".to_string(),
                     };
 
-                    format!("{invoke_ts}.then((v) => ({mapper} as typeof v))")
+                    if jsdoc {
+                        format!("{invoke_ts}.then((v) => {mapper})")
+                    } else {
+                        format!("{invoke_ts}.then((v) => ({mapper} as typeof v))")
+                    }
                 }
             } else {
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
@@ -380,8 +387,13 @@ fn runtime(
                         cfg,
                         semantic_types_runtime_types,
                     )
+                    .map(|transform| jsdoc_transform(transform, "v", jsdoc))
                 {
-                    format!("{invoke_ts}.then((v) => ({mapped} as typeof v))")
+                    if jsdoc {
+                        format!("{invoke_ts}.then((v) => {mapped})")
+                    } else {
+                        format!("{invoke_ts}.then((v) => ({mapped} as typeof v))")
+                    }
                 } else {
                     invoke_ts
                 }
@@ -457,7 +469,8 @@ fn runtime(
                 &exporter,
                 cfg,
                 semantic_types_runtime_types,
-            );
+            )
+            .map(|transform| jsdoc_transform(transform, "v", jsdoc));
             let deserialize_transform = render_result_transform_for_phase(
                 &event_dt,
                 Phase::Deserialize,
@@ -465,7 +478,8 @@ fn runtime(
                 &exporter,
                 cfg,
                 semantic_types_runtime_types,
-            );
+            )
+            .map(|transform| jsdoc_transform(transform, "v", jsdoc));
 
             if serialize_transform.is_some() || deserialize_transform.is_some() {
                 field_ts.push_str(", ");
@@ -803,6 +817,14 @@ fn render_result_transform_for_phase(
     apply_semantic_type_for_phase(&dt, phase, input, semantic_types_runtime_types, cfg)
         .map(|(_, mapped)| mapped)
         .filter(|mapped| mapped != input)
+}
+
+fn jsdoc_transform(transform: String, input: &str, jsdoc: bool) -> String {
+    if jsdoc {
+        transform.replace(&format!(" as typeof {input}"), "")
+    } else {
+        transform
+    }
 }
 
 fn has_semantic_type_for_phase(

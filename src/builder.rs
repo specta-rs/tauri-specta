@@ -293,15 +293,17 @@ impl<R: Runtime> Builder<R> {
     /// This opts into runtime transforms and type remapping for transport-specific
     /// shapes such as bigints or custom semantic types.
     ///
+    /// See the [`specta_typescript::semantic`](https://docs.rs/specta-typescript/latest/specta_typescript/semantic/index.html)
+    /// docs for configuration details.
     #[cfg(any(feature = "javascript", feature = "typescript"))]
     pub fn semantic_types(mut self, semantic_types: semantic::Configuration) -> Self {
         self.cfg.semantic_types = Some(semantic_types);
         self
     }
 
-    /// Export BigInt-style types as TypeScript `number`.
+    /// Dangerously export BigInt-style types as TypeScript `number`.
     ///
-    /// This can lose precision for values that exceed JavaScript's safe integer range.
+    /// This is dangerous as large numbers may be truncated or lose precision. Refer to the [upstream guidance](https://docs.rs/specta-typescript/latest/specta_typescript/struct.Error.html#bigint-forbidden) for more information.
     #[cfg(any(feature = "javascript", feature = "typescript"))]
     pub fn dangerously_cast_bigints_to_number(mut self) -> Self {
         self.cfg.dangerously_cast_bigints_to_number = true;

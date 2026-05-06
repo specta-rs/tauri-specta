@@ -4,25 +4,17 @@
 //!
 //! <section class="warning">
 //!
-//! Tauri Specta v2 is still in beta, and requires using [Tauri v2](https://tauri.app) and [Specta v2](https://github.com/specta-rs/specta) lands as stable.
+//! Tauri Specta v2 is still in beta, and requires using [Specta v2 beta](https://github.com/specta-rs/specta) until it lands as stable.
 //!
-//! It is really important you use `=` in your versions to ensure your project will not break after future updates!
+//! During the beta period, it is really important you use `=` before your Specta version to ensure your project will not break after future updates!
 //!
 //! </section>
 //!
 //! To get started run the following commands to add the required dependencies to your `Cargo.toml`:
 //!
 //! ```sh
-//! # Always required
-//! cargo add tauri@2.0 specta@=2.0.0-rc.21
-//!
-//! # Typescript
-//! cargo add specta-typescript@0.0.9
-//! cargo add tauri-specta@=2.0.0-rc.21 --features derive,typescript
-//!
-//! # JSDoc
-//! cargo add specta-jsdoc@0.0.9
-//! cargo add tauri-specta@=2.0.0-rc.21 --features derive,javascript
+//! cargo add tauri@2.0 specta@=2.0.0-rc.25 specta-typescript@0.0.12
+//! cargo add tauri-specta@=2.0.0-rc.25 --features derive,typescript,javascript # `javascript` for JSDoc, `typescript` for Typescript
 //! ```
 //!
 //! ## Features
@@ -172,6 +164,67 @@
 //! ```
 //!
 //! Refer to [`Event`] for all the possible methods for listening and emitting events.
+//!
+//! ## Phase-specific types
+//!
+//! Tauri Specta exports bindings from the point of view of the frontend. Command
+//! arguments and emitted event payloads are values that JavaScript sends to Rust,
+//! while command results and received event payloads are values that Rust sends to
+//! JavaScript. These two directions can have different serialized shapes when a
+//! type uses phase-specific Serde attributes such as
+//! `#[serde(rename(serialize = "...", deserialize = "..."))]`.
+//!
+//! By default, exported TypeScript and JSDoc bindings preserve those differences
+//! using Specta's phase-aware Serde formatting. Command inputs are rendered using
+//! the deserialize phase because Rust deserializes them from JavaScript, command
+//! outputs are rendered using the serialize phase because Rust serializes them to
+//! JavaScript, and events apply the appropriate phase for `emit` and `listen`.
+//! This keeps the generated frontend API aligned with the actual wire format used
+//! by Tauri and Serde.
+//!
+//! If you do not want separate serialize/deserialize shapes, call
+//! [`Builder::disable_serde_phases`]. That switches export back to unified Serde
+//! formatting, which is simpler but cannot represent phase-specific Serde behavior
+//! accurately.
+//!
+//! ## Semantic frontend types
+//!
+//! Some Rust types have a JSON-compatible transport shape but a richer JavaScript
+//! runtime shape. For example, dates usually cross the IPC boundary as strings,
+//! byte buffers as arrays, and URLs as strings, but frontend code often wants to
+//! work with `Date`, `Uint8Array`, or `URL` values directly.
+//!
+//! [`Builder::semantic_types`] enables Specta TypeScript's semantic type system for
+//! generated TypeScript and JSDoc bindings. When configured, Tauri Specta uses the
+//! semantic rules to remap exported types and to inject runtime transforms around
+//! command arguments, command results, event payloads, and channel payloads. The
+//! default [`specta_typescript::semantic::Configuration`] handles common ecosystem
+//! types such as `chrono` dates, `jiff` dates, `bytes` buffers, and `url::Url`, and
+//! custom rules can be added with Specta TypeScript's semantic APIs.
+//!
+//! See the [`specta_typescript::semantic`] module documentation for the full list
+//! of built-in semantic rules and for custom rule examples.
+//!
+//! ## BigInt handling
+//!
+//! Specta TypeScript forbids exporting BigInt-style Rust numeric types such as
+//! `usize`, `isize`, `i64`, `u64`, `i128`, `u128`, and `f128` as TypeScript
+//! `number` by default. This is intentional: values outside JavaScript's safe
+//! integer range can lose precision when they are parsed or represented as
+//! `number`.
+//!
+//! Prefer modelling these values losslessly, such as using a smaller integer type
+//! when the range is known to be safe, or serializing large integers as strings and
+//! converting them to `bigint` on the frontend. Specta's upstream BigInt error
+//! documentation describes the tradeoffs and migration paths in more detail:
+//! <https://docs.rs/specta-typescript/latest/specta_typescript/struct.Error.html#bigint-forbidden>.
+//!
+//! [`Builder::dangerously_cast_bigints_to_number`] is an escape hatch for cases
+//! where you explicitly accept precision loss. It remaps BigInt-style primitive
+//! types, and `specta_typescript::BigInt`, to TypeScript `number` during export.
+//! This is crate-wide for the builder and should be treated like an unsafe policy
+//! decision: it can make generated bindings compile, but it does not make large
+//! numeric values safe to round-trip through JavaScript.
 //!
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
