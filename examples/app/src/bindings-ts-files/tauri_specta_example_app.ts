@@ -19,6 +19,18 @@ export type PhaseSpecificRename_Serialize = {
 	serialized_value: string,
 };
 
+export type SemanticTypes = {
+	date: Date,
+	bytes: Uint8Array,
+	url: URL,
+};
+
+export type SemanticTypesEvent = {
+	date: Date,
+	bytes: Uint8Array,
+	url: URL,
+};
+
 export type Testing = {
 	a: string,
 };

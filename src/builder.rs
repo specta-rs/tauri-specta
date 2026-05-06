@@ -14,6 +14,8 @@ use specta::{
     Type, Types,
     datatype::{Function, Reference},
 };
+#[cfg(any(feature = "javascript", feature = "typescript"))]
+use specta_typescript::semantic;
 use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// The mode which the error handling is done in the bindings.
@@ -36,12 +38,12 @@ pub enum ErrorHandlingMode {
 ///
 /// You can extend this example by calling other methods on the builder to configure your application further.
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use tauri_specta::{collect_commands, collect_events, Builder};
 /// use specta_typescript::Typescript;
 ///
 ///
-/// let mut builder = <Builder>::new()
+/// let mut builder = Builder::new()
 ///     .commands(collect_commands![])
 ///     .events(collect_events![]);
 ///
@@ -57,19 +59,18 @@ pub enum ErrorHandlingMode {
 ///
 ///         Ok(())
 ///     })
-///     // on an actual app, remove the string argument
-///     .run(tauri::generate_context!("tests/tauri.conf.json"))
+///     .run(tauri::test::mock_context(tauri::test::noop_assets()))
 ///     .expect("error while running tauri application");
 /// ```
 ///
 /// # Exporting using JSDoc
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use tauri_specta::{collect_commands,collect_events,Builder};
-/// use specta_jsdoc::JSDoc;
+/// use specta_typescript::JSDoc;
 ///
 ///
-/// let mut builder = <Builder>::new()
+/// let mut builder = Builder::new()
 ///     .commands(collect_commands![])
 ///     .events(collect_events![]);
 ///
@@ -86,8 +87,7 @@ pub enum ErrorHandlingMode {
 ///
 ///         Ok(())
 ///     })
-///     // on an actual app, remove the string argument
-///     .run(tauri::generate_context!("tests/tauri.conf.json"))
+///     .run(tauri::test::mock_context(tauri::test::noop_assets()))
 ///     .expect("error while running tauri application");
 /// ```
 #[derive(Debug)]
@@ -123,8 +123,12 @@ pub struct BuilderConfiguration {
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
     /// Implementation source used for typed frontend error helpers.
     pub typed_error_impl: Cow<'static, str>,
-    /// Whether nuanced type generation is enabled for supported exporters.
-    pub enable_nuanced_types: bool,
+    /// Semantic type handling configuration for supported exporters.
+    #[cfg(any(feature = "javascript", feature = "typescript"))]
+    pub semantic_types: Option<semantic::Configuration>,
+    /// Whether BigInt-style types should be exported as TypeScript `number`.
+    #[cfg(any(feature = "javascript", feature = "typescript"))]
+    pub dangerously_cast_bigints_to_number: bool,
     /// Whether serde serialize/deserialize phase differences should be ignored.
     pub disable_serde_phases: bool,
 }
@@ -186,7 +190,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use tauri_specta::{Builder, collect_commands};
     ///
     /// #[tauri::command]
@@ -275,7 +279,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use serde::{Serialize, Deserialize};
     /// use specta::Type;
     /// use tauri_specta::{Builder, collect_events, Event};
@@ -300,7 +304,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use tauri_specta::Builder;
     /// use serde::{Serialize, Deserialize};
     /// use specta::Type;
@@ -323,7 +327,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use tauri_specta::Builder;
     /// use specta::{Type, Types};
     ///
@@ -340,7 +344,7 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use tauri_specta::Builder;
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().constant("CONSTANT_NAME","ANY_CONSTANT_VALUE");
@@ -383,16 +387,25 @@ impl<R: Runtime> Builder<R> {
         self
     }
 
-    /// Enable nuanced frontend type handling for exported bindings.
+    /// Enable semantic frontend type handling for exported bindings.
     ///
-    /// This opts into runtime transforms for values such as bigints and other
-    /// transport-specific shapes which require client-side restoration.
+    /// This opts into runtime transforms and type remapping for transport-specific
+    /// shapes such as bigints or custom semantic types.
     ///
-    /// NOTE: The runtime behavior of this isn't guarantee without a Tauri crates.io patch so ensure you are careful!
-    /// NOTE: This will be enabled by default in future releases.
-    /// TODO: Flip this to be enabled by default
-    pub fn unstable_nuanced_types(mut self) -> Self {
-        self.cfg.enable_nuanced_types = true;
+    /// See the [`specta_typescript::semantic`](https://docs.rs/specta-typescript/latest/specta_typescript/semantic/index.html)
+    /// docs for configuration details.
+    #[cfg(any(feature = "javascript", feature = "typescript"))]
+    pub fn semantic_types(mut self, semantic_types: semantic::Configuration) -> Self {
+        self.cfg.semantic_types = Some(semantic_types);
+        self
+    }
+
+    /// Dangerously export BigInt-style types as TypeScript `number`.
+    ///
+    /// This is dangerous as large numbers may be truncated or lose precision. Refer to the [upstream guidance](https://docs.rs/specta-typescript/latest/specta_typescript/struct.Error.html#bigint-forbidden) for more information.
+    #[cfg(any(feature = "javascript", feature = "typescript"))]
+    pub fn dangerously_cast_bigints_to_number(mut self) -> Self {
+        self.cfg.dangerously_cast_bigints_to_number = true;
         self
     }
 
@@ -433,10 +446,10 @@ impl<R: Runtime> Builder<R> {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
     /// use tauri_specta::{Builder, collect_events};
     ///
-    /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![]);
+    /// let mut builder = Builder::new().events(collect_events![]);
     ///
     /// tauri::Builder::default()
     ///     .setup(move |app| {
@@ -444,8 +457,7 @@ impl<R: Runtime> Builder<R> {
     ///
     ///         Ok(())
     ///     })
-    ///     // on an actual app, remove the string argument
-    ///     .run(tauri::generate_context!("tests/tauri.conf.json"))
+    ///     .run(tauri::test::mock_context(tauri::test::noop_assets()))
     ///     .expect("error while running tauri application");
     /// ```
     pub fn mount_events(&self, handle: &impl Manager<R>) {
@@ -465,7 +477,7 @@ impl<R: Runtime> Builder<R> {
     /// Export the bindings to the filesystem using the provided exporter.
     ///
     /// # Example
-    /// ```rust,ignore-windows
+    /// ```rust
     /// use tauri_specta::{Builder, collect_commands, collect_events};
     /// use specta_typescript::Typescript;
     ///

@@ -10,65 +10,57 @@ export const commands = {
 	 *  WORLD
 	 *  !!!!
 	 * @param {string} myName
-	 * @returns {string} myName
+	 * @returns {Promise<string>}
 	 */
 	helloWorld: (myName) => __TAURI_INVOKE("hello_world", { myName }),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {Promise<string>} */
 	goodbyeWorld: () => __TAURI_INVOKE("goodbye_world"),
 	/**
 	 * @param {string} myName
-	 * @returns {string} myName
+	 * @returns {Promise<string>}
 	 */
 	asyncHelloWorld: (myName) => __TAURI_INVOKE("async_hello_world", { myName }),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {Promise<{ status: "ok"; data: string } | { status: "error"; error: number }>} */
 	hasError: () => typedError(__TAURI_INVOKE("has_error")),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {Promise<MyStruct>} */
 	someStruct: () => __TAURI_INVOKE("some_struct"),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {Promise<void>} */
 	generic: () => __TAURI_INVOKE("generic"),
 	/**
-	 * @returns {string} myName
+	 * @returns {Promise<void>}
 	 * @deprecated This is a deprecated function
 	 */
 	deprecated: () => __TAURI_INVOKE("deprecated"),
 	/**
 	 * @param {Channel<number>} channel
-	 * @returns {string} myName
+	 * @returns {Promise<void>}
 	 */
 	withChannel: (channel) => __TAURI_INVOKE("with_channel", { channel }),
 	/**
 	 * @param {PhaseSpecificRename_Deserialize} input
-	 * @returns {string} myName
+	 * @returns {Promise<PhaseSpecificRename_Serialize>}
 	 */
 	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {Promise<{ status: "ok"; data: null } | { status: "error"; error: MyError }>} */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
-	/**
-	 * @returns {string} myName
-	 */
+	/** @returns {Promise<{ status: "ok"; data: null } | { status: "error"; error: MyError2 }>} */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
+	/**
+	 * @param {SemanticTypes} arg
+	 * @param {Channel<SemanticTypes>} channel
+	 * @returns {Promise<SemanticTypes>}
+	 */
+	semanticTypes: (arg, channel) => __TAURI_INVOKE("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel: mapChannel(channel, (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})) }).then((v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})),
 };
 
 /** Events */
 export const events = {
-	/**
-	 * @type {ReturnType<typeof makeEvent<EmptyEvent>>}
-	 */
+	/** @type {ReturnType<typeof makeEvent<EmptyEvent>>} */
 	emptyEvent: makeEvent("empty-event"),
-	/**
-	 * @type {ReturnType<typeof makeEvent<DemoEvent>>}
-	 */
+	/** @type {ReturnType<typeof makeEvent<DemoEvent>>} */
 	myDemoEvent: makeEvent("myDemoEvent"),
+	/** @type {ReturnType<typeof makeEvent<SemanticTypesEvent>>} */
+	semanticTypesEvent: makeEvent("semantic-types-event", (v) => ({...v,bytes:[...v.bytes]}), (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})),
 };
 
 /* Constants */
@@ -111,12 +103,40 @@ export const universalConstant = 42;
 	* @property {string} serialized_value
 	*
 	* @typedef {{
+	*		date: Date,
+	*		bytes: Uint8Array,
+	*		url: URL,
+	*	}} SemanticTypes
+	* @property {Date} date
+	* @property {Uint8Array} bytes
+	* @property {URL} url
+	*
+	* @typedef {{
+	*		date: Date,
+	*		bytes: Uint8Array,
+	*		url: URL,
+	*	}} SemanticTypesEvent
+	* @property {Date} date
+	* @property {Uint8Array} bytes
+	* @property {URL} url
+	*
+	* @typedef {{
 	*		a: string,
 	*	}} Testing
 	* @property {string} a
 	*/
 
 /* Tauri Specta runtime */
+/**
+ * @template T
+ * @param {Channel<T>} channel
+ * @param {(payload: any) => T} deserialize
+ * @returns {Channel<T>}
+ */
+function mapChannel(channel, deserialize) {
+    return new Channel((payload) => channel.onmessage(deserialize(payload)));
+}
+
 /**
   * @template T
   * @template E
@@ -135,25 +155,30 @@ async function typedError(result) {
 /**
  * @template T
  * @param {string} name
+ * @param {(payload: T) => unknown} [serialize]
+ * @param {(payload: any) => T} [deserialize]
  */
-function makeEvent(name) {
+function makeEvent(name, serialize, deserialize) {
+    const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapPayload = (payload) => serialize ? serialize(payload) : payload;
+
     const base = {
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        listen: (cb) => __TAURI_EVENT.listen(name, cb),
+        listen: (cb) => __TAURI_EVENT.listen(name, mapEvent(cb)),
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        once: (cb) => __TAURI_EVENT.once(name, cb),
+        once: (cb) => __TAURI_EVENT.once(name, mapEvent(cb)),
         /** @param {T} payload */
-        emit: (payload) => __TAURI_EVENT.emit(name, payload),
+        emit: (payload) => __TAURI_EVENT.emit(name, mapPayload(payload)),
     };
 
     /** @param {import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window} target */
     const fn = (target) => ({
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        listen: (cb) => target.listen(name, cb),
+        listen: (cb) => target.listen(name, mapEvent(cb)),
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        once: (cb) => target.once(name, cb),
+        once: (cb) => target.once(name, mapEvent(cb)),
         /** @param {T} payload */
-        emit: (payload) => target.emit(name, payload),
+        emit: (payload) => target.emit(name, mapPayload(payload)),
     });
 
     return Object.assign(fn, base);
