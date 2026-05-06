@@ -167,18 +167,17 @@
 //!
 //! ## Phase-specific types
 //!
-//! By default Tauri Specta emits phase-specific types. This means for a Rust type,
-//! you will receive 3 Typescript types like:
+//! By default, Tauri Specta exports types using Serde-aware serialize and deserialize phases. When a Rust type has different Serde shapes for serialization and deserialization, Tauri Specta emits separate TypeScript aliases for those phases:
+//!
 //! ```ts
 //! export type MyType_Serialize = ...;
 //! export type MyType_Deserialize = ...;
 //! export type MyType = MyType_Serialize | MyType_Deserialize;
 //! ```
 //!
-//! Tauri Specta will specialize and use the `_Serialize` type for command arguments,
-//! and the `_Deserialize` type for command results. The union type remains for you to use.
+//! Tauri Specta will ensure command arguments use the deserialize shape, and command results use the serialize shape. If the serialize and deserialize shapes are identical, only the normal type alias may be emitted.
 //!
-//! This allows proper type narrowing on Serde attributes which aren't uniformly applied.
+//! This allows proper type narrowing on Serde attributes which aren't uniformly applied like `rename(serialize = ..., deserialize = ...)`, `skip_serializing`, or `skip_deserializing`.
 //!
 //! Refer to [`specta_serde::PhasesFormat`] for more information.
 //!
