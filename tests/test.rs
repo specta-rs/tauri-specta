@@ -9,25 +9,25 @@ use tauri::{Runtime, State, Window};
 #[tauri::command]
 #[specta]
 fn basic() -> String {
-    format!("Hello, world!")
+    "Hello, world!".to_string()
 }
 
 #[tauri::command]
 #[specta]
 fn result() -> Result<String, ()> {
-    Ok(format!("Hello, world!"))
+    Ok("Hello, world!".to_string())
 }
 
 #[tauri::command(async)]
 #[specta]
 async fn async_() -> String {
-    format!("Hello, world!")
+    "Hello, world!".to_string()
 }
 
 #[tauri::command(async)]
 #[specta]
 async fn async_result() -> Result<String, ()> {
-    Ok(format!("Hello, world!"))
+    Ok("Hello, world!".to_string())
 }
 
 #[tauri::command(async)]
@@ -41,29 +41,30 @@ async fn async_impl() -> impl Serialize + Type {
 #[tauri::command]
 #[specta]
 fn value(input: String) -> String {
-    format!("Hello, world!")
+    "Hello, world!".to_string()
 }
 
 #[tauri::command]
 #[specta]
 fn state(state: State<String>) -> String {
-    format!("Hello, world!")
+    "Hello, world!".to_string()
 }
 
 #[tauri::command]
 #[specta]
 fn window<R: Runtime>(window: Window<R>) -> String {
-    format!("Hello, world!")
+    "Hello, world!".to_string()
 }
 
 #[tauri::command]
 #[specta]
 fn state_value(state: State<()>, a: String) -> String {
-    format!("Hello, world!")
+    "Hello, world!".to_string()
 }
 
 #[tauri::command]
 #[specta]
+#[allow(clippy::boxed_local)]
 fn state_many_values(state: State<()>, a: String, b: i32, c: bool, d: Box<u128>) -> String {
-    format!("Hello, world!")
+    "Hello, world!".to_string()
 }

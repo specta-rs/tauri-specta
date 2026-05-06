@@ -179,7 +179,7 @@ fn runtime(
                             Phase::Deserialize,
                             Phase::Serialize,
                             &exporter,
-                            &cfg,
+                            cfg,
                             semantic_types_runtime_types,
                         )?,
                     ))
