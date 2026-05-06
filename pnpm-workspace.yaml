@@ -1,3 +1,4 @@
 packages:
   - 'examples/app'
   - 'examples/custom-plugin/*'
+  - 'examples/tanstack-query'
