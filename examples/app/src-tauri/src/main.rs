@@ -124,6 +124,7 @@ fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
 pub struct RichTypes {
     date: chrono::DateTime<chrono::Utc>,
     bytes: bytes::Bytes,
+    url: url::Url,
 }
 
 #[tauri::command]

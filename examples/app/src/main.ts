@@ -34,12 +34,14 @@ events.emptyEvent(appWindow).listen((e) => console.log("Window event", e));
 
 const date = new Date();
 const bytes = new Uint8Array([1, 2, 3, 4]);
-commands.richTypes({ date, bytes }).then((result) => {
+const url = new URL("https://specta.dev/docs?example=rich-types");
+commands.richTypes({ date, bytes, url }).then((result) => {
   console.log("richTypes", result);
   console.log(
     "RICH TYPE ASSERTIONS",
     result.date.getTime() === date.getTime(),
     result.bytes.length === bytes.length &&
       result.bytes.every((v, i) => v === bytes[i]),
+    result.url.href === url.href,
   );
 });

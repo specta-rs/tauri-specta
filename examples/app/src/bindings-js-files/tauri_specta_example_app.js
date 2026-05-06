@@ -32,9 +32,11 @@
 	* @typedef {{
 	*		date: Date,
 	*		bytes: Uint8Array,
+	*		url: URL,
 	*	}} RichTypes
 	* @property {Date} date
 	* @property {Uint8Array} bytes
+	* @property {URL} url
 	*
 	* @typedef {{
 	*		a: string,

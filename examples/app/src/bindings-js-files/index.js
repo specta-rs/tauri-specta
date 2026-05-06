@@ -53,7 +53,7 @@ export const commands = {
 	 * @param {tauri_specta_example_app.RichTypes} arg
 	 * @returns {string} myName
 	 */
-	richTypes: (arg) => __TAURI_INVOKE("rich_types", { arg: ({...arg,bytes:[...arg.bytes]}) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes)}) as typeof v)),
+	richTypes: (arg) => __TAURI_INVOKE("rich_types", { arg: ({...arg,bytes:[...arg.bytes]}) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
 };
 
 /** Events */

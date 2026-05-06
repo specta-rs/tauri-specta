@@ -3002,6 +3002,7 @@ dependencies = [
  "paste",
  "rustc_version",
  "specta-macros",
+ "url",
 ]
 
 [[package]]
@@ -3447,6 +3448,7 @@ dependencies = [
  "tauri-plugin-os",
  "tauri-specta",
  "thiserror 2.0.18",
+ "url",
 ]
 
 [[package]]
