@@ -19,6 +19,10 @@ export type PhaseSpecificRename_Serialize = {
 	serialized_value: string,
 };
 
+export type RichTypes = {
+	date: Date,
+};
+
 export type Testing = {
 	a: string,
 };

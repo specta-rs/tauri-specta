@@ -30,6 +30,11 @@
 	* @property {string} serialized_value
 	*
 	* @typedef {{
+	*		date: Date,
+	*	}} RichTypes
+	* @property {Date} date
+	*
+	* @typedef {{
 	*		a: string,
 	*	}} Testing
 	* @property {string} a

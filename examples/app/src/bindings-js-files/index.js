@@ -49,6 +49,11 @@ export const commands = {
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	/** @returns {string} myName */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
+	/**
+	 * @param {tauri_specta_example_app.RichTypes} arg
+	 * @returns {string} myName
+	 */
+	richTypes: (arg) => __TAURI_INVOKE("rich_types", { arg }).then((v) => ({...v,date:new Date(v.date)})),
 };
 
 /** Events */

@@ -31,3 +31,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
 events.emptyEvent.listen((e) => console.log("Global event", e));
 events.emptyEvent(appWindow).listen((e) => console.log("Window event", e));
+
+const originalDate = new Date();
+commands.richTypes({ date: originalDate }).then((v) => {
+  console.log("richTypes", v);
+  console.log("RICH TYPE ASSERTIONS", v.date === originalDate);
+});

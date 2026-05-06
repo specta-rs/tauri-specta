@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use specta_typescript::Typescript;
+use specta_typescript::{RichTypesConfiguration, Typescript};
 use tauri_specta::*;
 use thiserror::Error;
 
@@ -120,6 +120,18 @@ fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
     Err(std::io::Error::other("oh no!").into()) // We use `into` here to do the `From` conversion.
 }
 
+#[derive(Debug, Serialize, Deserialize, Type)]
+pub struct RichTypes {
+    date: chrono::DateTime<chrono::Utc>,
+}
+
+#[tauri::command]
+#[specta::specta]
+fn rich_types(arg: RichTypes) -> RichTypes {
+    println!("{arg:?}");
+    arg
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
 #[tauri_specta(event_name = "myDemoEvent")] // Optionally rename event key (for JS/TS)
 pub struct DemoEvent(String);
@@ -140,6 +152,8 @@ pub struct Testing {
 #[allow(deprecated)]
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
+        // TODO: Explain this
+        .rich_types(RichTypesConfiguration::default())
         // This can be used if you don't want per-phase (Serialize/Deserialize) types.
         // .disable_serde_phases()
         .commands(tauri_specta::collect_commands![
@@ -154,6 +168,7 @@ fn main() {
             phase_specific_rename,
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
+            rich_types,
         ])
         .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
         .typ::<Custom>()

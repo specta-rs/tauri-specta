@@ -6,6 +6,8 @@ use specta::{
     Type, Types,
     datatype::{Function, Reference},
 };
+#[cfg(any(feature = "javascript", feature = "typescript"))]
+use specta_typescript::RichTypesConfiguration;
 use tauri::{Manager, Runtime, ipc::Invoke};
 
 /// The mode which the error handling is done in the bindings.
@@ -105,8 +107,9 @@ pub struct BuilderConfiguration {
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
     /// Implementation source used for typed frontend error helpers.
     pub typed_error_impl: Cow<'static, str>,
-    /// Whether nuanced type generation is enabled for supported exporters.
-    pub enable_nuanced_types: bool,
+    /// Rich type handling configuration for supported exporters.
+    #[cfg(any(feature = "javascript", feature = "typescript"))]
+    pub rich_types: Option<RichTypesConfiguration>,
     /// Whether serde serialize/deserialize phase differences should be ignored.
     pub disable_serde_phases: bool,
 }
@@ -282,16 +285,14 @@ impl<R: Runtime> Builder<R> {
         self
     }
 
-    /// Enable nuanced frontend type handling for exported bindings.
+    /// Enable rich frontend type handling for exported bindings.
     ///
-    /// This opts into runtime transforms for values such as bigints and other
-    /// transport-specific shapes which require client-side restoration.
+    /// This opts into runtime transforms and type remapping for transport-specific
+    /// shapes such as bigints or custom rich types.
     ///
-    /// NOTE: The runtime behavior of this isn't guarantee without a Tauri crates.io patch so ensure you are careful!
-    /// NOTE: This will be enabled by default in future releases.
-    /// TODO: Flip this to be enabled by default
-    pub fn unstable_nuanced_types(mut self) -> Self {
-        self.cfg.enable_nuanced_types = true;
+    #[cfg(any(feature = "javascript", feature = "typescript"))]
+    pub fn rich_types(mut self, rich_types: RichTypesConfiguration) -> Self {
+        self.cfg.rich_types = Some(rich_types);
         self
     }
 

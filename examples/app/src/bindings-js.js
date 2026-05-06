@@ -45,6 +45,11 @@ export const commands = {
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	/** @returns {string} myName */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
+	/**
+	 * @param {RichTypes} arg
+	 * @returns {string} myName
+	 */
+	richTypes: (arg) => __TAURI_INVOKE("rich_types", { arg }).then((v) => ({...v,date:new Date(v.date)})),
 };
 
 /** Events */
@@ -93,6 +98,11 @@ export const universalConstant = 42;
 	*		serialized_value: string,
 	*	}} PhaseSpecificRename_Serialize
 	* @property {string} serialized_value
+	*
+	* @typedef {{
+	*		date: Date,
+	*	}} RichTypes
+	* @property {Date} date
 	*
 	* @typedef {{
 	*		a: string,

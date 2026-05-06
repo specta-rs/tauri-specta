@@ -24,6 +24,7 @@ export const commands = {
 	phaseSpecificRename: (input: PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
 	typesafeErrorsUsingThiserror: () => typedError<null, MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
+	richTypes: (arg: RichTypes) => __TAURI_INVOKE<RichTypes>("rich_types", { arg }).then((v) => ({...v,date:new Date(v.date)})),
 };
 
 /** Events */
@@ -58,6 +59,10 @@ export type PhaseSpecificRename_Deserialize = {
 
 export type PhaseSpecificRename_Serialize = {
 	serialized_value: string,
+};
+
+export type RichTypes = {
+	date: Date,
 };
 
 export type Testing = {

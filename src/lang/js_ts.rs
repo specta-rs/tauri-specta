@@ -8,9 +8,7 @@ use specta::{
     },
 };
 use specta_serde::Phase;
-use specta_typescript::{
-    Error, Exporter, FrameworkExporter, define, rich_types::RichTypesConfiguration,
-};
+use specta_typescript::{Error, Exporter, FrameworkExporter, RichTypesConfiguration, define};
 use specta_util::Remapper;
 
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
@@ -82,6 +80,8 @@ fn runtime(
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
+    let rich_types_runtime_types = rich_types_runtime_types(cfg)?;
+    let rich_types_runtime_types = rich_types_runtime_types.as_ref().unwrap_or(exporter.types);
 
     let mut out = String::new();
 
@@ -154,7 +154,14 @@ fn runtime(
                 .map(|(name, dt)| {
                     Ok((
                         name.to_lower_camel_case(),
-                        render_reference_dt_for_phase(dt, Phase::Deserialize, &exporter)?,
+                        render_reference_dt_for_phase(
+                            dt,
+                            Phase::Deserialize,
+                            Phase::Serialize,
+                            &exporter,
+                            &cfg,
+                            rich_types_runtime_types,
+                        )?,
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -180,7 +187,19 @@ fn runtime(
                     command
                         .args()
                         .iter()
-                        .map(|(name, _)| name.to_lower_camel_case())
+                        .map(|(name, dt)| {
+                            let name = name.to_lower_camel_case();
+                            let value = render_result_transform_for_phase(
+                                dt,
+                                Phase::Serialize,
+                                &name,
+                                &exporter,
+                                cfg,
+                                rich_types_runtime_types,
+                            );
+
+                            value.map_or(name.clone(), |value| format!("{name}: {value}"))
+                        })
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -192,32 +211,66 @@ fn runtime(
                 && let Some(result) = command.result()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
             {
-                let ok_transform =
-                    render_result_transform_for_phase(dt_ok, "v.data", &exporter, cfg);
-                let err_transform =
-                    render_result_transform_for_phase(dt_err, "v.error", &exporter, cfg);
+                let ok_rich_type = has_rich_type_for_phase(
+                    dt_ok,
+                    Phase::Deserialize,
+                    "v.data",
+                    &exporter,
+                    cfg,
+                    rich_types_runtime_types,
+                );
+                let err_rich_type = has_rich_type_for_phase(
+                    dt_err,
+                    Phase::Deserialize,
+                    "v.error",
+                    &exporter,
+                    cfg,
+                    rich_types_runtime_types,
+                );
+                let ok_transform = render_result_transform_for_phase(
+                    dt_ok,
+                    Phase::Deserialize,
+                    "v.data",
+                    &exporter,
+                    cfg,
+                    rich_types_runtime_types,
+                );
+                let err_transform = render_result_transform_for_phase(
+                    dt_err,
+                    Phase::Deserialize,
+                    "v.error",
+                    &exporter,
+                    cfg,
+                    rich_types_runtime_types,
+                );
 
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
                     invoke_ts.push('<');
                     invoke_ts.push_str(&render_reference_dt_for_phase(
                         dt_ok,
-                        if ok_transform.is_some() {
+                        if ok_rich_type {
                             Phase::Deserialize
                         } else {
                             Phase::Serialize
                         },
+                        Phase::Deserialize,
                         &exporter,
+                        cfg,
+                        rich_types_runtime_types,
                     )?);
                     invoke_ts.push_str(", ");
                     invoke_ts.push_str(&render_reference_dt_for_phase(
                         dt_err,
-                        if err_transform.is_some() {
+                        if err_rich_type {
                             Phase::Deserialize
                         } else {
                             Phase::Serialize
                         },
+                        Phase::Deserialize,
                         &exporter,
+                        cfg,
+                        rich_types_runtime_types,
                     )?);
                     invoke_ts.push('>');
                 }
@@ -251,24 +304,31 @@ fn runtime(
                     .or(command.result());
 
                 if !jsdoc {
-                    let output_transform = output_dt
-                        .and_then(|dt| render_result_transform_for_phase(dt, "v", &exporter, cfg));
-
+                    let output_rich_type = output_dt.is_some_and(|dt| {
+                        has_rich_type_for_phase(
+                            dt,
+                            Phase::Deserialize,
+                            "v",
+                            &exporter,
+                            cfg,
+                            rich_types_runtime_types,
+                        )
+                    });
                     invoke_ts.push('<');
                     invoke_ts.push_str(&match command.result() {
-                        Some(dt) => Cow::Owned(render_reference_dt(
-                            &specta_serde::select_phase_datatype(
-                                extract_std_result(dt, exporter.types)
-                                    .map(|(ok, _)| ok)
-                                    .unwrap_or(dt),
-                                exporter.types,
-                                if output_transform.is_some() {
-                                    Phase::Deserialize
-                                } else {
-                                    Phase::Serialize
-                                },
-                            ),
+                        Some(dt) => Cow::Owned(render_reference_dt_for_phase(
+                            extract_std_result(dt, exporter.types)
+                                .map(|(ok, _)| ok)
+                                .unwrap_or(dt),
+                            if output_rich_type {
+                                Phase::Deserialize
+                            } else {
+                                Phase::Serialize
+                            },
+                            Phase::Deserialize,
                             &exporter,
+                            cfg,
+                            rich_types_runtime_types,
                         )?),
                         None => Cow::Borrowed("void"),
                     });
@@ -277,7 +337,14 @@ fn runtime(
                 invoke_ts.push_str(&invoke_args);
 
                 if let Some(dt) = output_dt
-                    && let Some(mapped) = render_result_transform_for_phase(dt, "v", &exporter, cfg)
+                    && let Some(mapped) = render_result_transform_for_phase(
+                        dt,
+                        Phase::Deserialize,
+                        "v",
+                        &exporter,
+                        cfg,
+                        rich_types_runtime_types,
+                    )
                 {
                     format!("{invoke_ts}.then((v) => {mapped})")
                 } else {
@@ -335,7 +402,14 @@ fn runtime(
             let mut field_ts = "makeEvent".to_string();
             if !jsdoc {
                 field_ts.push('<');
-                field_ts.push_str(&exporter.reference(r)?);
+                field_ts.push_str(&render_reference_dt_for_phase(
+                    &DataType::Reference(r.clone()),
+                    Phase::Deserialize,
+                    Phase::Deserialize,
+                    &exporter,
+                    cfg,
+                    rich_types_runtime_types,
+                )?);
                 field_ts.push('>');
             }
             field_ts.push('(');
@@ -346,7 +420,14 @@ fn runtime(
             if jsdoc {
                 field.docs = format!(
                     "@type {{ReturnType<typeof makeEvent<{}>>}}",
-                    exporter.reference(r)?
+                    render_reference_dt_for_phase(
+                        &DataType::Reference(r.clone()),
+                        Phase::Deserialize,
+                        Phase::Deserialize,
+                        &exporter,
+                        cfg,
+                        rich_types_runtime_types,
+                    )?
                 )
                 .into();
             }
@@ -432,34 +513,16 @@ fn runtime(
 #[derive(Debug, Clone)]
 struct SpectaFormat {
     disable_serde_phases: bool,
+    rich_types: Option<RichTypesConfiguration>,
     remapper: Remapper,
 }
 
 impl SpectaFormat {
     fn new(cfg: &BuilderConfiguration) -> Self {
-        let replacement = if !cfg.enable_nuanced_types {
-            DataType::Primitive(Primitive::u32)
-        } else if !cfg.disable_serde_phases {
-            specta_serde::phased(define("bigint | number").into(), define("bigint").into())
-        } else {
-            define("bigint | number").into()
-        };
-
-        let mut remapper = Remapper::new();
-        for primitive in [
-            Primitive::usize,
-            Primitive::isize,
-            Primitive::u64,
-            Primitive::i64,
-            Primitive::u128,
-            Primitive::i128,
-        ] {
-            remapper = remapper.rule(DataType::Primitive(primitive), replacement.clone());
-        }
-
         Self {
             disable_serde_phases: cfg.disable_serde_phases,
-            remapper: remapper.rule(
+            rich_types: cfg.rich_types.clone(),
+            remapper: Remapper::new().rule(
                 DataType::Primitive(Primitive::f128),
                 DataType::Primitive(Primitive::f64),
             ),
@@ -469,11 +532,16 @@ impl SpectaFormat {
 
 impl Format for SpectaFormat {
     fn map_types(&'_ self, types: &Types) -> Result<Cow<'_, Types>, specta::FormatError> {
-        if self.disable_serde_phases {
+        let types = if self.disable_serde_phases {
             specta_serde::Format.map_types(types)
         } else {
             specta_serde::PhasesFormat.map_types(types)
-        }
+        }?;
+
+        Ok(match &self.rich_types {
+            Some(rich_types) => Cow::Owned(rich_types.apply_types(&types).into_owned()),
+            None => types,
+        })
     }
 
     fn map_type(
@@ -614,30 +682,72 @@ fn is_channel_type(dt: &DataType, types: &Types) -> bool {
 
 fn render_result_transform_for_phase(
     dt: &DataType,
+    phase: Phase,
     input: &str,
-    exporter: &FrameworkExporter,
+    _exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
+    rich_types_runtime_types: &Types,
 ) -> Option<String> {
-    if !cfg.enable_nuanced_types {
-        return None;
-    }
-
-    let mut rich_types = RichTypesConfiguration::empty();
-    rich_types.enable_lossless_bigint();
-
-    rich_types
-        .apply(exporter.types, dt, input)
+    apply_rich_type_for_phase(dt, phase, input, rich_types_runtime_types, cfg)
         .map(|(_, mapped)| mapped)
         .filter(|mapped| mapped != input)
 }
 
-fn render_reference_dt_for_phase(
+fn has_rich_type_for_phase(
     dt: &DataType,
     phase: Phase,
+    input: &str,
+    _exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
+    rich_types_runtime_types: &Types,
+) -> bool {
+    apply_rich_type_for_phase(dt, phase, input, rich_types_runtime_types, cfg).is_some()
+}
+
+fn render_reference_dt_for_phase(
+    dt: &DataType,
+    serde_phase: Phase,
+    rich_type_phase: Phase,
     exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
+    rich_types_runtime_types: &Types,
 ) -> Result<String, Error> {
-    let dt = specta_serde::select_phase_datatype(dt, exporter.types, phase);
+    let dt = specta_serde::select_phase_datatype(dt, exporter.types, serde_phase);
+    let dt = apply_rich_type_for_phase(&dt, rich_type_phase, "v", rich_types_runtime_types, cfg)
+        .and_then(|(dt, _)| dt)
+        .unwrap_or(dt);
+
     render_reference_dt(&dt, exporter)
+}
+
+fn apply_rich_type_for_phase(
+    dt: &DataType,
+    phase: Phase,
+    input: &str,
+    types: &Types,
+    cfg: &BuilderConfiguration,
+) -> Option<(Option<DataType>, String)> {
+    let rich_types = cfg.rich_types.as_ref()?;
+    match phase {
+        Phase::Serialize => rich_types.apply_serialize(types, dt, input),
+        Phase::Deserialize => rich_types.apply_deserialize(types, dt, input),
+    }
+}
+
+fn rich_types_runtime_types(cfg: &BuilderConfiguration) -> Result<Option<Types>, Error> {
+    if cfg.rich_types.is_none() {
+        return Ok(None);
+    }
+
+    let types = hide_unused_std_result_type(cfg, cfg.types.clone());
+    let types = if cfg.disable_serde_phases {
+        specta_serde::Format.map_types(&types)
+    } else {
+        specta_serde::PhasesFormat.map_types(&types)
+    }
+    .map_err(|err| Error::framework("failed to format rich types runtime types", err))?;
+
+    Ok(Some(types.into_owned()))
 }
 
 // Render a `DataType` as a reference (or fallback to inline).
