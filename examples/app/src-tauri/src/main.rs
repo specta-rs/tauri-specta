@@ -120,7 +120,7 @@ fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
     Err(std::io::Error::other("oh no!").into()) // We use `into` here to do the `From` conversion.
 }
 
-#[derive(Debug, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct SemanticTypes {
     date: chrono::DateTime<chrono::Utc>,
     bytes: bytes::Bytes,
@@ -129,7 +129,10 @@ pub struct SemanticTypes {
 
 #[tauri::command]
 #[specta::specta]
-fn semantic_types(arg: SemanticTypes) -> SemanticTypes {
+fn semantic_types(
+    arg: SemanticTypes,
+    _channel: tauri::ipc::Channel<SemanticTypes>,
+) -> SemanticTypes {
     println!("{arg:?}");
     arg
 }
@@ -140,6 +143,9 @@ pub struct DemoEvent(String);
 
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
 pub struct EmptyEvent;
+
+#[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
+pub struct SemanticTypesEvent(SemanticTypes);
 
 #[derive(Type)]
 #[allow(dead_code)]
@@ -172,7 +178,11 @@ fn main() {
             typesafe_errors_using_thiserror_with_value,
             semantic_types,
         ])
-        .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
+        .events(tauri_specta::collect_events![
+            crate::DemoEvent,
+            EmptyEvent,
+            SemanticTypesEvent
+        ])
         .typ::<Custom>()
         .typ::<Testing>()
         .constant("universalConstant", 42);

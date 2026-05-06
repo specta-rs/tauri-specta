@@ -47,9 +47,10 @@ export const commands = {
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 	/**
 	 * @param {SemanticTypes} arg
+	 * @param {Channel<SemanticTypes>} channel
 	 * @returns {string} myName
 	 */
-	semanticTypes: (arg) => __TAURI_INVOKE("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
+	semanticTypes: (arg, channel) => __TAURI_INVOKE("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
 };
 
 /** Events */
@@ -58,6 +59,8 @@ export const events = {
 	emptyEvent: makeEvent("empty-event"),
 	/** @type {ReturnType<typeof makeEvent<DemoEvent>>} */
 	myDemoEvent: makeEvent("myDemoEvent"),
+	/** @type {ReturnType<typeof makeEvent<SemanticTypesEvent>>} */
+	semanticTypesEvent: makeEvent("semantic-types-event"),
 };
 
 /* Constants */
@@ -107,6 +110,9 @@ export const universalConstant = 42;
 	* @property {Date} date
 	* @property {Uint8Array} bytes
 	* @property {URL} url
+	*
+	* @typedef {SemanticTypes} SemanticTypesEvent
+	* @property {SemanticTypes} "0"
 	*
 	* @typedef {{
 	*		a: string,

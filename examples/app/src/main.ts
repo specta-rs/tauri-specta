@@ -1,4 +1,5 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { Channel } from "@tauri-apps/api/core";
 import { commands, events } from "./bindings";
 // import { commands, events } from "./bindings-jsdoc.js";
 
@@ -35,13 +36,31 @@ events.emptyEvent(appWindow).listen((e) => console.log("Window event", e));
 const date = new Date();
 const bytes = new Uint8Array([1, 2, 3, 4]);
 const url = new URL("https://specta.dev/docs?example=rich-types");
-commands.richTypes({ date, bytes, url }).then((result) => {
-  console.log("richTypes", result);
+const channel = new Channel<{ date: Date; bytes: Uint8Array; url: URL }>();
+
+channel.onmessage = (message) => {
+  console.log("semanticTypes channel", message);
+};
+
+events.semanticTypesEvent.listen((event) => {
+  console.log("semanticTypesEvent", event.payload);
   console.log(
-    "RICH TYPE ASSERTIONS",
+    "SEMANTIC EVENT ASSERTIONS",
+    event.payload.date instanceof Date,
+    event.payload.bytes instanceof Uint8Array,
+    event.payload.url instanceof URL,
+  );
+});
+
+commands.semanticTypes({ date, bytes, url }, channel).then((result) => {
+  console.log("semanticTypes", result);
+  console.log(
+    "SEMANTIC TYPE ASSERTIONS",
     result.date.getTime() === date.getTime(),
     result.bytes.length === bytes.length &&
       result.bytes.every((v, i) => v === bytes[i]),
     result.url.href === url.href,
   );
+
+  events.semanticTypesEvent.emit(result);
 });

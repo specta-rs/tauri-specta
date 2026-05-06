@@ -38,6 +38,9 @@
 	* @property {Uint8Array} bytes
 	* @property {URL} url
 	*
+	* @typedef {SemanticTypes} SemanticTypesEvent
+	* @property {SemanticTypes} "0"
+	*
 	* @typedef {{
 	*		a: string,
 	*	}} Testing

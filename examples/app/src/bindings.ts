@@ -24,13 +24,14 @@ export const commands = {
 	phaseSpecificRename: (input: PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
 	typesafeErrorsUsingThiserror: () => typedError<null, MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
-	semanticTypes: (arg: SemanticTypes) => __TAURI_INVOKE<SemanticTypes>("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
+	semanticTypes: (arg: SemanticTypes, channel: Channel<SemanticTypes>) => __TAURI_INVOKE<SemanticTypes>("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
 };
 
 /** Events */
 export const events = {
 	emptyEvent: makeEvent<EmptyEvent>("empty-event"),
 	myDemoEvent: makeEvent<DemoEvent>("myDemoEvent"),
+	semanticTypesEvent: makeEvent<SemanticTypesEvent>("semantic-types-event"),
 };
 
 /* Constants */
@@ -66,6 +67,8 @@ export type SemanticTypes = {
 	bytes: Uint8Array,
 	url: URL,
 };
+
+export type SemanticTypesEvent = SemanticTypes;
 
 export type Testing = {
 	a: string,

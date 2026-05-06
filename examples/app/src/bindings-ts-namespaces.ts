@@ -24,13 +24,14 @@ export const commands = {
 	phaseSpecificRename: (input: $s$.tauri_specta_example_app.PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<$s$.tauri_specta_example_app.PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
 	typesafeErrorsUsingThiserror: () => typedError<null, $s$.tauri_specta_example_app.MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, $s$.tauri_specta_example_app.MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
-	semanticTypes: (arg: $s$.tauri_specta_example_app.SemanticTypes) => __TAURI_INVOKE<$s$.tauri_specta_example_app.SemanticTypes>("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
+	semanticTypes: (arg: $s$.tauri_specta_example_app.SemanticTypes, channel: Channel<$s$.tauri_specta_example_app.SemanticTypes>) => __TAURI_INVOKE<$s$.tauri_specta_example_app.SemanticTypes>("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
 };
 
 /** Events */
 export const events = {
 	emptyEvent: makeEvent<$s$.tauri_specta_example_app.EmptyEvent>("empty-event"),
 	myDemoEvent: makeEvent<$s$.tauri_specta_example_app.DemoEvent>("myDemoEvent"),
+	semanticTypesEvent: makeEvent<$s$.tauri_specta_example_app.SemanticTypesEvent>("semantic-types-event"),
 };
 
 /* Constants */
@@ -65,6 +66,8 @@ namespace $s$ {
 			bytes: Uint8Array,
 			url: URL,
 		};
+
+		export type SemanticTypesEvent = $s$.tauri_specta_example_app.SemanticTypes;
 
 		export type Testing = {
 			a: string,

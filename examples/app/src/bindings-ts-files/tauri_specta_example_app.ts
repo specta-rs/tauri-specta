@@ -25,6 +25,8 @@ export type SemanticTypes = {
 	url: URL,
 };
 
+export type SemanticTypesEvent = SemanticTypes;
+
 export type Testing = {
 	a: string,
 };
