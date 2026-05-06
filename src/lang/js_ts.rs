@@ -607,10 +607,7 @@ struct SpectaFormat {
 
 impl SpectaFormat {
     fn new(cfg: &BuilderConfiguration) -> Self {
-        let mut remapper = Remapper::new().rule(
-            DataType::Primitive(Primitive::f128),
-            DataType::Primitive(Primitive::f64),
-        );
+        let mut remapper = Remapper::new();
 
         if cfg.dangerously_cast_bigints_to_number {
             // Creating a virtual `Types` here is a bad pattern but given we know Specta doesn't use it, it's safe.
