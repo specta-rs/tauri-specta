@@ -38,8 +38,14 @@
 	* @property {Uint8Array} bytes
 	* @property {URL} url
 	*
-	* @typedef {SemanticTypes} SemanticTypesEvent
-	* @property {SemanticTypes} "0"
+	* @typedef {{
+	*		date: Date,
+	*		bytes: Uint8Array,
+	*		url: URL,
+	*	}} SemanticTypesEvent
+	* @property {Date} date
+	* @property {Uint8Array} bytes
+	* @property {URL} url
 	*
 	* @typedef {{
 	*		a: string,

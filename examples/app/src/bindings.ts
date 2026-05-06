@@ -31,7 +31,7 @@ export const commands = {
 export const events = {
 	emptyEvent: makeEvent<EmptyEvent>("empty-event"),
 	myDemoEvent: makeEvent<DemoEvent>("myDemoEvent"),
-	semanticTypesEvent: makeEvent<SemanticTypesEvent>("semantic-types-event"),
+	semanticTypesEvent: makeEvent<SemanticTypesEvent>("semantic-types-event", (v) => ({...v,bytes:[...v.bytes]}), (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})),
 };
 
 /* Constants */
@@ -68,7 +68,11 @@ export type SemanticTypes = {
 	url: URL,
 };
 
-export type SemanticTypesEvent = SemanticTypes;
+export type SemanticTypesEvent = {
+	date: Date,
+	bytes: Uint8Array,
+	url: URL,
+};
 
 export type Testing = {
 	a: string,
@@ -86,17 +90,20 @@ async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; dat
 
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
-function makeEvent<T>(name: string) {
+function makeEvent<T>(name: string, serialize?: (payload: T) => unknown, deserialize?: (payload: any) => T) {
+    const mapEvent = (cb: __TAURI_EVENT.EventCallback<T>) => (event: __TAURI_EVENT.Event<any>) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapPayload = (payload: T) => serialize ? serialize(payload) : payload;
+
     const base = {
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, cb),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, cb),
-        emit: ((payload: T) => __TAURI_EVENT.emit(name, payload) as unknown) as EventEmit<T>
+        listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, mapEvent(cb)),
+        emit: ((payload: T) => __TAURI_EVENT.emit(name, mapPayload(payload)) as unknown) as EventEmit<T>
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, cb),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, cb),
-        emit: ((payload: T) => target.emit(name, payload) as unknown) as EventEmit<T>
+        listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, mapEvent(cb)),
+        emit: ((payload: T) => target.emit(name, mapPayload(payload)) as unknown) as EventEmit<T>
     });
 
     return Object.assign(fn, base);

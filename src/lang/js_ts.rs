@@ -416,6 +416,38 @@ fn runtime(
             }
             field_ts.push('(');
             field_ts.push_str(&event_name_escaped);
+            let event_dt = DataType::Reference(r.clone());
+            let serialize_transform = render_result_transform_for_phase(
+                &event_dt,
+                Phase::Serialize,
+                "v",
+                &exporter,
+                cfg,
+                semantic_types_runtime_types,
+            );
+            let deserialize_transform = render_result_transform_for_phase(
+                &event_dt,
+                Phase::Deserialize,
+                "v",
+                &exporter,
+                cfg,
+                semantic_types_runtime_types,
+            );
+
+            if serialize_transform.is_some() || deserialize_transform.is_some() {
+                field_ts.push_str(", ");
+                field_ts.push_str(
+                    &serialize_transform
+                        .map(|transform| format!("(v) => {transform}"))
+                        .unwrap_or_else(|| "undefined".to_string()),
+                );
+                field_ts.push_str(", ");
+                field_ts.push_str(
+                    &deserialize_transform
+                        .map(|transform| format!("(v) => {transform}"))
+                        .unwrap_or_else(|| "undefined".to_string()),
+                );
+            }
             field_ts.push(')');
 
             let mut field = Field::new(define(field_ts).into());
@@ -711,7 +743,16 @@ fn render_result_transform_for_phase(
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
 ) -> Option<String> {
-    apply_semantic_type_for_phase(dt, phase, input, semantic_types_runtime_types, cfg)
+    let dt = specta_serde::select_phase_datatype(dt, semantic_types_runtime_types, phase);
+    let dt = if let DataType::Reference(Reference::Named(r)) = &dt
+        && let Some(ndt) = semantic_types_runtime_types.get(r)
+        && let Some(dt) = &ndt.ty
+    {
+        dt.clone()
+    } else {
+        dt
+    };
+    apply_semantic_type_for_phase(&dt, phase, input, semantic_types_runtime_types, cfg)
         .map(|(_, mapped)| mapped)
         .filter(|mapped| mapped != input)
 }
@@ -848,17 +889,20 @@ const TYPED_ERROR_ASSERTION_TS: &str = "const _assertTypedErrorFollowsContract: 
 
 const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
-function makeEvent<T>(name: string) {
+function makeEvent<T>(name: string, serialize?: (payload: T) => unknown, deserialize?: (payload: any) => T) {
+    const mapEvent = (cb: __TAURI_EVENT.EventCallback<T>) => (event: __TAURI_EVENT.Event<any>) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapPayload = (payload: T) => serialize ? serialize(payload) : payload;
+
     const base = {
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, cb),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, cb),
-        emit: ((payload: T) => __TAURI_EVENT.emit(name, payload) as unknown) as EventEmit<T>
+        listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, mapEvent(cb)),
+        emit: ((payload: T) => __TAURI_EVENT.emit(name, mapPayload(payload)) as unknown) as EventEmit<T>
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, cb),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, cb),
-        emit: ((payload: T) => target.emit(name, payload) as unknown) as EventEmit<T>
+        listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, mapEvent(cb)),
+        emit: ((payload: T) => target.emit(name, mapPayload(payload)) as unknown) as EventEmit<T>
     });
 
     return Object.assign(fn, base);
@@ -867,25 +911,30 @@ function makeEvent<T>(name: string) {
 const MAKE_EVENT_IMPL_JS: &str = r#"/**
  * @template T
  * @param {string} name
+ * @param {(payload: T) => unknown} [serialize]
+ * @param {(payload: any) => T} [deserialize]
  */
-function makeEvent(name) {
+function makeEvent(name, serialize, deserialize) {
+    const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapPayload = (payload) => serialize ? serialize(payload) : payload;
+
     const base = {
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        listen: (cb) => __TAURI_EVENT.listen(name, cb),
+        listen: (cb) => __TAURI_EVENT.listen(name, mapEvent(cb)),
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        once: (cb) => __TAURI_EVENT.once(name, cb),
+        once: (cb) => __TAURI_EVENT.once(name, mapEvent(cb)),
         /** @param {T} payload */
-        emit: (payload) => __TAURI_EVENT.emit(name, payload),
+        emit: (payload) => __TAURI_EVENT.emit(name, mapPayload(payload)),
     };
 
     /** @param {import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window} target */
     const fn = (target) => ({
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        listen: (cb) => target.listen(name, cb),
+        listen: (cb) => target.listen(name, mapEvent(cb)),
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        once: (cb) => target.once(name, cb),
+        once: (cb) => target.once(name, mapEvent(cb)),
         /** @param {T} payload */
-        emit: (payload) => target.emit(name, payload),
+        emit: (payload) => target.emit(name, mapPayload(payload)),
     });
 
     return Object.assign(fn, base);

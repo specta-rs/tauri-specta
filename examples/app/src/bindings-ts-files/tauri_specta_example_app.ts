@@ -25,7 +25,11 @@ export type SemanticTypes = {
 	url: URL,
 };
 
-export type SemanticTypesEvent = SemanticTypes;
+export type SemanticTypesEvent = {
+	date: Date,
+	bytes: Uint8Array,
+	url: URL,
+};
 
 export type Testing = {
 	a: string,

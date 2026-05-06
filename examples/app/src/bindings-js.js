@@ -60,7 +60,7 @@ export const events = {
 	/** @type {ReturnType<typeof makeEvent<DemoEvent>>} */
 	myDemoEvent: makeEvent("myDemoEvent"),
 	/** @type {ReturnType<typeof makeEvent<SemanticTypesEvent>>} */
-	semanticTypesEvent: makeEvent("semantic-types-event"),
+	semanticTypesEvent: makeEvent("semantic-types-event", (v) => ({...v,bytes:[...v.bytes]}), (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})),
 };
 
 /* Constants */
@@ -111,8 +111,14 @@ export const universalConstant = 42;
 	* @property {Uint8Array} bytes
 	* @property {URL} url
 	*
-	* @typedef {SemanticTypes} SemanticTypesEvent
-	* @property {SemanticTypes} "0"
+	* @typedef {{
+	*		date: Date,
+	*		bytes: Uint8Array,
+	*		url: URL,
+	*	}} SemanticTypesEvent
+	* @property {Date} date
+	* @property {Uint8Array} bytes
+	* @property {URL} url
 	*
 	* @typedef {{
 	*		a: string,
@@ -139,25 +145,30 @@ async function typedError(result) {
 /**
  * @template T
  * @param {string} name
+ * @param {(payload: T) => unknown} [serialize]
+ * @param {(payload: any) => T} [deserialize]
  */
-function makeEvent(name) {
+function makeEvent(name, serialize, deserialize) {
+    const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapPayload = (payload) => serialize ? serialize(payload) : payload;
+
     const base = {
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        listen: (cb) => __TAURI_EVENT.listen(name, cb),
+        listen: (cb) => __TAURI_EVENT.listen(name, mapEvent(cb)),
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        once: (cb) => __TAURI_EVENT.once(name, cb),
+        once: (cb) => __TAURI_EVENT.once(name, mapEvent(cb)),
         /** @param {T} payload */
-        emit: (payload) => __TAURI_EVENT.emit(name, payload),
+        emit: (payload) => __TAURI_EVENT.emit(name, mapPayload(payload)),
     };
 
     /** @param {import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window} target */
     const fn = (target) => ({
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        listen: (cb) => target.listen(name, cb),
+        listen: (cb) => target.listen(name, mapEvent(cb)),
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        once: (cb) => target.once(name, cb),
+        once: (cb) => target.once(name, mapEvent(cb)),
         /** @param {T} payload */
-        emit: (payload) => target.emit(name, payload),
+        emit: (payload) => target.emit(name, mapPayload(payload)),
     });
 
     return Object.assign(fn, base);

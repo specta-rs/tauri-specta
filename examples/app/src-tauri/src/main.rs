@@ -145,7 +145,11 @@ pub struct DemoEvent(String);
 pub struct EmptyEvent;
 
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
-pub struct SemanticTypesEvent(SemanticTypes);
+pub struct SemanticTypesEvent {
+    date: chrono::DateTime<chrono::Utc>,
+    bytes: bytes::Bytes,
+    url: url::Url,
+}
 
 #[derive(Type)]
 #[allow(dead_code)]
