@@ -2,7 +2,7 @@ use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
 use specta::{
-    Format, Types,
+    Format, Type, Types,
     datatype::{
         DataType, Field, Fields, NamedDataType, NamedReferenceType, Primitive, Reference, Struct,
     },
@@ -519,13 +519,31 @@ struct SpectaFormat {
 
 impl SpectaFormat {
     fn new(cfg: &BuilderConfiguration) -> Self {
+        let mut remapper = Remapper::new().rule(
+            DataType::Primitive(Primitive::f128),
+            DataType::Primitive(Primitive::f64),
+        );
+
+        if cfg.dangerously_cast_bigints_to_number {
+            // Creating a virtual `Types` here is a bad pattern but given we know Specta doesn't use it, it's safe.
+            let number = <specta_typescript::Number as Type>::definition(&mut Types::default());
+            remapper = remapper
+                .rule(DataType::Primitive(Primitive::usize), number.clone())
+                .rule(DataType::Primitive(Primitive::isize), number.clone())
+                .rule(DataType::Primitive(Primitive::u64), number.clone())
+                .rule(DataType::Primitive(Primitive::i64), number.clone())
+                .rule(DataType::Primitive(Primitive::u128), number.clone())
+                .rule(DataType::Primitive(Primitive::i128), number.clone())
+                .rule(
+                    <specta_typescript::BigInt as Type>::definition(&mut Types::default()),
+                    number,
+                );
+        }
+
         Self {
             disable_serde_phases: cfg.disable_serde_phases,
             rich_types: cfg.rich_types.clone(),
-            remapper: Remapper::new().rule(
-                DataType::Primitive(Primitive::f128),
-                DataType::Primitive(Primitive::f64),
-            ),
+            remapper,
         }
     }
 }
@@ -539,8 +557,11 @@ impl Format for SpectaFormat {
         }?;
 
         Ok(match &self.rich_types {
-            Some(rich_types) => Cow::Owned(rich_types.apply_types(&types).into_owned()),
-            None => types,
+            Some(rich_types) => Cow::Owned(
+                self.remapper
+                    .remap_types(rich_types.apply_types(&types).into_owned()),
+            ),
+            None => Cow::Owned(self.remapper.remap_types(types.into_owned())),
         })
     }
 

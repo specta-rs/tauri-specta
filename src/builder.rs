@@ -110,6 +110,9 @@ pub struct BuilderConfiguration {
     /// Rich type handling configuration for supported exporters.
     #[cfg(any(feature = "javascript", feature = "typescript"))]
     pub rich_types: Option<RichTypesConfiguration>,
+    /// Whether BigInt-style types should be exported as TypeScript `number`.
+    #[cfg(any(feature = "javascript", feature = "typescript"))]
+    pub dangerously_cast_bigints_to_number: bool,
     /// Whether serde serialize/deserialize phase differences should be ignored.
     pub disable_serde_phases: bool,
 }
@@ -293,6 +296,15 @@ impl<R: Runtime> Builder<R> {
     #[cfg(any(feature = "javascript", feature = "typescript"))]
     pub fn rich_types(mut self, rich_types: RichTypesConfiguration) -> Self {
         self.cfg.rich_types = Some(rich_types);
+        self
+    }
+
+    /// Export BigInt-style types as TypeScript `number`.
+    ///
+    /// This can lose precision for values that exceed JavaScript's safe integer range.
+    #[cfg(any(feature = "javascript", feature = "typescript"))]
+    pub fn dangerously_cast_bigints_to_number(mut self) -> Self {
+        self.cfg.dangerously_cast_bigints_to_number = true;
         self
     }
 
