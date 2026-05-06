@@ -77,24 +77,8 @@ export const universalConstant = 42;
  * @param {(payload: any) => T} deserialize
  * @returns {Channel<T>}
  */
-const channelDeserializers = new WeakMap();
-
 function mapChannel(channel, deserialize) {
-    const mapped = channelDeserializers.has(channel);
-    channelDeserializers.set(channel, deserialize);
-    if (mapped) {
-        return channel;
-    }
-
-    const { get, set } = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(channel), "onmessage");
-    const onmessage = channel.onmessage;
-    Object.defineProperty(channel, "onmessage", {
-        configurable: true,
-        get: () => get.call(channel),
-        set: (callback) => set.call(channel, (payload) => callback(channelDeserializers.get(channel)(payload)))
-    });
-    channel.onmessage = onmessage;
-    return channel;
+    return new Channel((payload) => channel.onmessage(deserialize(payload)));
 }
 
 /**

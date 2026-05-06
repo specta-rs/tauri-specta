@@ -87,24 +87,8 @@ namespace $s$ {
 export import tauri_specta_example_app = $s$.tauri_specta_example_app;
 
 /* Tauri Specta runtime */
-const channelDeserializers = new WeakMap<Channel<any>, (payload: any) => any>();
-
 function mapChannel<T>(channel: Channel<T>, deserialize: (payload: any) => T): Channel<T> {
-    const mapped = channelDeserializers.has(channel);
-    channelDeserializers.set(channel, deserialize);
-    if (mapped) {
-        return channel;
-    }
-
-    const { get, set } = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(channel), "onmessage")!;
-    const onmessage = channel.onmessage;
-    Object.defineProperty(channel, "onmessage", {
-        configurable: true,
-        get: () => get!.call(channel),
-        set: (callback: (payload: any) => void) => set!.call(channel, (payload: any) => callback(channelDeserializers.get(channel)!(payload)))
-    });
-    channel.onmessage = onmessage;
-    return channel;
+    return new Channel((payload) => channel.onmessage(deserialize(payload)));
 }
 
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
