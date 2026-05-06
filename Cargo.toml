@@ -40,7 +40,6 @@ tauri = { version = "2", default-features = false, features = ["specta"] }
 heck = "0.5"
 specta-serde = { workspace = true }
 specta-util = { workspace = true }
-bytes = "1.11.1"
 
 [dev-dependencies]
 tauri = { version = "2", default-features = false, features = ["test", "wry"] }
