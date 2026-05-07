@@ -4,7 +4,7 @@
 /// returning a [`Commands`](crate::Commands) struct that can be passed to [`Builder::commands`](crate::Builder::commands).
 ///
 /// # Usage
-/// ```rust,ignore-windows
+/// ```rust
 /// use tauri_specta::{collect_commands,Builder};
 ///
 /// #[tauri::command]
@@ -74,7 +74,7 @@ macro_rules! __private_command_metadata_inner {
 /// This returns a [`Events`](crate::Events) struct that can be passed to [`Builder::events`](crate::Builder::events).
 ///
 /// # Usage
-/// ```rust,ignore-windows
+/// ```rust
 /// use serde::{Serialize, Deserialize};
 /// use specta::Type;
 /// use tauri_specta::{Event, Builder, collect_events};

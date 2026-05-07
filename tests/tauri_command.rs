@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 // #![allow(unused)]
 
 // use serde::Serialize;

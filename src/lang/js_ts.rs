@@ -1,21 +1,26 @@
 use std::{borrow::Cow, path::Path};
 
 use heck::ToLowerCamelCase;
-use specta::ResolvedTypes;
-use specta::datatype::{DataType, Field, Fields, Primitive, Reference, Struct};
+use specta::{
+    Format, Type, Types,
+    datatype::{
+        DataType, Field, Fields, NamedDataType, NamedReferenceType, Primitive, Reference, Struct,
+    },
+};
 use specta_serde::Phase;
-use specta_tags::TransformPlan;
-use specta_typescript::{Error, Exporter, FrameworkExporter, define};
+use specta_typescript::{Error, Exporter, FrameworkExporter, define, semantic};
+use specta_util::Remapper;
 
 use crate::name::resolve_tauri_event_name;
-use crate::{BuilderConfiguration, Command, ErrorHandlingMode, LanguageExt};
+use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
-        let types = resolve_types_for_export(&cfg)?;
+        let types = hide_unused_std_result_type(&cfg, cfg.types.clone());
+        let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
@@ -31,9 +36,10 @@ impl LanguageExt for specta_typescript::Typescript {
                     },
                     TYPED_ERROR_ASSERTION_TS,
                     MAKE_EVENT_IMPL_TS,
+                    MAP_CHANNEL_IMPL_TS,
                 )
             })
-            .export_to(path, &types)
+            .export_to(path, &types, format)
     }
 }
 
@@ -42,7 +48,8 @@ impl LanguageExt for specta_typescript::JSDoc {
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
-        let types = resolve_types_for_export(&cfg)?;
+        let types = hide_unused_std_result_type(&cfg, cfg.types.clone());
+        let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
             .framework_prelude(FRAMEWORK_HEADER)
@@ -58,31 +65,11 @@ impl LanguageExt for specta_typescript::JSDoc {
                     },
                     "",
                     MAKE_EVENT_IMPL_JS,
+                    MAP_CHANNEL_IMPL_JS,
                 )
             })
-            .export_to(path, &types)
+            .export_to(path, &types, format)
     }
-}
-
-fn resolve_types_for_export(cfg: &BuilderConfiguration) -> Result<ResolvedTypes, Error> {
-    let mut types = cfg.types.clone();
-
-    types.iter_mut(|ndt| {
-        rewrite_bigints_in_datatype(
-            ndt.ty_mut(),
-            cfg.enable_nuanced_types,
-            !cfg.disable_serde_phases,
-        )
-    });
-
-    let types = if cfg.disable_serde_phases {
-        specta_serde::apply(types)
-    } else {
-        specta_serde::apply_phases(types)
-    }
-    .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
-
-    Ok(types)
 }
 
 fn runtime(
@@ -92,23 +79,27 @@ fn runtime(
     typed_error_impl: &str,
     typed_error_assertion: &str,
     make_event_impl: &str,
+    map_channel_impl: &str,
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
+    let semantic_types_runtime_types = semantic_types_runtime_types(cfg)?;
+    let semantic_types_runtime_types = semantic_types_runtime_types
+        .as_ref()
+        .unwrap_or(exporter.types);
 
     let mut out = String::new();
 
     if let Some(ndt) = cfg
         .types
         .into_unsorted_iter()
-        .find(|ndt| RESERVED_NDT_NAMES.contains(&&**ndt.name()))
+        .find(|ndt| RESERVED_NDT_NAMES.contains(&&*ndt.name))
     {
         return Err(Error::framework(
             "",
             format!(
                 "User defined type '{}' defined in {} must be renamed so it doesn't conflict with Tauri Specta runtime.",
-                ndt.name(),
-                ndt.location()
+                ndt.name, ndt.location
             ),
         ));
     }
@@ -121,6 +112,22 @@ fn runtime(
                 .any(|arg| is_channel_type(&arg.ty, exporter.types))
             // Check if result contains a Channel
             || command.result.as_ref().is_some_and(|dt| is_channel_type(dt, exporter.types))
+    });
+    let is_channel_transform_used = cfg.commands.iter().any(|command| {
+        command.args.iter().any(|arg| {
+            let dt = &arg.ty;
+            channel_generic_type(dt, exporter.types).is_some_and(|dt| {
+                render_result_transform_for_phase(
+                    dt,
+                    Phase::Deserialize,
+                    "v",
+                    &exporter,
+                    cfg,
+                    semantic_types_runtime_types,
+                )
+                .is_some()
+            })
+        })
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling == ErrorHandlingMode::Result
@@ -159,8 +166,6 @@ fn runtime(
     if enabled_commands {
         let mut s = Struct::named();
         for command in &cfg.commands {
-            validate_exported_command(command, exporter.types)?;
-
             let command_name_escaped =
                 serde_json::to_string(&command.name).expect("failed to serialize string");
 
@@ -170,7 +175,14 @@ fn runtime(
                 .map(|arg| {
                     Ok((
                         arg.name.to_lower_camel_case(),
-                        render_reference_dt_for_phase(&arg.ty, Phase::Deserialize, &exporter, cfg)?,
+                        render_reference_dt_for_phase(
+                            &arg.ty,
+                            Phase::Deserialize,
+                            Phase::Serialize,
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        )?,
                     ))
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
@@ -196,7 +208,36 @@ fn runtime(
                     command
                         .args
                         .iter()
-                        .map(|arg| arg.name.to_lower_camel_case())
+                        .map(|arg| {
+                            let name = arg.name.to_lower_camel_case();
+                            let dt = &arg.ty;
+                            let value = if let Some(generic) =
+                                channel_generic_type(dt, exporter.types)
+                            {
+                                render_result_transform_for_phase(
+                                    generic,
+                                    Phase::Deserialize,
+                                    "v",
+                                    &exporter,
+                                    cfg,
+                                    semantic_types_runtime_types,
+                                )
+                                .map(|transform| jsdoc_transform(transform, "v", jsdoc))
+                                .map(|transform| format!("mapChannel({name}, (v) => {transform})"))
+                            } else {
+                                render_result_transform_for_phase(
+                                    dt,
+                                    Phase::Serialize,
+                                    &name,
+                                    &exporter,
+                                    cfg,
+                                    semantic_types_runtime_types,
+                                )
+                                .map(|transform| jsdoc_transform(transform, &name, jsdoc))
+                            };
+
+                            value.map_or(name.clone(), |value| format!("{name}: {value}"))
+                        })
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -208,34 +249,68 @@ fn runtime(
                 && let Some(result) = command.result.as_ref()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
             {
-                let ok_transform =
-                    render_result_transform_for_phase(dt_ok, "v.data", &exporter, cfg);
-                let err_transform =
-                    render_result_transform_for_phase(dt_err, "v.error", &exporter, cfg);
+                let ok_semantic_type = has_semantic_type_for_phase(
+                    dt_ok,
+                    Phase::Deserialize,
+                    "v.data",
+                    &exporter,
+                    cfg,
+                    semantic_types_runtime_types,
+                );
+                let err_semantic_type = has_semantic_type_for_phase(
+                    dt_err,
+                    Phase::Deserialize,
+                    "v.error",
+                    &exporter,
+                    cfg,
+                    semantic_types_runtime_types,
+                );
+                let ok_transform = render_result_transform_for_phase(
+                    dt_ok,
+                    Phase::Deserialize,
+                    "v.data",
+                    &exporter,
+                    cfg,
+                    semantic_types_runtime_types,
+                )
+                .map(|transform| jsdoc_transform(transform, "v.data", jsdoc));
+                let err_transform = render_result_transform_for_phase(
+                    dt_err,
+                    Phase::Deserialize,
+                    "v.error",
+                    &exporter,
+                    cfg,
+                    semantic_types_runtime_types,
+                )
+                .map(|transform| jsdoc_transform(transform, "v.error", jsdoc));
 
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
                     invoke_ts.push('<');
                     invoke_ts.push_str(&render_reference_dt_for_phase(
                         dt_ok,
-                        if ok_transform.is_some() {
+                        if ok_semantic_type {
                             Phase::Deserialize
                         } else {
                             Phase::Serialize
                         },
+                        Phase::Deserialize,
                         &exporter,
                         cfg,
+                        semantic_types_runtime_types,
                     )?);
                     invoke_ts.push_str(", ");
                     invoke_ts.push_str(&render_reference_dt_for_phase(
                         dt_err,
-                        if err_transform.is_some() {
+                        if err_semantic_type {
                             Phase::Deserialize
                         } else {
                             Phase::Serialize
                         },
+                        Phase::Deserialize,
                         &exporter,
                         cfg,
+                        semantic_types_runtime_types,
                     )?);
                     invoke_ts.push('>');
                 }
@@ -259,7 +334,11 @@ fn runtime(
                         (None, None) => "v".to_string(),
                     };
 
-                    format!("{invoke_ts}.then((v) => {mapper})")
+                    if jsdoc {
+                        format!("{invoke_ts}.then((v) => {mapper})")
+                    } else {
+                        format!("{invoke_ts}.then((v) => ({mapper} as typeof v))")
+                    }
                 }
             } else {
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
@@ -270,27 +349,31 @@ fn runtime(
                     .or(command.result.as_ref());
 
                 if !jsdoc {
-                    let output_transform = output_dt
-                        .and_then(|dt| render_result_transform_for_phase(dt, "v", &exporter, cfg));
-
+                    let output_semantic_type = output_dt.is_some_and(|dt| {
+                        has_semantic_type_for_phase(
+                            dt,
+                            Phase::Deserialize,
+                            "v",
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        )
+                    });
                     invoke_ts.push('<');
                     invoke_ts.push_str(&match command.result.as_ref() {
-                        Some(dt) => Cow::Owned(render_reference_dt(
-                            &specta_serde::select_phase_datatype(
-                                &rewrite_bigints_for_export(
-                                    extract_std_result(dt, exporter.types)
-                                        .map(|(ok, _)| ok)
-                                        .unwrap_or(dt),
-                                    cfg,
-                                ),
-                                exporter.types,
-                                if output_transform.is_some() {
-                                    Phase::Deserialize
-                                } else {
-                                    Phase::Serialize
-                                },
-                            ),
+                        Some(dt) => Cow::Owned(render_reference_dt_for_phase(
+                            extract_std_result(dt, exporter.types)
+                                .map(|(ok, _)| ok)
+                                .unwrap_or(dt),
+                            if output_semantic_type {
+                                Phase::Deserialize
+                            } else {
+                                Phase::Serialize
+                            },
+                            Phase::Deserialize,
                             &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
                         )?),
                         None => Cow::Borrowed("void"),
                     });
@@ -299,17 +382,29 @@ fn runtime(
                 invoke_ts.push_str(&invoke_args);
 
                 if let Some(dt) = output_dt
-                    && let Some(mapped) = render_result_transform_for_phase(dt, "v", &exporter, cfg)
+                    && let Some(mapped) = render_result_transform_for_phase(
+                        dt,
+                        Phase::Deserialize,
+                        "v",
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    )
+                    .map(|transform| jsdoc_transform(transform, "v", jsdoc))
                 {
-                    format!("{invoke_ts}.then((v) => {mapped})")
+                    if jsdoc {
+                        format!("{invoke_ts}.then((v) => {mapped})")
+                    } else {
+                        format!("{invoke_ts}.then((v) => ({mapped} as typeof v))")
+                    }
                 } else {
                     invoke_ts
                 }
             };
 
             let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
-            field.set_deprecated(command.deprecated.clone());
-            field.set_docs({
+            field.deprecated = command.deprecated.clone();
+            field.docs = {
                 let mut docs = command.docs.to_string();
 
                 if jsdoc {
@@ -329,11 +424,93 @@ fn runtime(
                         docs.push('\n');
                     }
 
-                    docs.push_str("@returns {string} myName");
+                    let returns = if cfg.error_handling == ErrorHandlingMode::Result
+                        && let Some(result) = command.result.as_ref()
+                        && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
+                    {
+                        let ok_semantic_type = has_semantic_type_for_phase(
+                            dt_ok,
+                            Phase::Deserialize,
+                            "v.data",
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        );
+                        let err_semantic_type = has_semantic_type_for_phase(
+                            dt_err,
+                            Phase::Deserialize,
+                            "v.error",
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        );
+                        let ok = render_reference_dt_for_phase(
+                            dt_ok,
+                            if ok_semantic_type {
+                                Phase::Deserialize
+                            } else {
+                                Phase::Serialize
+                            },
+                            Phase::Deserialize,
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        )?;
+                        let err = render_reference_dt_for_phase(
+                            dt_err,
+                            if err_semantic_type {
+                                Phase::Deserialize
+                            } else {
+                                Phase::Serialize
+                            },
+                            Phase::Deserialize,
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        )?;
+
+                        format!(
+                            "{{ status: \"ok\"; data: {ok} }} | {{ status: \"error\"; error: {err} }}"
+                        )
+                    } else {
+                        let output_dt = command
+                            .result
+                            .as_ref()
+                            .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
+                            .or(command.result.as_ref());
+                        let output_semantic_type = output_dt.is_some_and(|dt| {
+                            has_semantic_type_for_phase(
+                                dt,
+                                Phase::Deserialize,
+                                "v",
+                                &exporter,
+                                cfg,
+                                semantic_types_runtime_types,
+                            )
+                        });
+
+                        match output_dt {
+                            Some(dt) => render_reference_dt_for_phase(
+                                dt,
+                                if output_semantic_type {
+                                    Phase::Deserialize
+                                } else {
+                                    Phase::Serialize
+                                },
+                                Phase::Deserialize,
+                                &exporter,
+                                cfg,
+                                semantic_types_runtime_types,
+                            )?,
+                            None => "void".to_string(),
+                        }
+                    };
+
+                    docs.push_str(&format!("@returns {{Promise<{returns}>}}"));
                 }
 
                 docs.into()
-            });
+            };
             s = s.field(
                 command_binding_name(&command.name).to_lower_camel_case(),
                 field,
@@ -360,22 +537,68 @@ fn runtime(
             let mut field_ts = "makeEvent".to_string();
             if !jsdoc {
                 field_ts.push('<');
-                field_ts.push_str(&exporter.reference(r)?);
+                field_ts.push_str(&render_reference_dt_for_phase(
+                    &DataType::Reference(r.clone()),
+                    Phase::Deserialize,
+                    Phase::Deserialize,
+                    &exporter,
+                    cfg,
+                    semantic_types_runtime_types,
+                )?);
                 field_ts.push('>');
             }
             field_ts.push('(');
             field_ts.push_str(&event_name_escaped);
+            let event_dt = DataType::Reference(r.clone());
+            let serialize_transform = render_result_transform_for_phase(
+                &event_dt,
+                Phase::Serialize,
+                "v",
+                &exporter,
+                cfg,
+                semantic_types_runtime_types,
+            )
+            .map(|transform| jsdoc_transform(transform, "v", jsdoc));
+            let deserialize_transform = render_result_transform_for_phase(
+                &event_dt,
+                Phase::Deserialize,
+                "v",
+                &exporter,
+                cfg,
+                semantic_types_runtime_types,
+            )
+            .map(|transform| jsdoc_transform(transform, "v", jsdoc));
+
+            if serialize_transform.is_some() || deserialize_transform.is_some() {
+                field_ts.push_str(", ");
+                field_ts.push_str(
+                    &serialize_transform
+                        .map(|transform| format!("(v) => {transform}"))
+                        .unwrap_or_else(|| "undefined".to_string()),
+                );
+                field_ts.push_str(", ");
+                field_ts.push_str(
+                    &deserialize_transform
+                        .map(|transform| format!("(v) => {transform}"))
+                        .unwrap_or_else(|| "undefined".to_string()),
+                );
+            }
             field_ts.push(')');
 
             let mut field = Field::new(define(field_ts).into());
             if jsdoc {
-                field.set_docs(
-                    format!(
-                        "@type {{ReturnType<typeof makeEvent<{}>>}}",
-                        exporter.reference(r)?
-                    )
-                    .into(),
-                );
+                field.docs = format!(
+                    "@type {{ReturnType<typeof makeEvent<{}>>}}",
+                    render_reference_dt_for_phase(
+                        &DataType::Reference(r.clone()),
+                        Phase::Deserialize,
+                        Phase::Deserialize,
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    )?
+                )
+                .into();
             }
             s = s.field(name.to_lower_camel_case(), field);
         }
@@ -391,7 +614,7 @@ fn runtime(
         out.push_str("\n/* Constants */");
 
         let mut constants = cfg.constants.iter().collect::<Vec<_>>();
-        constants.sort_by(|(a, _), (b, _)| a.cmp(b));
+        constants.sort_by_key(|(a, _)| *a);
         for (name, value) in constants.iter() {
             let mut as_constt = None;
             // `as const` isn't supported in JS so are conditional on that.
@@ -429,9 +652,16 @@ fn runtime(
     }
 
     // Runtime
-    if has_typed_error || enabled_events {
+    if has_typed_error || enabled_events || is_channel_transform_used {
         out.push_str("\n/* Tauri Specta runtime */\n");
 
+        if is_channel_transform_used {
+            out.push_str(map_channel_impl);
+            out.push('\n');
+            if has_typed_error || enabled_events {
+                out.push('\n');
+            }
+        }
         if has_typed_error {
             out.push_str(typed_error_impl);
             out.push('\n');
@@ -455,109 +685,72 @@ fn runtime(
     Ok(Cow::Owned(out))
 }
 
-fn rewrite_bigints_in_datatype(dt: &mut DataType, nuanced: bool, phased: bool) {
-    fn rewrite_bigints_in_fields(fields: &mut Fields, nuanced: bool, phased: bool) {
-        match fields {
-            Fields::Unit => {}
-            Fields::Unnamed(fields) => {
-                for field in fields.fields_mut() {
-                    if let Some(ty) = field.ty_mut() {
-                        rewrite_bigints_in_datatype(ty, nuanced, phased);
-                    }
-                }
-            }
-            Fields::Named(fields) => {
-                for (_, field) in fields.fields_mut() {
-                    if let Some(ty) = field.ty_mut() {
-                        rewrite_bigints_in_datatype(ty, nuanced, phased);
-                    }
-                }
-            }
-        }
-    }
+/// Applies `specta_serde` format + also remaps `DataType`'s and does other transformations!
+#[derive(Debug, Clone)]
+struct SpectaFormat {
+    disable_serde_phases: bool,
+    semantic_types: Option<semantic::Configuration>,
+    remapper: Remapper,
+}
 
-    match dt {
-        DataType::Primitive(primitive) => match primitive {
-            Primitive::usize
-            | Primitive::isize
-            | Primitive::u64
-            | Primitive::i64
-            | Primitive::u128
-            | Primitive::i128 => {
-                *dt = if !nuanced {
-                    // TODO: This is temporary until we have official support for large number types in Tauri.
-                    DataType::Primitive(Primitive::u32)
-                } else if phased {
-                    specta_serde::phased(define("bigint | number").into(), define("bigint").into())
-                } else {
-                    define("bigint | number").into()
-                };
-            }
-            Primitive::f128 => {
-                *dt = DataType::Primitive(Primitive::f64);
-            }
-            _ => {}
-        },
-        DataType::List(list) => rewrite_bigints_in_datatype(list.ty_mut(), nuanced, phased),
-        DataType::Map(map) => {
-            rewrite_bigints_in_datatype(map.key_ty_mut(), nuanced, phased);
-            rewrite_bigints_in_datatype(map.value_ty_mut(), nuanced, phased);
+impl SpectaFormat {
+    fn new(cfg: &BuilderConfiguration) -> Self {
+        let mut remapper = Remapper::new();
+
+        if cfg.dangerously_cast_bigints_to_number {
+            // Creating a virtual `Types` here is a bad pattern but given we know Specta doesn't use it, it's safe.
+            let number = <specta_typescript::Number as Type>::definition(&mut Types::default());
+            remapper = remapper
+                .rule(DataType::Primitive(Primitive::usize), number.clone())
+                .rule(DataType::Primitive(Primitive::isize), number.clone())
+                .rule(DataType::Primitive(Primitive::u64), number.clone())
+                .rule(DataType::Primitive(Primitive::i64), number.clone())
+                .rule(DataType::Primitive(Primitive::u128), number.clone())
+                .rule(DataType::Primitive(Primitive::i128), number.clone())
+                .rule(
+                    <specta_typescript::BigInt as Type>::definition(&mut Types::default()),
+                    number,
+                );
         }
-        DataType::Struct(strct) => rewrite_bigints_in_fields(strct.fields_mut(), nuanced, phased),
-        DataType::Enum(enm) => {
-            for (_, variant) in enm.variants_mut() {
-                rewrite_bigints_in_fields(variant.fields_mut(), nuanced, phased);
-            }
+
+        Self {
+            disable_serde_phases: cfg.disable_serde_phases,
+            semantic_types: cfg.semantic_types.clone(),
+            remapper,
         }
-        DataType::Tuple(tuple) => {
-            for item in tuple.elements_mut() {
-                rewrite_bigints_in_datatype(item, nuanced, phased);
-            }
-        }
-        DataType::Nullable(inner) => rewrite_bigints_in_datatype(inner, nuanced, phased),
-        DataType::Reference(Reference::Named(reference)) => {
-            for (_, generic) in reference.generics_mut() {
-                rewrite_bigints_in_datatype(generic, nuanced, phased);
-            }
-        }
-        DataType::Reference(Reference::Generic(_)) | DataType::Reference(Reference::Opaque(_)) => {}
     }
 }
 
-fn rewrite_bigints_for_export(dt: &DataType, cfg: &BuilderConfiguration) -> DataType {
-    let mut dt = dt.clone();
-    rewrite_bigints_in_datatype(&mut dt, cfg.enable_nuanced_types, !cfg.disable_serde_phases);
-    dt
-}
+impl Format for SpectaFormat {
+    fn map_types(&'_ self, types: &Types) -> Result<Cow<'_, Types>, specta::FormatError> {
+        let types = if self.disable_serde_phases {
+            specta_serde::Format.map_types(types)
+        } else {
+            specta_serde::PhasesFormat.map_types(types)
+        }?;
 
-fn validate_exported_command(command: &Command, types: &ResolvedTypes) -> Result<(), Error> {
-    for (position, arg) in command.args.iter().enumerate() {
-        specta_serde::validate(&arg.ty, types).map_err(|err| {
-            Error::framework(
-                format!(
-                    "Specta Serde validation failed for command '{}' param #{} ('{}')",
-                    command.name,
-                    position + 1,
-                    arg.name
-                ),
-                err,
-            )
-        })?;
+        Ok(match &self.semantic_types {
+            Some(semantic_types) => Cow::Owned(
+                self.remapper
+                    .remap_types(semantic_types.apply_types(&types).into_owned()),
+            ),
+            None => Cow::Owned(self.remapper.remap_types(types.into_owned())),
+        })
     }
 
-    if let Some(result) = command.result.as_ref() {
-        specta_serde::validate(result, types).map_err(|err| {
-            Error::framework(
-                format!(
-                    "Specta Serde validation failed for command '{}' result",
-                    command.name
-                ),
-                err,
-            )
-        })?;
-    }
+    fn map_type(
+        &'_ self,
+        types: &Types,
+        dt: &DataType,
+    ) -> Result<Cow<'_, DataType>, specta::FormatError> {
+        let dt = if self.disable_serde_phases {
+            specta_serde::Format.map_type(types, dt)?
+        } else {
+            specta_serde::PhasesFormat.map_type(types, dt)?
+        };
 
-    Ok(())
+        Ok(Cow::Owned(self.remapper.remap_dt(dt.into_owned())))
+    }
 }
 
 fn command_binding_name(name: &str) -> &str {
@@ -566,13 +759,13 @@ fn command_binding_name(name: &str) -> &str {
 
 fn extract_std_result<'a>(
     dt: &'a DataType,
-    types: &'a ResolvedTypes,
+    types: &'a Types,
 ) -> Option<(&'a DataType, &'a DataType)> {
     if let DataType::Reference(Reference::Named(r)) = dt
-        && let Some(ndt) = r.get(types.as_types())
-        && ndt.name() == "Result"
-        && (ndt.module_path() == "std::result" || ndt.module_path() == "core::result")
-        && let [(_, ok), (_, err), ..] = r.generics()
+        && let Some(ndt) = types.get(r)
+        && is_result_ndt(ndt)
+        && let NamedReferenceType::Reference { generics, .. } = &r.inner
+        && let [(_, ok), (_, err), ..] = generics.as_slice()
     {
         return Some((ok, err));
     }
@@ -580,53 +773,225 @@ fn extract_std_result<'a>(
     None
 }
 
-fn is_channel_type(dt: &DataType, types: &ResolvedTypes) -> bool {
+fn hide_unused_std_result_type(cfg: &BuilderConfiguration, mut types: Types) -> Types {
+    let is_std_result_used_after_command_result_flattening = cfg.commands.iter().any(|command| {
+        command
+            .args
+            .iter()
+            .any(|arg| datatype_contains_std_result(&arg.ty, &types))
+            || command.result.as_ref().is_some_and(|dt| {
+                if let Some((ok, err)) = extract_std_result(dt, &types) {
+                    datatype_contains_std_result(ok, &types)
+                        || datatype_contains_std_result(err, &types)
+                } else {
+                    datatype_contains_std_result(dt, &types)
+                }
+            })
+    }) || cfg
+        .events
+        .values()
+        .any(|(_, r)| datatype_contains_std_result(&DataType::Reference(r.clone()), &types))
+        || types.into_unsorted_iter().any(|ndt| {
+            if is_result_ndt(ndt) {
+                false
+            } else {
+                ndt.ty
+                    .as_ref()
+                    .is_some_and(|dt| datatype_contains_std_result(dt, &types))
+            }
+        });
+
+    if is_std_result_used_after_command_result_flattening {
+        return types;
+    }
+
+    types.iter_mut(|ndt| {
+        if is_result_ndt(ndt) {
+            ndt.ty = None;
+        }
+    });
+
+    types
+}
+
+fn datatype_contains_std_result(dt: &DataType, types: &Types) -> bool {
     match dt {
-        DataType::Reference(Reference::Named(r)) => r
-            .get(types.as_types())
-            .map(|ndt| ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::"))
-            .unwrap_or(false),
-        _ => false,
+        DataType::Primitive(_) | DataType::Generic(_) => false,
+        DataType::List(list) => datatype_contains_std_result(&list.ty, types),
+        DataType::Map(map) => {
+            datatype_contains_std_result(map.key_ty(), types)
+                || datatype_contains_std_result(map.value_ty(), types)
+        }
+        DataType::Struct(s) => fields_contain_std_result(&s.fields, types),
+        DataType::Enum(e) => e
+            .variants
+            .iter()
+            .any(|(_, variant)| fields_contain_std_result(&variant.fields, types)),
+        DataType::Tuple(tuple) => tuple
+            .elements
+            .iter()
+            .any(|dt| datatype_contains_std_result(dt, types)),
+        DataType::Nullable(dt) => datatype_contains_std_result(dt, types),
+        DataType::Intersection(dts) => dts.iter().any(|dt| datatype_contains_std_result(dt, types)),
+        DataType::Reference(Reference::Named(r)) => {
+            let generic_contains_result = match &r.inner {
+                NamedReferenceType::Reference { generics, .. } => generics
+                    .iter()
+                    .any(|(_, dt)| datatype_contains_std_result(dt, types)),
+                NamedReferenceType::Inline { dt, .. } => datatype_contains_std_result(dt, types),
+                NamedReferenceType::Recursive => false,
+            };
+
+            generic_contains_result || types.get(r).is_some_and(is_result_ndt)
+        }
+        DataType::Reference(Reference::Opaque(_)) => false,
+    }
+}
+
+fn fields_contain_std_result(fields: &Fields, types: &Types) -> bool {
+    match fields {
+        Fields::Unit => false,
+        Fields::Unnamed(fields) => fields
+            .fields
+            .iter()
+            .filter_map(|field| field.ty.as_ref())
+            .any(|dt| datatype_contains_std_result(dt, types)),
+        Fields::Named(fields) => fields
+            .fields
+            .iter()
+            .filter_map(|(_, field)| field.ty.as_ref())
+            .any(|dt| datatype_contains_std_result(dt, types)),
+    }
+}
+
+fn is_result_ndt(ndt: &NamedDataType) -> bool {
+    ndt.name == "Result" && matches!(&*ndt.module_path, "std::result" | "core::result")
+}
+
+fn is_channel_type(dt: &DataType, types: &Types) -> bool {
+    channel_generic_type(dt, types).is_some()
+}
+
+fn channel_generic_type<'a>(dt: &'a DataType, types: &Types) -> Option<&'a DataType> {
+    let DataType::Reference(Reference::Named(r)) = dt else {
+        return None;
+    };
+    let ndt = types.get(r)?;
+    if ndt.name != "TAURI_CHANNEL" || !ndt.module_path.starts_with("tauri::") {
+        return None;
+    }
+    match &r.inner {
+        NamedReferenceType::Reference { generics, .. } => generics.first().map(|(_, dt)| dt),
+        NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive => None,
     }
 }
 
 fn render_result_transform_for_phase(
     dt: &DataType,
+    phase: Phase,
     input: &str,
-    exporter: &FrameworkExporter,
+    _exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
+    semantic_types_runtime_types: &Types,
 ) -> Option<String> {
-    if !cfg.enable_nuanced_types {
-        return None;
-    }
+    let dt = specta_serde::select_phase_datatype(dt, semantic_types_runtime_types, phase);
+    let dt = if let DataType::Reference(Reference::Named(r)) = &dt
+        && let Some(ndt) = semantic_types_runtime_types.get(r)
+        && let Some(dt) = &ndt.ty
+    {
+        dt.clone()
+    } else {
+        dt
+    };
+    apply_semantic_type_for_phase(&dt, phase, input, semantic_types_runtime_types, cfg)
+        .map(|(_, mapped)| mapped)
+        .filter(|mapped| mapped != input)
+}
 
-    let mapped = TransformPlan::analyze(dt, exporter.types).map(input);
-    (mapped != input).then(|| mapped.into_owned())
+fn jsdoc_transform(transform: String, input: &str, jsdoc: bool) -> String {
+    if jsdoc {
+        transform.replace(&format!(" as typeof {input}"), "")
+    } else {
+        transform
+    }
+}
+
+fn has_semantic_type_for_phase(
+    dt: &DataType,
+    phase: Phase,
+    input: &str,
+    _exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
+    semantic_types_runtime_types: &Types,
+) -> bool {
+    apply_semantic_type_for_phase(dt, phase, input, semantic_types_runtime_types, cfg).is_some()
 }
 
 fn render_reference_dt_for_phase(
     dt: &DataType,
-    phase: Phase,
+    serde_phase: Phase,
+    semantic_type_phase: Phase,
     exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
+    semantic_types_runtime_types: &Types,
 ) -> Result<String, Error> {
-    let dt = specta_serde::select_phase_datatype(
-        &rewrite_bigints_for_export(dt, cfg),
-        exporter.types,
-        phase,
-    );
+    let dt = specta_serde::select_phase_datatype(dt, exporter.types, serde_phase);
+    let dt = apply_semantic_type_for_phase(
+        &dt,
+        semantic_type_phase,
+        "v",
+        semantic_types_runtime_types,
+        cfg,
+    )
+    .and_then(|(dt, _)| dt)
+    .unwrap_or(dt);
+
     render_reference_dt(&dt, exporter)
+}
+
+fn apply_semantic_type_for_phase(
+    dt: &DataType,
+    phase: Phase,
+    input: &str,
+    types: &Types,
+    cfg: &BuilderConfiguration,
+) -> Option<(Option<DataType>, String)> {
+    let semantic_types = cfg.semantic_types.as_ref()?;
+    match phase {
+        Phase::Serialize => semantic_types.apply_serialize(types, dt, input),
+        Phase::Deserialize => semantic_types.apply_deserialize(types, dt, input),
+    }
+}
+
+fn semantic_types_runtime_types(cfg: &BuilderConfiguration) -> Result<Option<Types>, Error> {
+    if cfg.semantic_types.is_none() {
+        return Ok(None);
+    }
+
+    let types = hide_unused_std_result_type(cfg, cfg.types.clone());
+    let types = if cfg.disable_serde_phases {
+        specta_serde::Format.map_types(&types)
+    } else {
+        specta_serde::PhasesFormat.map_types(&types)
+    }
+    .map_err(|err| Error::framework("failed to format semantic types runtime types", err))?;
+
+    Ok(Some(types.into_owned()))
 }
 
 // Render a `DataType` as a reference (or fallback to inline).
 // Also handles Tauri channel references.
 fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt
-        && let Some(ndt) = r.get(exporter.types.as_types())
-        && ndt.name() == "TAURI_CHANNEL"
-        && ndt.module_path().starts_with("tauri::")
+        && let Some(ndt) = exporter.types.get(r)
+        && ndt.name == "TAURI_CHANNEL"
+        && ndt.module_path.starts_with("tauri::")
     {
-        let generic = if let Some((_, dt)) = r.generics().first() {
+        let generics = match &r.inner {
+            NamedReferenceType::Reference { generics, .. } => generics.as_slice(),
+            NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive => &[],
+        };
+        let generic = if let Some((_, dt)) = generics.first() {
             match &dt {
                 DataType::Reference(r) => exporter.reference(r)?,
                 dt => exporter.inline(dt)?,
@@ -650,6 +1015,7 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "__TAURI_INVOKE",
     "typedError",
     "makeEvent",
+    "mapChannel",
 ];
 
 const FRAMEWORK_HEADER: &str =
@@ -662,6 +1028,20 @@ const TYPED_ERROR_IMPL_TS: &str = r#"async function typedError<T, E>(result: Pro
         if (e instanceof Error) throw e;
         return { status: "error", error: e as any };
     }
+}"#;
+
+const MAP_CHANNEL_IMPL_TS: &str = r#"function mapChannel<T>(channel: Channel<T>, deserialize: (payload: any) => T): Channel<T> {
+    return new Channel((payload) => channel.onmessage(deserialize(payload)));
+}"#;
+
+const MAP_CHANNEL_IMPL_JS: &str = r#"/**
+ * @template T
+ * @param {Channel<T>} channel
+ * @param {(payload: any) => T} deserialize
+ * @returns {Channel<T>}
+ */
+function mapChannel(channel, deserialize) {
+    return new Channel((payload) => channel.onmessage(deserialize(payload)));
 }"#;
 
 const TYPED_ERROR_IMPL_JS: &str = r#"/**
@@ -683,17 +1063,20 @@ const TYPED_ERROR_ASSERTION_TS: &str = "const _assertTypedErrorFollowsContract: 
 
 const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
-function makeEvent<T>(name: string) {
+function makeEvent<T>(name: string, serialize?: (payload: T) => unknown, deserialize?: (payload: any) => T) {
+    const mapEvent = (cb: __TAURI_EVENT.EventCallback<T>) => (event: __TAURI_EVENT.Event<any>) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapPayload = (payload: T) => serialize ? serialize(payload) : payload;
+
     const base = {
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, cb),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, cb),
-        emit: ((payload: T) => __TAURI_EVENT.emit(name, payload) as unknown) as EventEmit<T>
+        listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, mapEvent(cb)),
+        emit: ((payload: T) => __TAURI_EVENT.emit(name, mapPayload(payload)) as unknown) as EventEmit<T>
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, cb),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, cb),
-        emit: ((payload: T) => target.emit(name, payload) as unknown) as EventEmit<T>
+        listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, mapEvent(cb)),
+        emit: ((payload: T) => target.emit(name, mapPayload(payload)) as unknown) as EventEmit<T>
     });
 
     return Object.assign(fn, base);
@@ -702,25 +1085,30 @@ function makeEvent<T>(name: string) {
 const MAKE_EVENT_IMPL_JS: &str = r#"/**
  * @template T
  * @param {string} name
+ * @param {(payload: T) => unknown} [serialize]
+ * @param {(payload: any) => T} [deserialize]
  */
-function makeEvent(name) {
+function makeEvent(name, serialize, deserialize) {
+    const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapPayload = (payload) => serialize ? serialize(payload) : payload;
+
     const base = {
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        listen: (cb) => __TAURI_EVENT.listen(name, cb),
+        listen: (cb) => __TAURI_EVENT.listen(name, mapEvent(cb)),
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        once: (cb) => __TAURI_EVENT.once(name, cb),
+        once: (cb) => __TAURI_EVENT.once(name, mapEvent(cb)),
         /** @param {T} payload */
-        emit: (payload) => __TAURI_EVENT.emit(name, payload),
+        emit: (payload) => __TAURI_EVENT.emit(name, mapPayload(payload)),
     };
 
     /** @param {import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window} target */
     const fn = (target) => ({
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        listen: (cb) => target.listen(name, cb),
+        listen: (cb) => target.listen(name, mapEvent(cb)),
         /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        once: (cb) => target.once(name, cb),
+        once: (cb) => target.once(name, mapEvent(cb)),
         /** @param {T} payload */
-        emit: (payload) => target.emit(name, payload),
+        emit: (payload) => target.emit(name, mapPayload(payload)),
     });
 
     return Object.assign(fn, base);

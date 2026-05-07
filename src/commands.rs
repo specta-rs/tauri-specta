@@ -170,7 +170,7 @@ where
 
 fn top_level_unit_as_void(dt: DataType) -> Option<DataType> {
     match &dt {
-        DataType::Tuple(tuple) if tuple.elements().is_empty() => None,
+        DataType::Tuple(tuple) if tuple.elements.is_empty() => None,
         _ => Some(dt),
     }
 }
@@ -180,8 +180,8 @@ fn deprecated_from_metadata(
 ) -> Option<Deprecated> {
     deprecated.map(|deprecated| {
         let mut out = Deprecated::new();
-        out.set_note(deprecated.note.map(Cow::Borrowed));
-        out.set_since(deprecated.since.map(Cow::Borrowed));
+        out.note = deprecated.note.map(Cow::Borrowed);
+        out.since = deprecated.since.map(Cow::Borrowed);
         out
     })
 }
