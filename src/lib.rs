@@ -40,7 +40,6 @@
 //! use tauri_specta::{collect_commands, Builder};
 //!
 //! #[tauri::command]
-//! #[specta::specta] // < You must annotate your commands
 //! fn hello_world(my_name: String) -> String {
 //!     format!("Hello, {my_name}! You've been greeted from Rust!")
 //! }
@@ -225,9 +224,10 @@ mod macros;
 mod name;
 
 pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
-pub use commands::Commands;
+pub use commands::{Command, CommandArg, Commands};
 pub use event::{Event, Events, TypedEvent};
 pub use lang::LanguageExt;
+pub use tauri_specta_macros::collect_commands;
 
 /// Implements the [`Event`](trait@crate::Event) trait for a struct.
 ///
@@ -247,23 +247,37 @@ pub mod internal {
 
     use std::{any::TypeId, sync::Arc};
 
-    use specta::{
-        Types,
-        datatype::{self, DataType},
-    };
+    use specta::{Types, datatype::DataType};
     use tauri::{Runtime, ipc::Invoke};
 
     use super::*;
 
+    #[doc(hidden)]
+    pub use paste::paste;
+
+    #[doc(hidden)]
+    pub use crate::commands::CommandSignature;
+
     /// called by `collect_commands` to construct `Commands`
-    pub fn command<R: Runtime, F>(
-        f: F,
-        types: fn(&mut Types) -> Vec<datatype::Function>,
-    ) -> Commands<R>
+    pub fn command<R: Runtime, F>(f: F, types: fn(&mut Types) -> Vec<Command>) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
     {
         Commands(Arc::new(f), types)
+    }
+
+    /// called by `collect_commands` to infer one command's type metadata
+    pub fn infer_command<F, M>(
+        f: F,
+        metadata: tauri::ipc::CommandMetadata,
+        types: &mut Types,
+    ) -> Command
+    where
+        F: crate::commands::CommandSignature<M>,
+        F::Args: crate::commands::CommandArguments<F::ArgMarkers>,
+        F::Result: crate::commands::CommandResult<F::ResultMarker>,
+    {
+        f.into_command(metadata, types)
     }
 
     /// called by `collect_events` to register events to an `Events`

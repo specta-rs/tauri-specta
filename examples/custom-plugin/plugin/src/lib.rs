@@ -6,7 +6,6 @@ use tauri_specta::*;
 
 /// Adds two numbers, returning the result.
 #[tauri::command]
-#[specta::specta]
 fn add_numbers(a: i32, b: i32) -> i32 {
     a + b
 }

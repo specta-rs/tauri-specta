@@ -7,31 +7,26 @@ use tauri::{Runtime, State, Window};
 // Test different combinations of results
 
 #[tauri::command]
-#[specta]
 fn basic() -> String {
     "Hello, world!".to_string()
 }
 
 #[tauri::command]
-#[specta]
 fn result() -> Result<String, ()> {
     Ok("Hello, world!".to_string())
 }
 
 #[tauri::command(async)]
-#[specta]
 async fn async_() -> String {
     "Hello, world!".to_string()
 }
 
 #[tauri::command(async)]
-#[specta]
 async fn async_result() -> Result<String, ()> {
     Ok("Hello, world!".to_string())
 }
 
 #[tauri::command(async)]
-#[specta]
 async fn async_impl() -> impl Serialize + Type {
     "Hello, World!"
 }
@@ -39,13 +34,11 @@ async fn async_impl() -> impl Serialize + Type {
 // Test different combinations of args
 
 #[tauri::command]
-#[specta]
 fn value(input: String) -> String {
     "Hello, world!".to_string()
 }
 
 #[tauri::command]
-#[specta]
 fn state(state: State<String>) -> String {
     "Hello, world!".to_string()
 }
@@ -57,7 +50,6 @@ fn window<R: Runtime>(window: Window<R>) -> String {
 }
 
 #[tauri::command]
-#[specta]
 fn state_value(state: State<()>, a: String) -> String {
     "Hello, world!".to_string()
 }

@@ -13,40 +13,33 @@ use thiserror::Error;
 /// WORLD
 /// !!!!
 #[tauri::command]
-#[specta::specta]
 fn hello_world(my_name: String) -> String {
     format!("Hello, {my_name}! You've been greeted from Rust!")
 }
 
 #[tauri::command]
-#[specta::specta]
 fn goodbye_world() -> impl Serialize + specta::Type {
     "Goodbye world :("
 }
 
 #[tauri::command]
-#[specta::specta]
 async fn async_hello_world(my_name: String) -> String {
     format!("Hello, {my_name}!")
 }
 
 #[tauri::command]
-#[specta::specta]
 fn has_error() -> Result<&'static str, i32> {
     Err(32)
 }
 
 #[tauri::command]
-#[specta::specta]
 fn generic<T: tauri::Runtime>(_app: tauri::AppHandle<T>) {}
 
 #[deprecated = "This is a deprecated function"]
 #[tauri::command]
-#[specta::specta]
 fn deprecated() {}
 
 #[tauri::command]
-#[specta::specta]
 fn with_channel(_channel: tauri::ipc::Channel<i32>) {}
 
 #[derive(Serialize, Deserialize, Type)]
@@ -56,7 +49,6 @@ struct PhaseSpecificRename {
 }
 
 #[tauri::command]
-#[specta::specta]
 fn phase_specific_rename(input: PhaseSpecificRename) -> PhaseSpecificRename {
     input
 }
@@ -65,7 +57,6 @@ mod nested {
     use super::*;
 
     #[tauri::command]
-    #[specta::specta]
     pub fn some_struct() -> MyStruct {
         MyStruct {
             some_field: "Hello World".into(),
@@ -94,7 +85,6 @@ pub enum MyError {
 }
 
 #[tauri::command]
-#[specta::specta]
 fn typesafe_errors_using_thiserror() -> Result<(), MyError> {
     Err(MyError::IoError(std::io::Error::other("oh no!")))
 }
@@ -113,7 +103,6 @@ impl From<std::io::Error> for MyError2 {
 }
 
 #[tauri::command]
-#[specta::specta]
 fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
     // some_method()?; // This will work because `?` does `From` conversion.
 

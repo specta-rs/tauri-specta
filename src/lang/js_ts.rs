@@ -11,7 +11,7 @@ use specta_serde::Phase;
 use specta_typescript::{Error, Exporter, FrameworkExporter, define, semantic};
 use specta_util::Remapper;
 
-use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
+use crate::name::resolve_tauri_event_name;
 use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
@@ -107,14 +107,15 @@ fn runtime(
     let is_channel_used = cfg.commands.iter().any(|command| {
         // Check if any argument is a Channel
         command
-            .args()
-            .iter()
-            .any(|(_, dt)| is_channel_type(dt, exporter.types))
+                .args
+                .iter()
+                .any(|arg| is_channel_type(&arg.ty, exporter.types))
             // Check if result contains a Channel
-            || command.result().is_some_and(|dt| is_channel_type(dt, exporter.types))
+            || command.result.as_ref().is_some_and(|dt| is_channel_type(dt, exporter.types))
     });
     let is_channel_transform_used = cfg.commands.iter().any(|command| {
-        command.args().iter().any(|(_, dt)| {
+        command.args.iter().any(|arg| {
+            let dt = &arg.ty;
             channel_generic_type(dt, exporter.types).is_some_and(|dt| {
                 render_result_transform_for_phase(
                     dt,
@@ -132,7 +133,8 @@ fn runtime(
         && cfg.error_handling == ErrorHandlingMode::Result
         && cfg.commands.iter().any(|command| {
             command
-                .result()
+                .result
+                .as_ref()
                 .and_then(|dt| extract_std_result(dt, exporter.types))
                 .is_some()
         });
@@ -165,17 +167,16 @@ fn runtime(
         let mut s = Struct::named();
         for command in &cfg.commands {
             let command_name_escaped =
-                serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
-                    .expect("failed to serialize string");
+                serde_json::to_string(&command.name).expect("failed to serialize string");
 
             let arguments = command
-                .args()
+                .args
                 .iter()
-                .map(|(name, dt)| {
+                .map(|arg| {
                     Ok((
-                        name.to_lower_camel_case(),
+                        arg.name.to_lower_camel_case(),
                         render_reference_dt_for_phase(
-                            dt,
+                            &arg.ty,
                             Phase::Deserialize,
                             Phase::Serialize,
                             &exporter,
@@ -199,16 +200,17 @@ fn runtime(
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let arguments_invoke_obj = if command.args().is_empty() {
+            let arguments_invoke_obj = if command.args.is_empty() {
                 Default::default()
             } else {
                 format!(
                     ", {{ {} }}",
                     command
-                        .args()
+                        .args
                         .iter()
-                        .map(|(name, dt)| {
-                            let name = name.to_lower_camel_case();
+                        .map(|arg| {
+                            let name = arg.name.to_lower_camel_case();
+                            let dt = &arg.ty;
                             let value = if let Some(generic) =
                                 channel_generic_type(dt, exporter.types)
                             {
@@ -244,7 +246,7 @@ fn runtime(
             let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
 
             let body = if cfg.error_handling == ErrorHandlingMode::Result
-                && let Some(result) = command.result()
+                && let Some(result) = command.result.as_ref()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
             {
                 let ok_semantic_type = has_semantic_type_for_phase(
@@ -341,9 +343,10 @@ fn runtime(
             } else {
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
                 let output_dt = command
-                    .result()
+                    .result
+                    .as_ref()
                     .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
-                    .or(command.result());
+                    .or(command.result.as_ref());
 
                 if !jsdoc {
                     let output_semantic_type = output_dt.is_some_and(|dt| {
@@ -357,7 +360,7 @@ fn runtime(
                         )
                     });
                     invoke_ts.push('<');
-                    invoke_ts.push_str(&match command.result() {
+                    invoke_ts.push_str(&match command.result.as_ref() {
                         Some(dt) => Cow::Owned(render_reference_dt_for_phase(
                             extract_std_result(dt, exporter.types)
                                 .map(|(ok, _)| ok)
@@ -422,7 +425,7 @@ fn runtime(
                     }
 
                     let returns = if cfg.error_handling == ErrorHandlingMode::Result
-                        && let Some(result) = command.result()
+                        && let Some(result) = command.result.as_ref()
                         && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
                     {
                         let ok_semantic_type = has_semantic_type_for_phase(
@@ -471,9 +474,10 @@ fn runtime(
                         )
                     } else {
                         let output_dt = command
-                            .result()
+                            .result
+                            .as_ref()
                             .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
-                            .or(command.result());
+                            .or(command.result.as_ref());
                         let output_semantic_type = output_dt.is_some_and(|dt| {
                             has_semantic_type_for_phase(
                                 dt,
@@ -507,7 +511,10 @@ fn runtime(
 
                 docs.into()
             };
-            s = s.field(command.name().to_lower_camel_case(), field);
+            s = s.field(
+                command_binding_name(&command.name).to_lower_camel_case(),
+                field,
+            );
         }
 
         out.push_str("\n/** Commands */");
@@ -746,6 +753,10 @@ impl Format for SpectaFormat {
     }
 }
 
+fn command_binding_name(name: &str) -> &str {
+    name.split_once('|').map_or(name, |(_, name)| name)
+}
+
 fn extract_std_result<'a>(
     dt: &'a DataType,
     types: &'a Types,
@@ -765,10 +776,10 @@ fn extract_std_result<'a>(
 fn hide_unused_std_result_type(cfg: &BuilderConfiguration, mut types: Types) -> Types {
     let is_std_result_used_after_command_result_flattening = cfg.commands.iter().any(|command| {
         command
-            .args()
+            .args
             .iter()
-            .any(|(_, dt)| datatype_contains_std_result(dt, &types))
-            || command.result().is_some_and(|dt| {
+            .any(|arg| datatype_contains_std_result(&arg.ty, &types))
+            || command.result.as_ref().is_some_and(|dt| {
                 if let Some((ok, err)) = extract_std_result(dt, &types) {
                     datatype_contains_std_result(ok, &types)
                         || datatype_contains_std_result(err, &types)

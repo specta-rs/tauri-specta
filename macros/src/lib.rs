@@ -6,13 +6,64 @@
 
 use heck::ToKebabCase;
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{ToTokens, quote, quote_spanned};
 use syn::{
-    ConstParam, DeriveInput, GenericParam, Generics, Ident, LifetimeParam, LitStr, TypeParam,
-    WhereClause, parse_macro_input, parse_quote,
+    ConstParam, DeriveInput, ExprPath, GenericParam, Generics, Ident, LifetimeParam, LitStr,
+    PathArguments, Token, TypeParam, WhereClause, parse::Parse, parse::ParseStream,
+    parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned,
 };
 
 use darling::FromDeriveInput;
+
+struct CommandsInput {
+    commands: Punctuated<ExprPath, Token![,]>,
+}
+
+impl Parse for CommandsInput {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        Ok(Self {
+            commands: Punctuated::parse_terminated(input)?,
+        })
+    }
+}
+
+#[proc_macro]
+pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let CommandsInput { commands } = parse_macro_input!(input as CommandsInput);
+
+    let tauri_commands = commands.iter().map(strip_path_generics);
+    let specta_commands = commands.iter().map(|command| {
+        let span = command.span();
+
+        quote_spanned! {span=>
+            tauri_specta::__private_infer_command!((#command), types)
+        }
+    });
+
+    quote! {
+        tauri_specta::internal::command(
+            ::tauri::generate_handler![#(#tauri_commands),*],
+            {
+                fn export(types: &mut ::specta::Types) -> ::std::vec::Vec<tauri_specta::Command> {
+                    ::std::vec![#(#specta_commands),*]
+                }
+
+                export
+            },
+        )
+    }
+    .into()
+}
+
+fn strip_path_generics(command: &ExprPath) -> TokenStream {
+    let mut path = command.path.clone();
+
+    for segment in &mut path.segments {
+        segment.arguments = PathArguments::None;
+    }
+
+    path.to_token_stream()
+}
 
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(tauri_specta), supports(struct_any, enum_any))]
