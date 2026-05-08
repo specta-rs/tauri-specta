@@ -828,7 +828,7 @@ fn datatype_contains_std_result(dt: &DataType, types: &Types) -> bool {
                     .iter()
                     .any(|(_, dt)| datatype_contains_std_result(dt, types)),
                 NamedReferenceType::Inline { dt, .. } => datatype_contains_std_result(dt, types),
-                NamedReferenceType::Recursive => false,
+                NamedReferenceType::Recursive(_) => false,
             };
 
             generic_contains_result || types.get(r).is_some_and(is_result_ndt)
@@ -871,7 +871,7 @@ fn channel_generic_type<'a>(dt: &'a DataType, types: &Types) -> Option<&'a DataT
     }
     match &r.inner {
         NamedReferenceType::Reference { generics, .. } => generics.first().map(|(_, dt)| dt),
-        NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive => None,
+        NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive(_) => None,
     }
 }
 
@@ -978,7 +978,7 @@ fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<St
     {
         let generics = match &r.inner {
             NamedReferenceType::Reference { generics, .. } => generics.as_slice(),
-            NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive => &[],
+            NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive(_) => &[],
         };
         let generic = if let Some((_, dt)) = generics.first() {
             match &dt {
