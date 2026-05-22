@@ -9,13 +9,14 @@ use serde::{Serialize, de::DeserializeOwned};
 use specta::{Type, Types, datatype::Reference};
 use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
+use crate::name::resolve_tauri_event_name;
+
 /// A wrapper around the output of the `collect_commands` macro.
 ///
 /// This acts to seal the implementation details of the macro.
 #[derive(Default)]
-pub struct Events(
-    pub(crate) BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>,
-);
+#[allow(clippy::type_complexity)]
+pub struct Events(pub(crate) BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>);
 
 #[derive(Default)]
 pub(crate) struct EventRegistryMeta {
@@ -28,6 +29,7 @@ pub(crate) struct EventRegistry(pub(crate) RwLock<HashMap<TypeId, EventRegistryM
 
 impl EventRegistry {
     /// gets the name of the event (taking into account plugin prefixes) and ensuring it was correctly mounted to the current app.
+    #[allow(clippy::panic)]
     pub fn get_event_name<E: Event, R: Runtime>(handle: &impl Manager<R>) -> Cow<'static, str> {
         let this = handle.try_state::<EventRegistry>().expect(
             "EventRegistry not found in Tauri state - Did you forget to call Builder::mount_events?",
@@ -38,9 +40,7 @@ impl EventRegistry {
             .get(&TypeId::of::<E>())
             .unwrap_or_else(|| panic!("Event {} not found in registry!", E::NAME));
 
-        meta.plugin_name
-            .map(|plugin_name| format!("plugin:{plugin_name}:{}", E::NAME).into())
-            .unwrap_or_else(|| E::NAME.into())
+        resolve_tauri_event_name(meta.plugin_name, E::NAME)
     }
 
     pub fn get_or_manage<R: Runtime>(handle: &impl Manager<R>) -> tauri::State<'_, Self> {
@@ -94,7 +94,7 @@ macro_rules! make_handler {
 /// #[derive(Debug, Clone, Serialize, Deserialize, Type, Event)]
 /// pub struct MyEvent(String);
 ///
-/// fn use_event(app_handle: AppHandle) {
+/// fn use_event(app_handle: AppHandle<tauri::Wry>) {
 ///     MyEvent::listen(&app_handle, |event| {
 ///         dbg!(event.payload);
 ///     });

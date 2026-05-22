@@ -5,9 +5,31 @@ export type DemoEvent = string;
 
 export type EmptyEvent = null;
 
-export type MyError = never | string;
+export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
 
-export type MyError2 = string;
+export type MyError2 = { type: "IoError"; data: string };
+
+export type PhaseSpecificRename = PhaseSpecificRename_Serialize | PhaseSpecificRename_Deserialize;
+
+export type PhaseSpecificRename_Deserialize = {
+	deserialized_value: string,
+};
+
+export type PhaseSpecificRename_Serialize = {
+	serialized_value: string,
+};
+
+export type SemanticTypes = {
+	date: Date,
+	bytes: Uint8Array,
+	url: URL,
+};
+
+export type SemanticTypesEvent = {
+	date: Date,
+	bytes: Uint8Array,
+	url: URL,
+};
 
 export type Testing = {
 	a: string,

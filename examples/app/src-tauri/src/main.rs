@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use specta_typescript::Typescript;
+use specta_typescript::{Typescript, semantic};
 use tauri_specta::*;
 use thiserror::Error;
 
@@ -48,6 +48,18 @@ fn deprecated() {}
 #[tauri::command]
 #[specta::specta]
 fn with_channel(_channel: tauri::ipc::Channel<i32>) {}
+
+#[derive(Serialize, Deserialize, Type)]
+struct PhaseSpecificRename {
+    #[serde(rename(serialize = "serialized_value", deserialize = "deserialized_value"))]
+    value: String,
+}
+
+#[tauri::command]
+#[specta::specta]
+fn phase_specific_rename(input: PhaseSpecificRename) -> PhaseSpecificRename {
+    input
+}
 
 mod nested {
     use super::*;
@@ -108,6 +120,24 @@ fn typesafe_errors_using_thiserror_with_value() -> Result<(), MyError2> {
     Err(std::io::Error::other("oh no!").into()) // We use `into` here to do the `From` conversion.
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SemanticTypes {
+    date: chrono::DateTime<chrono::Utc>,
+    bytes: bytes::Bytes,
+    url: url::Url,
+}
+
+#[tauri::command]
+#[specta::specta]
+fn semantic_types(
+    arg: SemanticTypes,
+    channel: tauri::ipc::Channel<SemanticTypes>,
+) -> SemanticTypes {
+    println!("{arg:?}");
+    channel.send(arg.clone()).ok();
+    arg
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
 #[tauri_specta(event_name = "myDemoEvent")] // Optionally rename event key (for JS/TS)
 pub struct DemoEvent(String);
@@ -115,16 +145,30 @@ pub struct DemoEvent(String);
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
 pub struct EmptyEvent;
 
+#[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
+pub struct SemanticTypesEvent {
+    date: chrono::DateTime<chrono::Utc>,
+    bytes: bytes::Bytes,
+    url: url::Url,
+}
+
 #[derive(Type)]
+#[allow(dead_code)]
 pub struct Custom(String);
 
 #[derive(Type)]
+#[allow(dead_code)]
 pub struct Testing {
     a: String,
 }
 
+#[allow(deprecated)]
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
+        // This enables `Date`, `Uint8Array`, and `URL` for supported types.
+        .semantic_types(semantic::Configuration::default())
+        // This can be used if you don't want per-phase (Serialize/Deserialize) types.
+        // .disable_serde_phases()
         .commands(tauri_specta::collect_commands![
             hello_world,
             goodbye_world,
@@ -134,10 +178,16 @@ fn main() {
             generic::<tauri::Wry>,
             deprecated,
             with_channel,
+            phase_specific_rename,
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
+            semantic_types,
         ])
-        .events(tauri_specta::collect_events![crate::DemoEvent, EmptyEvent])
+        .events(tauri_specta::collect_events![
+            crate::DemoEvent,
+            EmptyEvent,
+            SemanticTypesEvent
+        ])
         .typ::<Custom>()
         .typ::<Testing>()
         .constant("universalConstant", 42);

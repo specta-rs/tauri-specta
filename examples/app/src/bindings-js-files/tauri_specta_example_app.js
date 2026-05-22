@@ -8,12 +8,44 @@
 	*
 	* @typedef {null} EmptyEvent
 	*
-	* @typedef {never | string} MyError
-	* @property {never} IoError
-	* @property {string} AnotherError
+	* @typedef {{ type: "IoError" } | { type: "AnotherError"; data: string }} MyError
+	* @property {{ type: "IoError" }} IoError
+	* @property {{ type: "AnotherError"; data: string }} AnotherError
 	*
-	* @typedef {string} MyError2
-	* @property {string} IoError
+	* @typedef {{ type: "IoError"; data: string }} MyError2
+	* @property {{ type: "IoError"; data: string }} IoError
+	*
+	* @typedef {PhaseSpecificRename_Serialize | PhaseSpecificRename_Deserialize} PhaseSpecificRename
+	* @property {PhaseSpecificRename_Serialize} Serialize
+	* @property {PhaseSpecificRename_Deserialize} Deserialize
+	*
+	* @typedef {{
+	*		deserialized_value: string,
+	*	}} PhaseSpecificRename_Deserialize
+	* @property {string} deserialized_value
+	*
+	* @typedef {{
+	*		serialized_value: string,
+	*	}} PhaseSpecificRename_Serialize
+	* @property {string} serialized_value
+	*
+	* @typedef {{
+	*		date: Date,
+	*		bytes: Uint8Array,
+	*		url: URL,
+	*	}} SemanticTypes
+	* @property {Date} date
+	* @property {Uint8Array} bytes
+	* @property {URL} url
+	*
+	* @typedef {{
+	*		date: Date,
+	*		bytes: Uint8Array,
+	*		url: URL,
+	*	}} SemanticTypesEvent
+	* @property {Date} date
+	* @property {Uint8Array} bytes
+	* @property {URL} url
 	*
 	* @typedef {{
 	*		a: string,

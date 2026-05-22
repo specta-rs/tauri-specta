@@ -1,7 +1,7 @@
 [package]
 name = "tauri-specta"
 description = "Completely typesafe Tauri commands"
-version = "2.0.0-rc.23"
+version = "2.0.0-rc.25"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2024"
 license = "MIT"
@@ -36,10 +36,15 @@ tauri-specta-macros = { version = "=2.0.0-rc.23", optional = true, path = "./mac
 serde = "1"
 serde_json = "1"
 thiserror = "2"
-tauri = { workspace = true, features = ["specta"] }
+tauri = { version = "2", default-features = false, features = ["specta"] }
 
 # Private
 heck = "0.5"
+specta-serde = { workspace = true }
+specta-util = { workspace = true }
+
+[dev-dependencies]
+tauri = { version = "2", default-features = false, features = ["test", "wry"] }
 
 [workspace]
 members = [
@@ -57,6 +62,7 @@ missing_docs = { level = "warn", priority = -1 }
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = { level = "allow", priority = 1 }
 unwrap_used = { level = "warn", priority = -1 }
 panic = { level = "warn", priority = -1 }
 todo = { level = "warn", priority = -1 }
