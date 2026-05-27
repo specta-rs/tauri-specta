@@ -3,7 +3,7 @@ use std::path::Path;
 use heck::ToLowerCamelCase;
 use specta::{
     Types,
-    datatype::{DataType, Function, Reference},
+    datatype::{DataType, Function, NamedDataType, NamedReferenceType, Reference},
 };
 use specta_rescript::{Error, ReScript, primitives::datatype_to_rescript};
 
@@ -60,11 +60,22 @@ fn render_header(exporter: &ReScript, out: &mut String) {
 }
 
 fn render_types(exporter: &ReScript, types: &Types, out: &mut String) -> Result<(), Error> {
-    let output = ReScript::export(&exporter.clone().header(""), types)?;
+    let filtered = types.clone().map(|mut ndt| {
+        if is_std_result_named_type(&ndt) {
+            ndt.ty = None;
+        }
+        ndt
+    });
+    let output = ReScript::export(&exporter.clone().header(""), &filtered)?;
     if !output.trim().is_empty() {
         out.push_str(&output);
     }
     Ok(())
+}
+
+fn is_std_result_named_type(ndt: &NamedDataType) -> bool {
+    ndt.name == "Result"
+        && (ndt.module_path == "std::result" || ndt.module_path == "core::result")
 }
 
 fn render_channel(config: &BuilderConfiguration, out: &mut String) {
@@ -221,10 +232,10 @@ fn is_tauri_channel(types: &Types, dt: &DataType) -> bool {
     let DataType::Reference(Reference::Named(r)) = dt else {
         return false;
     };
-    let Some(ndt) = r.get(types) else {
+    let Some(ndt) = types.get(r) else {
         return false;
     };
-    ndt.name() == "TAURI_CHANNEL" && ndt.module_path().starts_with("tauri::")
+    ndt.name == "TAURI_CHANNEL" && ndt.module_path.starts_with("tauri::")
 }
 
 /// Render a DataType to a ReScript type string, with special handling for Tauri's Channel type
@@ -232,12 +243,15 @@ fn is_tauri_channel(types: &Types, dt: &DataType) -> bool {
 fn format_dt(types: &Types, dt: &DataType) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt {
         if is_tauri_channel(types, dt) {
-            let generic = r
-                .generics()
-                .first()
-                .map(|(_, g)| format_dt(types, g))
-                .transpose()?
-                .unwrap_or_else(|| "'a".to_string());
+            let generic = if let NamedReferenceType::Reference { generics, .. } = &r.inner {
+                generics
+                    .first()
+                    .map(|(_, g)| format_dt(types, g))
+                    .transpose()?
+                    .unwrap_or_else(|| "'a".to_string())
+            } else {
+                "'a".to_string()
+            };
             return Ok(format!("tauriChannel__<{generic}>"));
         }
         if let Some((ok_dt, err_dt)) = extract_std_result(dt, types) {
@@ -258,17 +272,19 @@ fn extract_std_result<'a>(
     let DataType::Reference(Reference::Named(r)) = dt else {
         return None;
     };
-    let ndt = r.get(types)?;
-    if ndt.name() != "Result" {
+    let NamedReferenceType::Reference { generics, .. } = &r.inner else {
+        return None;
+    };
+    let ndt = types.get(r)?;
+    if ndt.name != "Result" {
         return None;
     }
-    let module_path = ndt.module_path();
-    if module_path != "std::result" && module_path != "core::result" {
+    if ndt.module_path != "std::result" && ndt.module_path != "core::result" {
         return None;
     }
-    let mut generics = r.generics().iter();
-    let (_, ok) = generics.next()?;
-    let (_, err) = generics.next()?;
+    let mut iter = generics.iter();
+    let (_, ok) = iter.next()?;
+    let (_, err) = iter.next()?;
     Some((ok, err))
 }
 

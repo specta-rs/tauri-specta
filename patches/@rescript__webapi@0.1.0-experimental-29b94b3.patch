@@ -1,0 +1,15 @@
+diff --git a/rescript.json b/rescript.json
+index 97fc7d51f83f323fa1caf71d88bf086dd467df39..3cf8dfa9819c28e37171bc18569dfdadc1310a3f 100644
+--- a/rescript.json
++++ b/rescript.json
+@@ -5,10 +5,6 @@
+     {
+       "dir": "src",
+       "subdirs": true
+-    },
+-    {
+-      "dir": "tests",
+-      "subdirs": true
+     }
+   ],
+   "package-specs": {

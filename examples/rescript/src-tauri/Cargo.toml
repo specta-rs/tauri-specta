@@ -15,7 +15,7 @@ tauri-build = { workspace = true, features = [] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 specta = { workspace = true }
-specta-rescript = { git = "https://github.com/rofinn/specta", branch = "rf/rescript" }
+specta-rescript = { git = "https://github.com/rofinn/specta", rev = "04316d7dfa2d4a83bf4b28314fa22aa061849e9a" }
 tauri = { workspace = true, features = [] }
 tauri-specta = { path = "../../../", features = ["derive", "rescript"] }
 thiserror = "2"

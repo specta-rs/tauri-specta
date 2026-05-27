@@ -6,6 +6,12 @@
     "@tauri-apps/api": "^2.10.1"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "rescript"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "rescript"
+    ],
+    "patchedDependencies": {
+      "@rescript/webapi@0.1.0-experimental-29b94b3": "patches/@rescript__webapi@0.1.0-experimental-29b94b3.patch"
+    }
   }
 }

@@ -115,14 +115,17 @@ pub struct DemoEvent(String);
 #[derive(Serialize, Deserialize, Debug, Clone, specta::Type, tauri_specta::Event)]
 pub struct EmptyEvent;
 
+#[allow(dead_code)]
 #[derive(Type)]
 pub struct Custom(String);
 
+#[allow(dead_code)]
 #[derive(Type)]
 pub struct Testing {
     a: String,
 }
 
+#[allow(deprecated)]
 fn main() {
     let builder = Builder::<tauri::Wry>::new()
         .commands(collect_commands![
