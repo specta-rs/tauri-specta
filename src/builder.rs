@@ -1,6 +1,6 @@
 use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
 
-use crate::{Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
+use crate::{Casing, Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
 use serde::Serialize;
 use specta::{
     Type, Types,
@@ -115,6 +115,10 @@ pub struct BuilderConfiguration {
     pub dangerously_cast_bigints_to_number: bool,
     /// Whether serde serialize/deserialize phase differences should be ignored.
     pub disable_serde_phases: bool,
+    /// Casing applied to generated command and event accessor names.
+    pub function_casing: Casing,
+    /// Casing applied to generated command argument names.
+    pub argument_casing: Casing,
 }
 
 impl<R: Runtime> Default for Builder<R> {
@@ -316,6 +320,44 @@ impl<R: Runtime> Builder<R> {
     /// `specta_serde::apply_phases`.
     pub fn disable_serde_phases(mut self) -> Self {
         self.cfg.disable_serde_phases = true;
+        self
+    }
+
+    /// Set the casing convention used for generated command and event accessor names.
+    ///
+    /// By default Tauri Specta renames Rust `snake_case` names to [`Casing::CamelCase`]
+    /// (e.g. `hello_world` becomes `commands.helloWorld`). Use this to keep the original
+    /// Rust naming or pick another convention.
+    ///
+    /// This does not affect the underlying Tauri command/event string used to invoke the
+    /// command, only the JavaScript accessor name in the generated bindings.
+    ///
+    /// ```rust
+    /// use tauri_specta::{Builder, Casing};
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().function_casing(Casing::SnakeCase);
+    /// ```
+    pub fn function_casing(mut self, casing: Casing) -> Self {
+        self.cfg.function_casing = casing;
+        self
+    }
+
+    /// Set the casing convention used for generated command argument names.
+    ///
+    /// By default Tauri Specta renames Rust `snake_case` arguments to [`Casing::CamelCase`]
+    /// (e.g. `my_name` becomes `myName`), which matches Tauri's default argument handling.
+    ///
+    /// If your commands use [`#[tauri::command(rename_all = "snake_case")]`](https://docs.rs/tauri/latest/tauri/attr.command.html),
+    /// set this to [`Casing::SnakeCase`] so the generated argument keys match what Tauri
+    /// expects when deserializing the invoke payload.
+    ///
+    /// ```rust
+    /// use tauri_specta::{Builder, Casing};
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new().argument_casing(Casing::SnakeCase);
+    /// ```
+    pub fn argument_casing(mut self, casing: Casing) -> Self {
+        self.cfg.argument_casing = casing;
         self
     }
 

@@ -1,6 +1,5 @@
 use std::{borrow::Cow, path::Path};
 
-use heck::ToLowerCamelCase;
 use specta::{
     Format, Type, Types,
     datatype::{
@@ -173,7 +172,7 @@ fn runtime(
                 .iter()
                 .map(|(name, dt)| {
                     Ok((
-                        name.to_lower_camel_case(),
+                        cfg.argument_casing.apply(name).into_owned(),
                         render_reference_dt_for_phase(
                             dt,
                             Phase::Deserialize,
@@ -208,7 +207,7 @@ fn runtime(
                         .args()
                         .iter()
                         .map(|(name, dt)| {
-                            let name = name.to_lower_camel_case();
+                            let name = cfg.argument_casing.apply(name).into_owned();
                             let value = if let Some(generic) =
                                 channel_generic_type(dt, exporter.types)
                             {
@@ -507,7 +506,7 @@ fn runtime(
 
                 docs.into()
             };
-            s = s.field(command.name().to_lower_camel_case(), field);
+            s = s.field(cfg.function_casing.apply(command.name()).into_owned(), field);
         }
 
         out.push_str("\n/** Commands */");
@@ -593,7 +592,7 @@ fn runtime(
                 )
                 .into();
             }
-            s = s.field(name.to_lower_camel_case(), field);
+            s = s.field(cfg.function_casing.apply(name).into_owned(), field);
         }
 
         out.push_str("\n/** Events */");

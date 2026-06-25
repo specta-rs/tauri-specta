@@ -210,6 +210,31 @@
 //! If you would like to opt-in to the dangerous behavior of truncating your integers,
 //! you can use [`Builder::dangerously_cast_bigints_to_number`] but we do not recommend it!
 //!
+//! ## Naming convention (casing)
+//!
+//! By default Tauri Specta renames your Rust `snake_case` commands, events, and arguments to
+//! JavaScript-idiomatic `camelCase` in the generated bindings (e.g. `hello_world(my_name)`
+//! becomes `commands.helloWorld(myName)`).
+//!
+//! You can override this with [`Builder::function_casing`] (for command and event accessor
+//! names) and [`Builder::argument_casing`] (for command argument names). See [`Casing`] for the
+//! supported conventions.
+//!
+//! ```rust
+//! use tauri_specta::{Builder, Casing};
+//!
+//! let mut builder = Builder::<tauri::Wry>::new()
+//!     // Keep the original Rust naming for accessors and arguments.
+//!     .function_casing(Casing::SnakeCase)
+//!     .argument_casing(Casing::SnakeCase);
+//! ```
+//!
+//! [`Builder::argument_casing`] is particularly important if your commands use
+//! `#[tauri::command(rename_all = "snake_case")]`. Tauri defaults to `camelCase` argument keys,
+//! so when you opt into `snake_case` on the Tauri side you must also set
+//! `argument_casing(Casing::SnakeCase)` so the generated invoke payload keys match what Tauri
+//! expects.
+//!
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
     // TODO: Tauri Specta logo
@@ -218,6 +243,7 @@
 )]
 
 mod builder;
+mod casing;
 mod commands;
 mod event;
 mod lang;
@@ -225,6 +251,7 @@ mod macros;
 mod name;
 
 pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
+pub use casing::Casing;
 pub use commands::Commands;
 pub use event::{Event, Events, TypedEvent};
 pub use lang::LanguageExt;
