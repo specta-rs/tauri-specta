@@ -20,8 +20,8 @@ tauri-specta = { path = "../../../", features = ["derive", "typescript", "javasc
 specta-typescript = { workspace = true }
 tauri-plugin-os = "^2.3.2"
 thiserror = "2"
-bytes = { version = "1.11.1", features = ["serde"] }
-chrono = { version = "0.4.44", features = ["serde"] }
+bytes = { version = "1.12.0", features = ["serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
 url = { version = "2.5.8", features = ["serde"] }
 
 [features]
