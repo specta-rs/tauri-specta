@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use specta_typescript::{Typescript, semantic};
 use tauri_specta::*;
+use tauri_specta_query::TanstackQueryFramework;
 use thiserror::Error;
 
 /// HELLO
@@ -189,9 +190,8 @@ fn main() {
     .typ::<Testing>()
     .constant("universalConstant", 42);
 
-    let (ts, builder) = builder.build();
+    let (tsq_bindings, builder) = builder.build(TanstackQueryFramework::React);
 
-    // let builder = tauri_specta::Builder::<tauri::Wry>::from(builder) // TODO: I like this more.
     // This enables `Date`, `Uint8Array`, and `URL` for supported types.
     let builder = builder.semantic_types(semantic::Configuration::default());
 
@@ -201,17 +201,18 @@ fn main() {
 
         builder
             .export(
-                Typescript::default()
-                    // TODO: Don't use this long term
-                    .header(ts),
+                Typescript::default().with_raw(tsq_bindings.clone()),
                 // .header("/* eslint-disable */")
                 "../src/bindings.ts",
             )
             .expect("Failed to export typescript bindings");
 
-        // builder
-        //     .export(JSDoc::default(), "../src/bindings-js.js")
-        //     .expect("Failed to export typescript bindings");
+        builder
+            .export(
+                JSDoc::default().with_raw(tsq_bindings.clone()),
+                "../src/bindings-js.js",
+            )
+            .expect("Failed to export typescript bindings");
 
         // builder
         //     .export(

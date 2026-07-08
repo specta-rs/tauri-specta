@@ -96,45 +96,52 @@ impl<R: Runtime> CommandSet<R> {
         }
     }
 
-    pub fn build(self) -> (String, tauri_specta::Builder<R>) {
-        // TODO: Support all Tanstack Query frameworks not just React.
-        let mut output =
-            "/** Tanstack Query */\nimport { queryOptions } from '@tanstack/react-query';\n"
-                .to_string();
+    pub fn build(self, framework: TanstackQueryFramework) -> (String, tauri_specta::Builder<R>) {
+        let output = {
+            // TODO: Support all Tanstack Query frameworks not just React.
+            let mut output =
+                "/** Tanstack Query */\nimport { queryOptions } from '@tanstack/react-query';\n"
+                    .to_string();
 
-        if !self.queries.is_empty() {
-            output.push_str("\nexport const queries = {");
-            for function in &self.queries {
-                output.push_str("\n\t");
-                output.push_str(&function.name); // TODO: Proper rename with casing
-                output.push_str(": ");
-                // TODO: `queryKey` and `queryFn` hooked up
-                output.push_str("queryOptions({ queryKey: ['todo'], queryFn: () => 42 });"); // TODO: Fix casing, types, etc.
-                output.push(',');
-            }
             if !self.queries.is_empty() {
-                output.push('\n');
+                output.push_str("\nexport const queries = {");
+                for function in &self.queries {
+                    output.push_str("\n\t");
+                    output.push_str(&function.name); // TODO: Proper rename with casing
+                    output.push_str(": ");
+                    // TODO: `queryKey` and `queryFn` hooked up
+                    output.push_str("queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),"); // TODO: Fix casing, types, etc.
+                }
+                if !self.queries.is_empty() {
+                    output.push('\n');
+                }
+                output.push_str("};");
             }
-            output.push_str("};");
-        }
 
-        if !self.mutations.is_empty() {
-            output.push_str("\nexport const mutations = {");
-            for function in &self.mutations {
-                // TODO
-                // println!(
-                //     // TODO: (args) =>
-                //     // TODO: Query key
-                //     // TODO: Query fn
-                //     "\n\t{}: mutationOptions({{ mutationKey: ['todo'], mutationFn: () => 42 }}),",
-                //     function.name,
-                // ); // TODO: Fix casing, types, etc.
-            }
             if !self.mutations.is_empty() {
+                output.push_str("\nexport const mutations = {");
+                for function in &self.mutations {
+                    // TODO
+                    // println!(
+                    //     // TODO: (args) =>
+                    //     // TODO: Query key
+                    //     // TODO: Query fn
+                    //     "\n\t{}: mutationOptions({{ mutationKey: ['todo'], mutationFn: () => 42 }}),",
+                    //     function.name,
+                    // ); // TODO: Fix casing, types, etc.
+                }
+                if !self.mutations.is_empty() {
+                    output.push('\n');
+                }
+                output.push_str("};");
+            }
+
+            if !self.queries.is_empty() && !self.mutations.is_empty() {
                 output.push('\n');
             }
-            output.push_str("};");
-        }
+
+            output
+        };
 
         let mut commands = self.queries;
         commands.extend(self.mutations);
@@ -151,4 +158,11 @@ impl<R: Runtime> CommandSet<R> {
 
         (output, builder)
     }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TanstackQueryFramework {
+    #[default]
+    React,
+    // TODO: Rest of them
 }

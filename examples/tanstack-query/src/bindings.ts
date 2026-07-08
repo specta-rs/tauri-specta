@@ -2,17 +2,17 @@
 import { queryOptions } from '@tanstack/react-query';
 
 export const queries = {
-	hello_world: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
-	async_hello_world: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
-	has_error: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
-	some_struct: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
-	generic: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
-	deprecated: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
-	with_channel: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
-	phase_specific_rename: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
-	typesafe_errors_using_thiserror: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
-	typesafe_errors_using_thiserror_with_value: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
-	semantic_types: queryOptions({ queryKey: ['todo'], queryFn: () => 42 });,
+	hello_world: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
+	async_hello_world: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
+	has_error: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
+	some_struct: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
+	generic: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
+	deprecated: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
+	with_channel: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
+	phase_specific_rename: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
+	typesafe_errors_using_thiserror: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
+	typesafe_errors_using_thiserror_with_value: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
+	semantic_types: queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),
 };
 export const mutations = {
 };
