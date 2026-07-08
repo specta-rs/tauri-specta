@@ -359,15 +359,6 @@ impl<R: Runtime> Builder<R> {
         }
     }
 
-    // TODO: Remove this
-    pub fn internal_commands(mut self, commands: Commands<R>, functions: Vec<Function>) -> Self {
-        self.cfg.commands = functions;
-        Self {
-            commands: Commands(commands.0, |_| Default::default()),
-            cfg: self.cfg,
-        }
-    }
-
     /// Export the bindings to the filesystem using the provided exporter.
     ///
     /// # Example

@@ -154,12 +154,17 @@ impl<R: Runtime> CommandSet<R> {
 
         let mut commands = self.queries;
         commands.extend(self.mutations);
+        let types = self.types;
 
         let mut builder = tauri_specta::Builder::<R>::new()
-            // TODO: Removing `internal_commands` in favor of `commands`
-            .internal_commands(Commands(self.handler, |_| Default::default()), commands)
-            .events(self.events)
-            .types(&self.types);
+            .commands(Commands(
+                self.handler,
+                Arc::new(move |tys| {
+                    tys.extend(&types);
+                    commands.clone()
+                }),
+            ))
+            .events(self.events);
 
         for (k, v) in self.constants {
             builder = builder.constant(k, v);

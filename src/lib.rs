@@ -256,14 +256,12 @@ pub mod internal {
     use super::*;
 
     /// called by `collect_commands` to construct `Commands`
-    pub fn command<R: Runtime, F>(
-        f: F,
-        types: fn(&mut Types) -> Vec<datatype::Function>,
-    ) -> Commands<R>
+    pub fn command<R: Runtime, F, T>(f: F, types: T) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
+        T: Fn(&mut Types) -> Vec<datatype::Function> + Send + Sync + 'static,
     {
-        Commands(Arc::new(f), types)
+        Commands(Arc::new(f), Arc::new(types))
     }
 
     /// called by `collect_events` to register events to an `Events`
