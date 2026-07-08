@@ -5,6 +5,7 @@
 
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
+use heck::ToLowerCamelCase;
 use serde::Serialize;
 use specta::{Type, Types, datatype};
 use tauri::{Runtime, ipc::Invoke};
@@ -98,19 +99,18 @@ impl<R: Runtime> CommandSet<R> {
 
     pub fn build(self, framework: TanstackQueryFramework) -> (String, tauri_specta::Builder<R>) {
         let output = {
-            // TODO: Support all Tanstack Query frameworks not just React.
-            let mut output =
-                "/** Tanstack Query */\nimport { queryOptions } from '@tanstack/react-query';\n"
-                    .to_string();
+            let mut output = format!("/** Tanstack Query */\n{}\n", framework.import());
 
             if !self.queries.is_empty() {
                 output.push_str("\nexport const queries = {");
                 for function in &self.queries {
-                    output.push_str("\n\t");
-                    output.push_str(&function.name); // TODO: Proper rename with casing
-                    output.push_str(": ");
-                    // TODO: `queryKey` and `queryFn` hooked up
-                    output.push_str("queryOptions({ queryKey: ['todo'], queryFn: () => 42 }),"); // TODO: Fix casing, types, etc.
+                    let name = function.name.to_lower_camel_case();
+                    let name_json =
+                        serde_json::to_string(&name).expect("failed to serialize query name");
+
+                    output.push_str(&format!(
+                        "\n\t{name}: (...args: Parameters<typeof commands.{name}>) => queryOptions({{ queryKey: [{name_json}, ...args], queryFn: () => commands.{name}(...args) }}),"
+                    ));
                 }
                 if !self.queries.is_empty() {
                     output.push('\n');
@@ -121,14 +121,13 @@ impl<R: Runtime> CommandSet<R> {
             if !self.mutations.is_empty() {
                 output.push_str("\nexport const mutations = {");
                 for function in &self.mutations {
-                    // TODO
-                    // println!(
-                    //     // TODO: (args) =>
-                    //     // TODO: Query key
-                    //     // TODO: Query fn
-                    //     "\n\t{}: mutationOptions({{ mutationKey: ['todo'], mutationFn: () => 42 }}),",
-                    //     function.name,
-                    // ); // TODO: Fix casing, types, etc.
+                    let name = function.name.to_lower_camel_case();
+                    let name_json =
+                        serde_json::to_string(&name).expect("failed to serialize mutation name");
+
+                    output.push_str(&format!(
+                        "\n\t{name}: mutationOptions({{ mutationKey: [{name_json}], mutationFn: (input: Parameters<typeof commands.{name}>) => commands.{name}(...input) }}),"
+                    ));
                 }
                 if !self.mutations.is_empty() {
                     output.push('\n');
@@ -165,4 +164,12 @@ pub enum TanstackQueryFramework {
     #[default]
     React,
     // TODO: Rest of them
+}
+
+impl TanstackQueryFramework {
+    fn import(self) -> &'static str {
+        match self {
+            Self::React => "import { mutationOptions, queryOptions } from '@tanstack/react-query';",
+        }
+    }
 }

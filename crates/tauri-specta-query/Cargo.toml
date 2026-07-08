@@ -5,6 +5,7 @@ edition = "2024"
 publish = false # TODO
 
 [dependencies]
+heck = "0.5"
 tauri.workspace = true
 specta.workspace = true
 serde = "1"
