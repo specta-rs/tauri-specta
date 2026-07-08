@@ -108,8 +108,13 @@ impl<R: Runtime> CommandSet<R> {
                     let name_json =
                         serde_json::to_string(&name).expect("failed to serialize query name");
 
+                    let options = format!(
+                        "{{ queryKey: [{name_json}, ...args], queryFn: () => commands.{name}(...args) }}"
+                    );
+
                     output.push_str(&format!(
-                        "\n\t{name}: (...args: Parameters<typeof commands.{name}>) => queryOptions({{ queryKey: [{name_json}, ...args], queryFn: () => commands.{name}(...args) }}),"
+                        "\n\t{name}: (...args: Parameters<typeof commands.{name}>) => {},",
+                        framework.query_options(options)
                     ));
                 }
                 if !self.queries.is_empty() {
@@ -125,8 +130,13 @@ impl<R: Runtime> CommandSet<R> {
                     let name_json =
                         serde_json::to_string(&name).expect("failed to serialize mutation name");
 
+                    let options = format!(
+                        "{{ mutationKey: [{name_json}], mutationFn: (input: Parameters<typeof commands.{name}>) => commands.{name}(...input) }}"
+                    );
+
                     output.push_str(&format!(
-                        "\n\t{name}: mutationOptions({{ mutationKey: [{name_json}], mutationFn: (input: Parameters<typeof commands.{name}>) => commands.{name}(...input) }}),"
+                        "\n\t{name}: {},",
+                        framework.mutation_options(options)
                     ));
                 }
                 if !self.mutations.is_empty() {
@@ -163,13 +173,40 @@ impl<R: Runtime> CommandSet<R> {
 pub enum TanstackQueryFramework {
     #[default]
     React,
-    // TODO: Rest of them
+    Solid,
+    Vue,
+    Angular,
+    Svelte,
+    Preact,
 }
 
 impl TanstackQueryFramework {
     fn import(self) -> &'static str {
         match self {
             Self::React => "import { mutationOptions, queryOptions } from '@tanstack/react-query';",
+            Self::Solid => "import { mutationOptions, queryOptions } from '@tanstack/solid-query';",
+            Self::Vue => "import { mutationOptions, queryOptions } from '@tanstack/vue-query';",
+            Self::Angular => {
+                "import { mutationOptions, queryOptions } from '@tanstack/angular-query-experimental';"
+            }
+            Self::Svelte => "",
+            Self::Preact => {
+                "import { mutationOptions, queryOptions } from '@tanstack/preact-query';"
+            }
+        }
+    }
+
+    fn query_options(self, options: String) -> String {
+        match self {
+            Self::Svelte => format!("() => ({options})"),
+            _ => format!("queryOptions({options})"),
+        }
+    }
+
+    fn mutation_options(self, options: String) -> String {
+        match self {
+            Self::Svelte => format!("() => ({options})"),
+            _ => format!("mutationOptions({options})"),
         }
     }
 }
