@@ -251,7 +251,7 @@ impl<R: Runtime> Builder<R> {
     /// let mut builder = Builder::<tauri::Wry>::new().constant("CONSTANT_NAME","ANY_CONSTANT_VALUE");
     /// ```
     #[track_caller]
-    pub fn constant<T: Serialize + Type>(mut self, k: impl Into<Cow<'static, str>>, v: T) -> Self {
+    pub fn constant<T: Serialize>(mut self, k: impl Into<Cow<'static, str>>, v: T) -> Self {
         self.cfg.constants.insert(
             k.into(),
             serde_json::to_value(v).expect("Tauri Specta failed to serialize constant"),
@@ -356,6 +356,15 @@ impl<R: Runtime> Builder<R> {
                     plugin_name: self.cfg.plugin_name,
                 },
             );
+        }
+    }
+
+    // TODO: Remove this
+    pub fn internal_commands(mut self, commands: Commands<R>, functions: Vec<Function>) -> Self {
+        self.cfg.commands = functions;
+        Self {
+            commands: Commands(commands.0, |_| Default::default()),
+            cfg: self.cfg,
         }
     }
 

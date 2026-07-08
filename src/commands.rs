@@ -7,9 +7,10 @@ use tauri::{Runtime, ipc::Invoke};
 ///
 /// This acts to seal the implementation details of the macro.
 pub struct Commands<R: Runtime>(
+    // TODO: Explain these being public
     // Bounds copied from `tauri::Builder::invoke_handler`
-    pub(crate) Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
-    pub(crate) fn(&mut Types) -> Vec<datatype::Function>,
+    pub Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
+    pub fn(&mut Types) -> Vec<datatype::Function>,
 );
 
 impl<R: Runtime> fmt::Debug for Commands<R> {

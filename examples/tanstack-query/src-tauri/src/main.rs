@@ -189,9 +189,11 @@ fn main() {
     .typ::<Testing>()
     .constant("universalConstant", 42);
 
-    let builder = tauri_specta::Builder::<tauri::Wry>::from(builder)
-        // This enables `Date`, `Uint8Array`, and `URL` for supported types.
-        .semantic_types(semantic::Configuration::default());
+    let (ts, builder) = builder.build();
+
+    // let builder = tauri_specta::Builder::<tauri::Wry>::from(builder) // TODO: I like this more.
+    // This enables `Date`, `Uint8Array`, and `URL` for supported types.
+    let builder = builder.semantic_types(semantic::Configuration::default());
 
     #[cfg(debug_assertions)]
     {
@@ -199,36 +201,38 @@ fn main() {
 
         builder
             .export(
-                Typescript::default(),
+                Typescript::default()
+                    // TODO: Don't use this long term
+                    .header(ts),
                 // .header("/* eslint-disable */")
                 "../src/bindings.ts",
             )
             .expect("Failed to export typescript bindings");
 
-        builder
-            .export(JSDoc::default(), "../src/bindings-js.js")
-            .expect("Failed to export typescript bindings");
+        // builder
+        //     .export(JSDoc::default(), "../src/bindings-js.js")
+        //     .expect("Failed to export typescript bindings");
 
-        builder
-            .export(
-                Typescript::default().layout(Layout::Files),
-                "../src/bindings-ts-files",
-            )
-            .expect("Failed to export typescript bindings");
+        // builder
+        //     .export(
+        //         Typescript::default().layout(Layout::Files),
+        //         "../src/bindings-ts-files",
+        //     )
+        //     .expect("Failed to export typescript bindings");
 
-        builder
-            .export(
-                JSDoc::default().layout(Layout::Files),
-                "../src/bindings-js-files",
-            )
-            .expect("Failed to export typescript bindings");
+        // builder
+        //     .export(
+        //         JSDoc::default().layout(Layout::Files),
+        //         "../src/bindings-js-files",
+        //     )
+        //     .expect("Failed to export typescript bindings");
 
-        builder
-            .export(
-                Typescript::default().layout(Layout::Namespaces),
-                "../src/bindings-ts-namespaces.ts",
-            )
-            .expect("Failed to export typescript bindings");
+        // builder
+        //     .export(
+        //         Typescript::default().layout(Layout::Namespaces),
+        //         "../src/bindings-ts-namespaces.ts",
+        //     )
+        //     .expect("Failed to export typescript bindings");
     }
 
     #[cfg(debug_assertions)]
