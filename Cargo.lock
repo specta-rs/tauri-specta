@@ -3405,6 +3405,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-specta-example-tanstack-query"
+version = "0.0.0"
+dependencies = [
+ "bytes",
+ "chrono",
+ "serde",
+ "serde_json",
+ "specta",
+ "specta-typescript",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-os",
+ "tauri-specta",
+ "tauri-specta-query",
+ "thiserror 2.0.18",
+ "url",
+]
+
+[[package]]
 name = "tauri-specta-macros"
 version = "2.0.0-rc.25"
 dependencies = [
@@ -3419,6 +3438,8 @@ dependencies = [
 name = "tauri-specta-query"
 version = "0.0.0"
 dependencies = [
+ "serde_json",
+ "specta",
  "tauri",
  "tauri-specta",
 ]

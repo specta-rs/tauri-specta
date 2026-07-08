@@ -59,6 +59,22 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  examples/tanstack-query:
+    dependencies:
+      '@tauri-apps/api':
+        specifier: ^2.11.1
+        version: 2.11.1
+    devDependencies:
+      '@tauri-apps/cli':
+        specifier: ^2.11.4
+        version: 2.11.4
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: ^8.1.2
+        version: 8.1.2(esbuild@0.27.3)
+
 packages:
 
   '@babel/code-frame@7.29.7':

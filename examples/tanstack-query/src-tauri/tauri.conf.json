@@ -39,9 +39,9 @@
       }
     }
   },
-  "productName": "tauri-specta-example",
+  "productName": "tauri-specta-example-tanstack-query",
   "version": "0.0.0",
-  "identifier": "com.otbeaumont.tauri-specta-example",
+  "identifier": "com.otbeaumont.tauri-specta-example-tanstack-query",
   "plugins": {},
   "app": {
     "withGlobalTauri": true,
@@ -50,7 +50,7 @@
         "fullscreen": false,
         "height": 600,
         "resizable": true,
-        "title": "tauri-specta-example",
+        "title": "tauri-specta-example-tanstack-query",
         "width": 800
       }
     ],

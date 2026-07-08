@@ -164,16 +164,9 @@ pub struct Testing {
 
 #[allow(deprecated)]
 fn main() {
-    let todo = tauri_specta_query::CommandSet::new(collect_queries![], collect_commands![]);
-
-    let builder = Builder::<tauri::Wry>::new()
-        // This enables `Date`, `Uint8Array`, and `URL` for supported types.
-        .semantic_types(semantic::Configuration::default())
-        // This can be used if you don't want per-phase (Serialize/Deserialize) types.
-        // .disable_serde_phases()
-        .commands(tauri_specta::collect_commands![
+    let builder = tauri_specta_query::CommandSet::new(
+        collect_commands![
             hello_world,
-            goodbye_world,
             async_hello_world,
             has_error,
             nested::some_struct,
@@ -184,15 +177,21 @@ fn main() {
             typesafe_errors_using_thiserror,
             typesafe_errors_using_thiserror_with_value,
             semantic_types,
-        ])
-        .events(tauri_specta::collect_events![
-            crate::DemoEvent,
-            EmptyEvent,
-            SemanticTypesEvent
-        ])
-        .typ::<Custom>()
-        .typ::<Testing>()
-        .constant("universalConstant", 42);
+        ],
+        collect_commands![goodbye_world],
+    )
+    .events(tauri_specta::collect_events![
+        crate::DemoEvent,
+        EmptyEvent,
+        SemanticTypesEvent
+    ])
+    .typ::<Custom>()
+    .typ::<Testing>()
+    .constant("universalConstant", 42);
+
+    let builder = tauri_specta::Builder::<tauri::Wry>::from(builder)
+        // This enables `Date`, `Uint8Array`, and `URL` for supported types.
+        .semantic_types(semantic::Configuration::default());
 
     #[cfg(debug_assertions)]
     {

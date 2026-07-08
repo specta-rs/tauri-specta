@@ -1,5 +1,5 @@
 {
-  "name": "tauri-specta-example-app",
+  "name": "tauri-specta-example-tanstack-query",
   "private": true,
   "type": "module",
   "scripts": {

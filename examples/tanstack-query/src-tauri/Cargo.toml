@@ -1,5 +1,5 @@
 [package]
-name = "tauri-specta-example-app"
+name = "tauri-specta-example-tanstack-query"
 version = "0.0.0"
 description = "A Tauri App"
 authors = ["you"]
@@ -17,6 +17,7 @@ specta = { workspace = true, features = ["bytes", "chrono", "url"] }
 serde = { version = "1.0", features = ["derive"] }
 tauri = { workspace = true, features = [] }
 tauri-specta = { path = "../../../", features = ["derive", "typescript", "javascript"] }
+tauri-specta-query = { path = "../../../crates/tauri-specta-query" }
 specta-typescript = { workspace = true }
 tauri-plugin-os = "^2.3.2"
 thiserror = "2"
