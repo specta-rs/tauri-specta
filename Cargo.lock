@@ -3416,6 +3416,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-specta-query"
+version = "0.0.0"
+dependencies = [
+ "tauri",
+ "tauri-specta",
+]
+
+[[package]]
 name = "tauri-utils"
 version = "2.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

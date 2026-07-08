@@ -46,6 +46,7 @@ tauri = { version = "2", default-features = false, features = ["test", "wry"] }
 
 [workspace]
 members = [
+  "crates/tauri-specta-query",
   "examples/app/src-tauri",
   "examples/custom-plugin/app/src-tauri",
   "examples/custom-plugin/plugin",
