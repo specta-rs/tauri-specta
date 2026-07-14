@@ -172,10 +172,13 @@
 //! ```ts
 //! export type MyType_Serialize = ...;
 //! export type MyType_Deserialize = ...;
-//! export type MyType = MyType_Serialize | MyType_Deserialize;
+//! export type MyType = MyType_Serialize;
 //! ```
 //!
-//! Tauri Specta will ensure command arguments use the deserialize shape, and command results use the serialize shape. If the serialize and deserialize shapes are identical, only the normal type alias may be emitted.
+//! The normal alias represents values serialized from Rust. Tauri Specta uses
+//! the explicit deserialize shape for command arguments and the serialize shape
+//! for command results. If the shapes are identical, only the normal type alias
+//! may be emitted.
 //!
 //! This allows proper type narrowing on Serde attributes which aren't uniformly applied like `rename(serialize = ..., deserialize = ...)`, `skip_serializing`, or `skip_deserializing`.
 //!
@@ -256,14 +259,12 @@ pub mod internal {
     use super::*;
 
     /// called by `collect_commands` to construct `Commands`
-    pub fn command<R: Runtime, F>(
-        f: F,
-        types: fn(&mut Types) -> Vec<datatype::Function>,
-    ) -> Commands<R>
+    pub fn command<R: Runtime, F, T>(f: F, types: T) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
+        T: Fn(&mut Types) -> Vec<datatype::Function> + Send + Sync + 'static,
     {
-        Commands(Arc::new(f), types)
+        Commands(Arc::new(f), Arc::new(types))
     }
 
     /// called by `collect_events` to register events to an `Events`

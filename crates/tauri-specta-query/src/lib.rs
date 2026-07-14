@@ -1,0 +1,266 @@
+//! TODO
+//!
+//! Known Issues:
+//!  - You can assign commands, events, types, constants after `From` into builder which will override. Fine for now.
+
+use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
+
+use heck::ToLowerCamelCase;
+use serde::Serialize;
+use specta::{Type, Types, datatype};
+use tauri::{Runtime, ipc::Invoke};
+use tauri_specta::{Commands, Events};
+
+pub struct CommandSet<R: Runtime> {
+    handler: Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
+    queries: Vec<datatype::Function>,
+    mutations: Vec<datatype::Function>,
+    types: Types,
+    events: Events,
+    constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
+}
+
+impl<R: Runtime> CommandSet<R> {
+    pub fn new(queries: Commands<R>, mutations: Commands<R>) -> Self {
+        let Commands(query_invoke, query_types) = queries;
+        let Commands(mutation_invoke, mutation_types) = mutations;
+
+        let mut types = Types::default();
+        let queries = query_types(&mut types);
+        let mutations = mutation_types(&mut types);
+
+        Self {
+            handler: Arc::new(move |i| {
+                (query_invoke)(Invoke {
+                    message: i.message.clone(),
+                    resolver: i.resolver.clone(),
+                    acl: i.acl.clone(),
+                }) || (mutation_invoke)(i)
+            }),
+            queries,
+            mutations,
+            types,
+            events: Default::default(),
+            constants: Default::default(),
+        }
+    }
+
+    pub fn events(self, events: Events) -> Self {
+        Self { events, ..self }
+    }
+
+    pub fn types(self, types: Types) -> Self {
+        Self { types, ..self }
+    }
+
+    pub fn typ<T: Type>(mut self) -> Self {
+        self.types.register_mut::<T>();
+        self
+    }
+
+    #[track_caller]
+    pub fn constant<T: Serialize>(mut self, k: impl Into<Cow<'static, str>>, v: T) -> Self {
+        self.constants.insert(
+            k.into(),
+            serde_json::to_value(v).expect("Tauri Specta failed to serialize constant"),
+        );
+        self
+    }
+
+    pub fn merge(&self, other: &Self) -> Self {
+        let mut types = self.types.clone();
+        types.extend(&other.types);
+
+        Self {
+            handler: Arc::new(move |i| {
+                (self.handler)(Invoke {
+                    message: i.message.clone(),
+                    resolver: i.resolver.clone(),
+                    acl: i.acl.clone(),
+                }) || (other.handler)(i)
+            }),
+            queries: self
+                .queries
+                .iter()
+                .chain(other.queries.iter())
+                .cloned()
+                .collect(),
+            mutations: self
+                .mutations
+                .iter()
+                .chain(other.mutations.iter())
+                .cloned()
+                .collect(),
+            types,
+            events: todo!(),    // self.events.merge(&other.events),
+            constants: todo!(), // self.constants.merge(&other.constants),
+        }
+    }
+
+    pub fn build(self, framework: TanstackQueryFramework) -> (String, tauri_specta::Builder<R>) {
+        let output = {
+            let mut output = format!("/** Tanstack Query */\n{}\n", framework.import());
+
+            if !self.queries.is_empty() {
+                output.push_str("\nexport const queries = {");
+                for function in &self.queries {
+                    let name = function.name.to_lower_camel_case();
+                    let name_json =
+                        serde_json::to_string(&name).expect("failed to serialize query name");
+
+                    let options = format!(
+                        "{{ queryKey: [{name_json}, ...args], queryFn: () => commands.{name}(...args) }}"
+                    );
+
+                    output.push_str(&format!(
+                        "\n\t{name}: (...args: Parameters<typeof commands.{name}>) => {},",
+                        framework.query_options(options)
+                    ));
+                }
+                if !self.queries.is_empty() {
+                    output.push('\n');
+                }
+                output.push_str("};");
+
+                output.push_str("\nexport const queryKeys = {");
+                for function in &self.queries {
+                    let name = function.name.to_lower_camel_case();
+                    let name_json =
+                        serde_json::to_string(&name).expect("failed to serialize query name");
+
+                    output.push_str(&format!(
+                        "\n\t{name}: (...args: Partial<Parameters<typeof commands.{name}>>) => [{name_json}, ...args],"
+                    ));
+                }
+                output.push_str("\n};");
+            }
+
+            if !self.mutations.is_empty() {
+                output.push_str("\nexport const mutations = {");
+                for function in &self.mutations {
+                    let name = function.name.to_lower_camel_case();
+                    let name_json =
+                        serde_json::to_string(&name).expect("failed to serialize mutation name");
+                    let args = function
+                        .args
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, (arg, _))| {
+                            let arg = arg.to_lower_camel_case();
+                            format!("{arg}: Parameters<typeof commands.{name}>[{idx}]")
+                        })
+                        .collect::<Vec<_>>();
+                    let arg_names = function
+                        .args
+                        .iter()
+                        .map(|(arg, _)| arg.to_lower_camel_case())
+                        .collect::<Vec<_>>();
+
+                    let mutation_fn = if args.is_empty() {
+                        format!("() => commands.{name}()")
+                    } else {
+                        format!(
+                            "(input: {{ {} }}) => commands.{name}({})",
+                            args.join("; "),
+                            arg_names
+                                .iter()
+                                .map(|arg| format!("input.{arg}"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    };
+
+                    let options =
+                        format!("{{ mutationKey: [{name_json}], mutationFn: {mutation_fn} }}");
+
+                    output.push_str(&format!(
+                        "\n\t{name}: () => {},",
+                        framework.mutation_options(options)
+                    ));
+                }
+                if !self.mutations.is_empty() {
+                    output.push('\n');
+                }
+                output.push_str("};");
+
+                output.push_str("\nexport const mutationKeys = {");
+                for function in &self.mutations {
+                    let name = function.name.to_lower_camel_case();
+                    let name_json =
+                        serde_json::to_string(&name).expect("failed to serialize mutation name");
+
+                    output.push_str(&format!("\n\t{name}: () => [{name_json}],"));
+                }
+                output.push_str("\n};");
+            }
+
+            if !self.queries.is_empty() && !self.mutations.is_empty() {
+                output.push('\n');
+            }
+
+            output
+        };
+
+        let mut commands = self.queries;
+        commands.extend(self.mutations);
+        let types = self.types;
+
+        let mut builder = tauri_specta::Builder::<R>::new()
+            .commands(Commands(
+                self.handler,
+                Arc::new(move |tys| {
+                    tys.extend(&types);
+                    commands.clone()
+                }),
+            ))
+            .events(self.events);
+
+        for (k, v) in self.constants {
+            builder = builder.constant(k, v);
+        }
+
+        (output, builder)
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TanstackQueryFramework {
+    #[default]
+    React,
+    Solid,
+    Vue,
+    Angular,
+    Svelte,
+    Preact,
+}
+
+impl TanstackQueryFramework {
+    fn import(self) -> &'static str {
+        match self {
+            Self::React => "import { mutationOptions, queryOptions } from '@tanstack/react-query';",
+            Self::Solid => "import { mutationOptions, queryOptions } from '@tanstack/solid-query';",
+            Self::Vue => "import { mutationOptions, queryOptions } from '@tanstack/vue-query';",
+            Self::Angular => {
+                "import { mutationOptions, queryOptions } from '@tanstack/angular-query-experimental';"
+            }
+            Self::Svelte => "",
+            Self::Preact => {
+                "import { mutationOptions, queryOptions } from '@tanstack/preact-query';"
+            }
+        }
+    }
+
+    fn query_options(self, options: String) -> String {
+        match self {
+            Self::Svelte => format!("() => ({options})"),
+            _ => format!("queryOptions({options})"),
+        }
+    }
+
+    fn mutation_options(self, options: String) -> String {
+        match self {
+            Self::Svelte => format!("() => ({options})"),
+            _ => format!("mutationOptions({options})"),
+        }
+    }
+}
