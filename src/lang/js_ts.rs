@@ -532,7 +532,10 @@ fn runtime(
 
         out.push_str("\n/** Commands */");
         out.push_str("\nexport const commands = ");
-        out.push_str(&exporter.reference(&s.build())?);
+        out.push_str(&match &s.build() {
+            DataType::Reference(r) => exporter.reference(r)?,
+            dt => exporter.inline(dt)?,
+        });
         out.push_str(";\n");
     }
 
@@ -624,7 +627,7 @@ fn runtime(
 
         out.push_str("\n/** Events */");
         out.push_str("\nexport const events = ");
-        out.push_str(&exporter.reference(&s.build())?);
+        out.push_str(&exporter.inline(&s.build())?);
         out.push_str(";\n");
     }
 
@@ -1125,13 +1128,20 @@ fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<St
             NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive(_) => &[],
         };
         let generic = if let Some((_, dt)) = generics.first() {
-            exporter.reference(dt)?.into()
+            match &dt {
+                DataType::Reference(r) => exporter.reference(r)?,
+                dt => exporter.inline(dt)?,
+            }
+            .into()
         } else {
             Cow::Borrowed("never")
         };
         Ok(format!("Channel<{generic}>"))
     } else {
-        exporter.reference(dt)
+        match &dt {
+            DataType::Reference(r) => exporter.reference(r),
+            dt => exporter.inline(dt),
+        }
     }
 }
 
