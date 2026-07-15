@@ -100,11 +100,16 @@ fn runtime(
 
     let mut out = String::new();
 
-    if let Some((ndt, name)) = exporter.types.into_unsorted_iter().find_map(|ndt| {
-        runtime_scope_name(exporter.layout, ndt)
-            .filter(|name| RESERVED_NDT_NAMES.contains(&name.as_ref()))
-            .map(|name| (ndt, name))
-    }) {
+    if let Some((ndt, name)) = exporter
+        .types
+        .into_unsorted_iter()
+        .filter(|ndt| ndt.ty.is_some())
+        .find_map(|ndt| {
+            runtime_scope_name(exporter.layout, ndt)
+                .filter(|name| RESERVED_NDT_NAMES.contains(&name.as_ref()))
+                .map(|name| (ndt, name))
+        })
+    {
         return Err(Error::framework(
             "",
             format!(
@@ -1335,6 +1340,16 @@ mod tests {
         }
     }
 
+    mod inline {
+        use super::*;
+
+        #[derive(Serialize, Deserialize, Type)]
+        #[specta(inline)]
+        pub struct Channel {
+            value: String,
+        }
+    }
+
     #[derive(Serialize, Type)]
     #[serde(untagged)]
     #[allow(dead_code)]
@@ -1408,6 +1423,17 @@ mod tests {
             fs::read_to_string(output_dir.join("jsdoc-flat"))
                 .expect("failed to read JSDoc bindings")
                 .contains("BuildChannel")
+        );
+
+        let inline_path = output_dir.join("inline.ts");
+        Builder::<tauri::Wry>::new()
+            .typ::<inline::Channel>()
+            .export(Typescript::default(), &inline_path)
+            .expect("an inline type named Channel should not conflict with the runtime");
+        assert!(
+            !fs::read_to_string(inline_path)
+                .expect("failed to read inline TypeScript bindings")
+                .contains("export type Channel")
         );
 
         let err = Builder::<tauri::Wry>::new()
