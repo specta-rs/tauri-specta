@@ -15,9 +15,14 @@ use tauri::{Manager, Runtime, ipc::Invoke};
 pub enum ErrorHandlingMode {
     /// Errors will be thrown
     Throw,
-    /// Errors will be returned as a Result enum
+    /// Errors will be returned as a status-tagged result object.
     #[default]
     Result,
+    /// Errors will be returned as a data/error result object.
+    ///
+    /// Successful commands return `{ data: T, error: null }`, while failed
+    /// commands return `{ data: null, error: E }`.
+    DataError,
 }
 
 /// Builder for configuring Tauri Specta in your application.
@@ -269,6 +274,7 @@ impl<R: Runtime> Builder<R> {
 
     /// Replace the internal implementation of the `typedError` function.
     /// This would allow integrating with Effect or any other result library.
+    /// The implementation must return the shape selected by [`ErrorHandlingMode`].
     ///
     /// ```rust
     /// use tauri_specta::Builder;
