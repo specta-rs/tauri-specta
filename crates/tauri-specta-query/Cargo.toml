@@ -28,7 +28,7 @@ tauri-specta = { version = "=2.0.0-rc.25", path = "../.." }
 [dev-dependencies]
 specta-typescript.workspace = true
 tauri = { workspace = true, features = ["test"] }
-tauri-specta = { path = "../..", features = ["derive", "typescript"] }
+tauri-specta = { path = "../..", features = ["typescript"] }
 
 [lints]
 workspace = true

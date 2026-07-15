@@ -215,28 +215,20 @@
 //!
 //! ## Naming convention (casing)
 //!
-//! By default Tauri Specta renames your Rust `snake_case` commands, events, and arguments to
-//! JavaScript-idiomatic `camelCase` in the generated bindings (e.g. `hello_world(my_name)`
-//! becomes `commands.helloWorld(myName)`).
+//! By default Tauri Specta renames your Rust `snake_case` commands and events to
+//! JavaScript-idiomatic `camelCase` in the generated bindings (e.g. `hello_world`
+//! becomes `commands.helloWorld`).
 //!
-//! You can override this with [`Builder::function_casing`] (for command and event accessor
-//! names) and [`Builder::argument_casing`] (for command argument names). See [`Casing`] for the
-//! supported conventions.
+//! You can override this with [`Builder::function_casing`]. See [`Casing`] for the supported
+//! conventions.
 //!
 //! ```rust
 //! use tauri_specta::{Builder, Casing};
 //!
 //! let mut builder = Builder::<tauri::Wry>::new()
-//!     // Keep the original Rust naming for accessors and arguments.
-//!     .function_casing(Casing::SnakeCase)
-//!     .argument_casing(Casing::SnakeCase);
+//!     // Keep the original Rust naming for command and event accessors.
+//!     .function_casing(Casing::SnakeCase);
 //! ```
-//!
-//! [`Builder::argument_casing`] is particularly important if your commands use
-//! `#[tauri::command(rename_all = "snake_case")]`. Tauri defaults to `camelCase` argument keys,
-//! so when you opt into `snake_case` on the Tauri side you must also set
-//! `argument_casing(Casing::SnakeCase)` so the generated invoke payload keys match what Tauri
-//! expects.
 //!
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(

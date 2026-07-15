@@ -1,5 +1,6 @@
 use std::{borrow::Cow, path::Path};
 
+use heck::ToLowerCamelCase;
 use specta::{
     Format, Type, Types,
     datatype::{
@@ -11,7 +12,7 @@ use specta_typescript::{Error, Exporter, FrameworkExporter, define, semantic};
 use specta_util::Remapper;
 
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
-use crate::{BuilderConfiguration, Casing, ErrorHandlingMode, LanguageExt};
+use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
@@ -171,16 +172,8 @@ fn runtime(
                 .args()
                 .iter()
                 .map(|(name, dt)| {
-                    let invoke_name = cfg.argument_casing.apply(name).into_owned();
-                    let binding_name = if is_javascript_identifier(&invoke_name) {
-                        invoke_name.clone()
-                    } else {
-                        Casing::CamelCase.apply(name).into_owned()
-                    };
-
                     Ok((
-                        binding_name,
-                        invoke_name,
+                        name.to_lower_camel_case(),
                         render_reference_dt_for_phase(
                             dt,
                             Phase::Deserialize,
@@ -195,7 +188,7 @@ fn runtime(
 
             let fn_arguments = arguments
                 .iter()
-                .map(|(name, _, dt)| {
+                .map(|(name, dt)| {
                     let mut arg = name.to_string();
                     if !jsdoc {
                         arg.push_str(": ");
@@ -214,8 +207,8 @@ fn runtime(
                     command
                         .args()
                         .iter()
-                        .zip(&arguments)
-                        .map(|((_, dt), (binding_name, invoke_name, _))| {
+                        .map(|(name, dt)| {
+                            let name = name.to_lower_camel_case();
                             let value = if let Some(generic) =
                                 channel_generic_type(dt, exporter.types)
                             {
@@ -228,25 +221,20 @@ fn runtime(
                                     semantic_types_runtime_types,
                                 )
                                 .map(|transform| jsdoc_transform(transform, "v", jsdoc))
-                                .map(|transform| {
-                                    format!("mapChannel({binding_name}, (v) => {transform})")
-                                })
+                                .map(|transform| format!("mapChannel({name}, (v) => {transform})"))
                             } else {
                                 render_result_transform_for_phase(
                                     dt,
                                     Phase::Serialize,
-                                    binding_name,
+                                    &name,
                                     &exporter,
                                     cfg,
                                     semantic_types_runtime_types,
                                 )
-                                .map(|transform| jsdoc_transform(transform, binding_name, jsdoc))
+                                .map(|transform| jsdoc_transform(transform, &name, jsdoc))
                             };
 
-                            render_object_property(
-                                invoke_name,
-                                value.as_deref().unwrap_or(binding_name),
-                            )
+                            value.map_or(name.clone(), |value| format!("{name}: {value}"))
                         })
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -424,7 +412,7 @@ fn runtime(
                     docs.push_str(
                         &arguments
                             .iter()
-                            .map(|(name, _, dt)| format!("@param {{{dt}}} {name}"))
+                            .map(|(name, dt)| format!("@param {{{dt}}} {name}"))
                             .collect::<Vec<_>>()
                             .join("\n"),
                     );
@@ -700,27 +688,6 @@ fn runtime(
     }
 
     Ok(Cow::Owned(out))
-}
-
-fn is_javascript_identifier(name: &str) -> bool {
-    let mut chars = name.chars();
-    chars
-        .next()
-        .is_some_and(|c| c == '_' || c == '$' || c.is_ascii_alphabetic())
-        && chars.all(|c| c == '_' || c == '$' || c.is_ascii_alphanumeric())
-}
-
-fn render_object_property(name: &str, value: &str) -> String {
-    if name == value && is_javascript_identifier(name) {
-        name.to_string()
-    } else {
-        let name = if is_javascript_identifier(name) {
-            name.to_string()
-        } else {
-            serde_json::to_string(name).expect("failed to serialize argument name")
-        };
-        format!("{name}: {value}")
-    }
 }
 
 /// Applies `specta_serde` format + also remaps `DataType`'s and does other transformations!

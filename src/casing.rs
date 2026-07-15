@@ -8,8 +8,7 @@ use heck::{ToKebabCase, ToLowerCamelCase, ToShoutySnakeCase, ToSnakeCase, ToUppe
 /// [`Casing::CamelCase`] when generating bindings. This enum lets you override that behavior,
 /// for example to keep Rust's original `snake_case` naming.
 ///
-/// This is used by [`Builder::function_casing`](crate::Builder::function_casing) and
-/// [`Builder::argument_casing`](crate::Builder::argument_casing).
+/// This is used by [`Builder::function_casing`](crate::Builder::function_casing).
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Casing {
@@ -22,9 +21,7 @@ pub enum Casing {
     PascalCase,
     /// `snake_case`.
     ///
-    /// This preserves the original Rust naming. Use this for argument names together with
-    /// [`#[tauri::command(rename_all = "snake_case")]`](https://docs.rs/tauri/latest/tauri/attr.command.html)
-    /// so the generated argument keys match what Tauri expects.
+    /// This preserves the original Rust naming.
     SnakeCase,
     /// `SCREAMING_SNAKE_CASE`.
     ScreamingSnakeCase,

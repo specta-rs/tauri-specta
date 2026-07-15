@@ -117,8 +117,6 @@ pub struct BuilderConfiguration {
     pub disable_serde_phases: bool,
     /// Casing applied to generated command and event accessor names.
     pub function_casing: Casing,
-    /// Casing applied to generated command argument names.
-    pub argument_casing: Casing,
 }
 
 impl<R: Runtime> Default for Builder<R> {
@@ -339,25 +337,6 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn function_casing(mut self, casing: Casing) -> Self {
         self.cfg.function_casing = casing;
-        self
-    }
-
-    /// Set the casing convention used for generated command argument names.
-    ///
-    /// By default Tauri Specta renames Rust `snake_case` arguments to [`Casing::CamelCase`]
-    /// (e.g. `my_name` becomes `myName`), which matches Tauri's default argument handling.
-    ///
-    /// If your commands use [`#[tauri::command(rename_all = "snake_case")]`](https://docs.rs/tauri/latest/tauri/attr.command.html),
-    /// set this to [`Casing::SnakeCase`] so the generated argument keys match what Tauri
-    /// expects when deserializing the invoke payload.
-    ///
-    /// ```rust
-    /// use tauri_specta::{Builder, Casing};
-    ///
-    /// let mut builder = Builder::<tauri::Wry>::new().argument_casing(Casing::SnakeCase);
-    /// ```
-    pub fn argument_casing(mut self, casing: Casing) -> Self {
-        self.cfg.argument_casing = casing;
         self
     }
 
