@@ -39,8 +39,7 @@ pnpm tauri dev
 ### Running tests
 
 ```bash
-mkdir _out
-OUT_DIR="$(pwd)/_out" cargo test --all --all-features
+cargo test --all --all-features
 ```
 
 ## Credit
