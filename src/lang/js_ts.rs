@@ -100,7 +100,7 @@ fn runtime(
 
     let mut out = String::new();
 
-    if let Some(ndt) = cfg
+    if let Some(ndt) = exporter
         .types
         .into_unsorted_iter()
         .find(|ndt| RESERVED_NDT_NAMES.contains(&&*ndt.name))
@@ -1268,13 +1268,13 @@ function makeEvent(name, serialize, deserialize) {
 mod tests {
     use std::fs;
 
-    use serde::Serialize;
+    use serde::{Deserialize, Serialize};
     use specta::{
         Type,
         datatype::{DataType, Primitive},
         specta,
     };
-    use specta_typescript::{JSDoc, Typescript};
+    use specta_typescript::{JSDoc, Layout, Typescript};
 
     use crate::{Builder, ErrorHandlingMode, collect_commands};
 
@@ -1298,6 +1298,23 @@ mod tests {
 
     #[derive(Serialize, Type)]
     struct SemanticError(String);
+
+    #[derive(Serialize, Deserialize, Type)]
+    #[serde(rename = "BuildChannel")]
+    #[allow(dead_code)]
+    enum Channel {
+        Production,
+    }
+
+    mod unrenamed {
+        use super::*;
+
+        #[derive(Serialize, Deserialize, Type)]
+        #[allow(dead_code)]
+        pub enum Channel {
+            Production,
+        }
+    }
 
     #[derive(Serialize, Type)]
     #[serde(untagged)]
@@ -1335,6 +1352,57 @@ mod tests {
     #[specta]
     fn semantic_nullable_error() -> Result<String, SemanticError> {
         Ok(String::new())
+    }
+
+    #[test]
+    fn reserved_runtime_names_use_formatted_type_names() {
+        let output_dir = std::env::temp_dir().join(format!(
+            "tauri-specta-reserved-runtime-names-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&output_dir);
+
+        let builder = Builder::<tauri::Wry>::new().typ::<Channel>();
+        for (name, layout) in [
+            ("flat", Layout::FlatFile),
+            ("namespaces", Layout::Namespaces),
+            ("module-prefixed", Layout::ModulePrefixedName),
+            ("files", Layout::Files),
+        ] {
+            let path = output_dir.join(format!("typescript-{name}"));
+            builder
+                .export(Typescript::default().layout(layout), path)
+                .expect("serde-renamed Channel should export as TypeScript");
+            if layout == Layout::FlatFile {
+                let output = fs::read_to_string(output_dir.join("typescript-flat"))
+                    .expect("failed to read TypeScript bindings");
+                assert!(output.contains("export type BuildChannel"));
+            }
+        }
+
+        for (name, layout) in [
+            ("flat", Layout::FlatFile),
+            ("module-prefixed", Layout::ModulePrefixedName),
+            ("files", Layout::Files),
+        ] {
+            let path = output_dir.join(format!("jsdoc-{name}"));
+            builder
+                .export(JSDoc::default().layout(layout), path)
+                .expect("serde-renamed Channel should export as JSDoc");
+            if layout == Layout::FlatFile {
+                let output = fs::read_to_string(output_dir.join("jsdoc-flat"))
+                    .expect("failed to read JSDoc bindings");
+                assert!(output.contains("BuildChannel"));
+            }
+        }
+
+        let err = Builder::<tauri::Wry>::new()
+            .typ::<unrenamed::Channel>()
+            .export(Typescript::default(), output_dir.join("unrenamed.ts"))
+            .expect_err("an exported type named Channel should conflict with the runtime");
+        assert!(err.to_string().contains("User defined type 'Channel'"));
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
     }
 
     #[test]
