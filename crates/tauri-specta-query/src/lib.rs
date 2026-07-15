@@ -1,7 +1,20 @@
-//! TODO
+//! Generate typesafe [TanStack Query](https://tanstack.com/query) helpers from
+//! [`tauri-specta`](https://docs.rs/tauri-specta) commands.
 //!
-//! Known Issues:
-//!  - You can assign commands, events, types, constants after `From` into builder which will override. Fine for now.
+//! Queries and mutations are collected separately in a [`CommandSet`]. Building the command set
+//! produces both the TypeScript helpers for the selected [`TanstackQueryFramework`] and the
+//! [`tauri_specta::Builder`] used to register the commands with Tauri.
+//!
+//! # Known issues
+//!
+//! Commands, events, types, and constants assigned to the builder after conversion from a
+//! [`CommandSet`] override the values supplied by the command set.
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![doc(
+    // TODO: Tauri Specta logo
+    html_logo_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png",
+    html_favicon_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png"
+)]
 
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
