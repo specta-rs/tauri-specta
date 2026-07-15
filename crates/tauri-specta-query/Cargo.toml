@@ -1,0 +1,32 @@
+[package]
+name = "tauri-specta-query"
+description = "Generate typesafe TanStack Query helpers for Tauri Specta commands"
+version = "0.0.1"
+authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
+edition = "2024"
+license = "MIT"
+include = ["/src"]
+repository = "https://github.com/specta-rs/tauri-specta"
+documentation = "https://docs.rs/tauri-specta-query/latest/tauri_specta_query"
+keywords = ["tauri", "specta", "tanstack-query", "typescript", "typesafe"]
+categories = ["web-programming", "asynchronous"]
+
+[package.metadata."docs.rs"]
+all-features = true
+rustc-args = ["--cfg", "docsrs"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+heck = "0.5"
+tauri.workspace = true
+specta.workspace = true
+serde = "1"
+serde_json = "1"
+tauri-specta = { version = "=2.0.0-rc.25", path = "../.." }
+
+[dev-dependencies]
+specta-typescript.workspace = true
+tauri-specta = { path = "../..", features = ["typescript"] }
+
+[lints]
+workspace = true

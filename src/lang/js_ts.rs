@@ -526,13 +526,23 @@ fn runtime(
                 serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name))
                     .expect("failed to serialize string");
 
+            let event_dt = DataType::Reference(r.clone());
             let mut field_ts = "makeEvent".to_string();
             if !jsdoc {
                 field_ts.push('<');
                 field_ts.push_str(&render_reference_dt_for_phase(
-                    &DataType::Reference(r.clone()),
+                    &event_dt,
+                    Phase::Serialize,
                     Phase::Deserialize,
+                    &exporter,
+                    cfg,
+                    semantic_types_runtime_types,
+                )?);
+                field_ts.push_str(", ");
+                field_ts.push_str(&render_reference_dt_for_phase(
+                    &event_dt,
                     Phase::Deserialize,
+                    Phase::Serialize,
                     &exporter,
                     cfg,
                     semantic_types_runtime_types,
@@ -541,7 +551,6 @@ fn runtime(
             }
             field_ts.push('(');
             field_ts.push_str(&event_name_escaped);
-            let event_dt = DataType::Reference(r.clone());
             let serialize_transform = render_result_transform_for_phase(
                 &event_dt,
                 Phase::Serialize,
@@ -1051,20 +1060,20 @@ const TYPED_ERROR_ASSERTION_TS: &str = "const _assertTypedErrorFollowsContract: 
 
 const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
-function makeEvent<T>(name: string, serialize?: (payload: T) => unknown, deserialize?: (payload: any) => T) {
-    const mapEvent = (cb: __TAURI_EVENT.EventCallback<T>) => (event: __TAURI_EVENT.Event<any>) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
-    const mapPayload = (payload: T) => serialize ? serialize(payload) : payload;
+function makeEvent<TListen, TEmit = TListen>(name: string, serialize?: (payload: TEmit) => unknown, deserialize?: (payload: any) => TListen) {
+    const mapEvent = (cb: __TAURI_EVENT.EventCallback<TListen>) => (event: __TAURI_EVENT.Event<any>) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapPayload = (payload: TEmit) => serialize ? serialize(payload) : payload;
 
     const base = {
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, mapEvent(cb)),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, mapEvent(cb)),
-        emit: ((payload: T) => __TAURI_EVENT.emit(name, mapPayload(payload)) as unknown) as EventEmit<T>
+        listen: (cb: __TAURI_EVENT.EventCallback<TListen>) => __TAURI_EVENT.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<TListen>) => __TAURI_EVENT.once(name, mapEvent(cb)),
+        emit: ((payload: TEmit) => __TAURI_EVENT.emit(name, mapPayload(payload)) as unknown) as EventEmit<TEmit>
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, mapEvent(cb)),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, mapEvent(cb)),
-        emit: ((payload: T) => target.emit(name, mapPayload(payload)) as unknown) as EventEmit<T>
+        listen: (cb: __TAURI_EVENT.EventCallback<TListen>) => target.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<TListen>) => target.once(name, mapEvent(cb)),
+        emit: ((payload: TEmit) => target.emit(name, mapPayload(payload)) as unknown) as EventEmit<TEmit>
     });
 
     return Object.assign(fn, base);

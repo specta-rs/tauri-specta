@@ -1,5 +1,5 @@
 {
-  "name": "tauri-specta-example-app",
+  "name": "tauri-specta-example-tanstack-query",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.2",
     "@tauri-apps/api": "^2.11.1"
   },
   "devDependencies": {

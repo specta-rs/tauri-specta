@@ -7,9 +7,10 @@ use tauri::{Runtime, ipc::Invoke};
 ///
 /// This acts to seal the implementation details of the macro.
 pub struct Commands<R: Runtime>(
+    // TODO: Explain these being public
     // Bounds copied from `tauri::Builder::invoke_handler`
-    pub(crate) Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
-    pub(crate) fn(&mut Types) -> Vec<datatype::Function>,
+    pub Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
+    pub Arc<dyn Fn(&mut Types) -> Vec<datatype::Function> + Send + Sync + 'static>,
 );
 
 impl<R: Runtime> fmt::Debug for Commands<R> {
@@ -22,13 +23,13 @@ impl<R: Runtime> Default for Commands<R> {
     fn default() -> Self {
         Self(
             Arc::new(tauri::generate_handler![]),
-            ::specta::function::collect_functions![],
+            Arc::new(::specta::function::collect_functions![]),
         )
     }
 }
 
 impl<R: Runtime> Clone for Commands<R> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1)
+        Self(self.0.clone(), self.1.clone())
     }
 }
