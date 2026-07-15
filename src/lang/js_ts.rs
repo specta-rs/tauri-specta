@@ -8,7 +8,7 @@ use specta::{
     },
 };
 use specta_serde::Phase;
-use specta_typescript::{Error, Exporter, FrameworkExporter, define, semantic};
+use specta_typescript::{Error, Exporter, FrameworkExporter, Layout, define, semantic};
 use specta_util::Remapper;
 
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
@@ -100,16 +100,16 @@ fn runtime(
 
     let mut out = String::new();
 
-    if let Some(ndt) = cfg
-        .types
-        .into_unsorted_iter()
-        .find(|ndt| RESERVED_NDT_NAMES.contains(&&*ndt.name))
-    {
+    if let Some((ndt, name)) = exporter.types.into_unsorted_iter().find_map(|ndt| {
+        runtime_scope_name(exporter.layout, ndt)
+            .filter(|name| RESERVED_NDT_NAMES.contains(&name.as_ref()))
+            .map(|name| (ndt, name))
+    }) {
         return Err(Error::framework(
             "",
             format!(
                 "User defined type '{}' defined in {} must be renamed so it doesn't conflict with Tauri Specta runtime.",
-                ndt.name, ndt.location
+                name, ndt.location
             ),
         ));
     }
@@ -704,6 +704,25 @@ fn runtime(
     Ok(Cow::Owned(out))
 }
 
+fn runtime_scope_name(layout: Layout, ndt: &NamedDataType) -> Option<Cow<'static, str>> {
+    match layout {
+        Layout::FlatFile => Some(ndt.name.clone()),
+        Layout::ModulePrefixedName => Some(Cow::Owned(format!(
+            "{}_{}",
+            ndt.module_path.replace("::", "_"),
+            ndt.name
+        ))),
+        Layout::Namespaces => Some(
+            ndt.module_path
+                .split("::")
+                .next()
+                .filter(|module| !module.is_empty())
+                .map_or_else(|| ndt.name.clone(), |module| Cow::Owned(module.to_owned())),
+        ),
+        Layout::Files => ndt.module_path.is_empty().then(|| ndt.name.clone()),
+    }
+}
+
 /// Applies `specta_serde` format + also remaps `DataType`'s and does other transformations!
 #[derive(Debug, Clone)]
 struct SpectaFormat {
@@ -1268,13 +1287,13 @@ function makeEvent(name, serialize, deserialize) {
 mod tests {
     use std::fs;
 
-    use serde::Serialize;
+    use serde::{Deserialize, Serialize};
     use specta::{
         Type,
         datatype::{DataType, Primitive},
         specta,
     };
-    use specta_typescript::{JSDoc, Typescript};
+    use specta_typescript::{JSDoc, Layout, Typescript};
 
     use crate::{Builder, ErrorHandlingMode, collect_commands};
 
@@ -1298,6 +1317,23 @@ mod tests {
 
     #[derive(Serialize, Type)]
     struct SemanticError(String);
+
+    #[derive(Serialize, Deserialize, Type)]
+    #[serde(rename = "BuildChannel")]
+    #[allow(dead_code)]
+    enum Channel {
+        Production,
+    }
+
+    mod unrenamed {
+        use super::*;
+
+        #[derive(Serialize, Deserialize, Type)]
+        #[allow(dead_code)]
+        pub enum Channel {
+            Production,
+        }
+    }
 
     #[derive(Serialize, Type)]
     #[serde(untagged)]
@@ -1335,6 +1371,81 @@ mod tests {
     #[specta]
     fn semantic_nullable_error() -> Result<String, SemanticError> {
         Ok(String::new())
+    }
+
+    #[test]
+    fn reserved_runtime_names_use_exported_type_names() {
+        let output_dir = std::path::Path::new("target/tests/reserved-runtime-names");
+        let _ = fs::remove_dir_all(output_dir);
+
+        let renamed = Builder::<tauri::Wry>::new().typ::<Channel>();
+        for (name, layout) in [
+            ("flat", Layout::FlatFile),
+            ("namespaces", Layout::Namespaces),
+            ("module-prefixed", Layout::ModulePrefixedName),
+            ("files", Layout::Files),
+        ] {
+            renamed
+                .export(Typescript::default().layout(layout), output_dir.join(name))
+                .expect("serde-renamed Channel should export as TypeScript");
+        }
+        assert!(
+            fs::read_to_string(output_dir.join("flat"))
+                .expect("failed to read TypeScript bindings")
+                .contains("export type BuildChannel")
+        );
+
+        for (name, layout) in [
+            ("jsdoc-flat", Layout::FlatFile),
+            ("jsdoc-module-prefixed", Layout::ModulePrefixedName),
+            ("jsdoc-files", Layout::Files),
+        ] {
+            renamed
+                .export(JSDoc::default().layout(layout), output_dir.join(name))
+                .expect("serde-renamed Channel should export as JSDoc");
+        }
+        assert!(
+            fs::read_to_string(output_dir.join("jsdoc-flat"))
+                .expect("failed to read JSDoc bindings")
+                .contains("BuildChannel")
+        );
+
+        let err = Builder::<tauri::Wry>::new()
+            .typ::<unrenamed::Channel>()
+            .export(Typescript::default(), output_dir.join("unrenamed.ts"))
+            .expect_err("a flat export named Channel should conflict with the runtime");
+        assert!(err.to_string().contains("User defined type 'Channel'"));
+
+        Builder::<tauri::Wry>::new()
+            .typ::<unrenamed::Channel>()
+            .export(JSDoc::default(), output_dir.join("unrenamed.js"))
+            .expect_err("a flat JSDoc export named Channel should conflict with the runtime");
+
+        for (name, layout) in [
+            ("unrenamed-namespaces", Layout::Namespaces),
+            ("unrenamed-module-prefixed", Layout::ModulePrefixedName),
+            ("unrenamed-files", Layout::Files),
+        ] {
+            Builder::<tauri::Wry>::new()
+                .typ::<unrenamed::Channel>()
+                .export(Typescript::default().layout(layout), output_dir.join(name))
+                .expect("a scoped Channel should not conflict with the runtime");
+        }
+
+        for (name, layout) in [
+            (
+                "unrenamed-jsdoc-module-prefixed",
+                Layout::ModulePrefixedName,
+            ),
+            ("unrenamed-jsdoc-files", Layout::Files),
+        ] {
+            Builder::<tauri::Wry>::new()
+                .typ::<unrenamed::Channel>()
+                .export(JSDoc::default().layout(layout), output_dir.join(name))
+                .expect("a scoped Channel should not conflict with the JSDoc runtime");
+        }
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
     }
 
     #[test]
