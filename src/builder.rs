@@ -330,6 +330,11 @@ impl<R: Runtime> Builder<R> {
     /// This does not affect the underlying Tauri command/event string used to invoke the
     /// command, only the JavaScript accessor name in the generated bindings.
     ///
+    /// Command argument names are separate because they are part of Tauri's
+    /// runtime IPC contract. To rename arguments, configure the command itself
+    /// and keep `#[tauri::command(rename_all = "...")]` aligned with
+    /// `#[specta(rename_all = "...")]`. This method never renames arguments.
+    ///
     /// ```rust
     /// use tauri_specta::{Builder, Casing};
     ///

@@ -2,11 +2,13 @@ use std::borrow::Cow;
 
 use heck::{ToKebabCase, ToLowerCamelCase, ToShoutySnakeCase, ToSnakeCase, ToUpperCamelCase};
 
-/// The casing convention applied to generated identifiers in the exported bindings.
+/// The casing convention applied to generated command and event accessors.
 ///
 /// By default Tauri Specta renames Rust `snake_case` identifiers to JavaScript-idiomatic
 /// [`Casing::CamelCase`] when generating bindings. This enum lets you override that behavior,
-/// for example to keep Rust's original `snake_case` naming.
+/// for example to keep Rust's original `snake_case` naming. This affects only
+/// the generated frontend property name; it does not rename command arguments
+/// or change the runtime IPC command string.
 ///
 /// This is used by [`Builder::function_casing`](crate::Builder::function_casing).
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Hash)]

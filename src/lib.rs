@@ -222,6 +222,19 @@
 //! You can override this with [`Builder::function_casing`]. See [`Casing`] for the supported
 //! conventions.
 //!
+//! Command accessor names and command argument names are separate concerns:
+//!
+//! - Function casing changes only the generated frontend property, such as
+//!   `commands.someName` to `commands.some_name`. It does not change the Rust
+//!   command name or the command string sent in the runtime IPC message.
+//! - Argument renaming changes the IPC payload contract and is configured per
+//!   command. Keep `#[tauri::command(rename_all = "...")]` and
+//!   `#[specta(rename_all = "...")]` aligned when renaming arguments.
+//!
+//! [`Builder::function_casing`] does not rename command arguments. See the
+//! [command-versus-argument explanation](https://github.com/specta-rs/tauri-specta/issues/164#issuecomment-4976416006)
+//! for more context.
+//!
 //! ```rust
 //! use tauri_specta::{Builder, Casing};
 //!

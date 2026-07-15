@@ -14,3 +14,9 @@ use tauri_specta_query::CommandSet;
 let commands = commands.function_casing(Casing::SnakeCase);
 # }
 ```
+
+Function casing changes generated frontend accessor names only. It does not
+change the Tauri IPC command string or rename command arguments. Argument
+renaming is configured per command and requires matching
+`#[tauri::command(rename_all = "...")]` and `#[specta(rename_all = "...")]`
+attributes.
