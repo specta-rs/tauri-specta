@@ -105,7 +105,7 @@ fn runtime(
         .into_unsorted_iter()
         .filter(|ndt| ndt.ty.is_some())
         .find_map(|ndt| {
-            runtime_scope_name(exporter.layout, ndt)
+            runtime_scope_name(jsdoc, exporter.layout, ndt)
                 .filter(|name| RESERVED_NDT_NAMES.contains(&name.as_ref()))
                 .map(|name| (ndt, name))
         })
@@ -709,22 +709,26 @@ fn runtime(
     Ok(Cow::Owned(out))
 }
 
-fn runtime_scope_name(layout: Layout, ndt: &NamedDataType) -> Option<Cow<'static, str>> {
-    match layout {
-        Layout::FlatFile => Some(ndt.name.clone()),
-        Layout::ModulePrefixedName => Some(Cow::Owned(format!(
+fn runtime_scope_name(
+    jsdoc: bool,
+    layout: Layout,
+    ndt: &NamedDataType,
+) -> Option<Cow<'static, str>> {
+    match (jsdoc, layout) {
+        (_, Layout::FlatFile) | (true, Layout::ModulePrefixedName) => Some(ndt.name.clone()),
+        (false, Layout::ModulePrefixedName) => Some(Cow::Owned(format!(
             "{}_{}",
             ndt.module_path.replace("::", "_"),
             ndt.name
         ))),
-        Layout::Namespaces => Some(
+        (_, Layout::Namespaces) => Some(
             ndt.module_path
                 .split("::")
                 .next()
                 .filter(|module| !module.is_empty())
                 .map_or_else(|| ndt.name.clone(), |module| Cow::Owned(module.to_owned())),
         ),
-        Layout::Files => ndt.module_path.is_empty().then(|| ndt.name.clone()),
+        (_, Layout::Files) => ndt.module_path.is_empty().then(|| ndt.name.clone()),
     }
 }
 
@@ -1458,18 +1462,21 @@ mod tests {
                 .expect("a scoped Channel should not conflict with the runtime");
         }
 
-        for (name, layout) in [
-            (
-                "unrenamed-jsdoc-module-prefixed",
-                Layout::ModulePrefixedName,
-            ),
-            ("unrenamed-jsdoc-files", Layout::Files),
-        ] {
-            Builder::<tauri::Wry>::new()
-                .typ::<unrenamed::Channel>()
-                .export(JSDoc::default().layout(layout), output_dir.join(name))
-                .expect("a scoped Channel should not conflict with the JSDoc runtime");
-        }
+        Builder::<tauri::Wry>::new()
+            .typ::<unrenamed::Channel>()
+            .export(
+                JSDoc::default().layout(Layout::ModulePrefixedName),
+                output_dir.join("unrenamed-jsdoc-module-prefixed"),
+            )
+            .expect_err("JSDoc module-prefixed typedefs should retain their bare names");
+
+        Builder::<tauri::Wry>::new()
+            .typ::<unrenamed::Channel>()
+            .export(
+                JSDoc::default().layout(Layout::Files),
+                output_dir.join("unrenamed-jsdoc-files"),
+            )
+            .expect("a Channel in a separate JSDoc file should not conflict with the runtime");
 
         fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
     }
