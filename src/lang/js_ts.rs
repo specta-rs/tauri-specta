@@ -507,7 +507,10 @@ fn runtime(
 
                 docs.into()
             };
-            s = s.field(command.name().to_lower_camel_case(), field);
+            s = s.field(
+                cfg.function_casing.apply(command.name()).into_owned(),
+                field,
+            );
         }
 
         out.push_str("\n/** Commands */");
@@ -602,7 +605,7 @@ fn runtime(
                 )
                 .into();
             }
-            s = s.field(name.to_lower_camel_case(), field);
+            s = s.field(cfg.function_casing.apply(name).into_owned(), field);
         }
 
         out.push_str("\n/** Events */");

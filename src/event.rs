@@ -14,9 +14,21 @@ use crate::name::resolve_tauri_event_name;
 /// A wrapper around the output of the `collect_commands` macro.
 ///
 /// This acts to seal the implementation details of the macro.
-#[derive(Default)]
+#[derive(Clone, Default)]
 #[allow(clippy::type_complexity)]
 pub struct Events(pub(crate) BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>);
+
+impl Events {
+    /// Combines two event collections.
+    ///
+    /// If both collections contain the same event name, the event from
+    /// `other` replaces the event in `self`.
+    #[must_use]
+    pub fn merge(mut self, other: Self) -> Self {
+        self.0.extend(other.0);
+        self
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct EventRegistryMeta {

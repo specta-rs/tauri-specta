@@ -213,6 +213,36 @@
 //! If you would like to opt-in to the dangerous behavior of truncating your integers,
 //! you can use [`Builder::dangerously_cast_bigints_to_number`] but we do not recommend it!
 //!
+//! ## Naming convention (casing)
+//!
+//! By default Tauri Specta renames your Rust `snake_case` commands and events to
+//! JavaScript-idiomatic `camelCase` in the generated bindings (e.g. `hello_world`
+//! becomes `commands.helloWorld`).
+//!
+//! You can override this with [`Builder::function_casing`]. See [`Casing`] for the supported
+//! conventions.
+//!
+//! Command accessor names and command argument names are separate concerns:
+//!
+//! - Function casing changes only the generated frontend property, such as
+//!   `commands.someName` to `commands.some_name`. It does not change the Rust
+//!   command name or the command string sent in the runtime IPC message.
+//! - Argument renaming changes the IPC payload contract and is configured per
+//!   command. Keep `#[tauri::command(rename_all = "...")]` and
+//!   `#[specta(rename_all = "...")]` aligned when renaming arguments.
+//!
+//! [`Builder::function_casing`] does not rename command arguments. See the
+//! [command-versus-argument explanation](https://github.com/specta-rs/tauri-specta/issues/164#issuecomment-4976416006)
+//! for more context.
+//!
+//! ```rust
+//! use tauri_specta::{Builder, Casing};
+//!
+//! let mut builder = Builder::<tauri::Wry>::new()
+//!     // Keep the original Rust naming for command and event accessors.
+//!     .function_casing(Casing::SnakeCase);
+//! ```
+//!
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
     // TODO: Tauri Specta logo
@@ -221,6 +251,7 @@
 )]
 
 mod builder;
+mod casing;
 mod commands;
 mod event;
 mod lang;
@@ -228,6 +259,7 @@ mod macros;
 mod name;
 
 pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
+pub use casing::Casing;
 pub use commands::Commands;
 pub use event::{Event, Events, TypedEvent};
 pub use lang::LanguageExt;

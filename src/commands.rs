@@ -3,6 +3,11 @@ use std::{fmt, sync::Arc};
 use specta::{Types, datatype};
 use tauri::{Runtime, ipc::Invoke};
 
+/// Type-erased collector used by [`Commands`] to register command metadata.
+#[doc(hidden)]
+pub type CommandTypeCollector =
+    dyn Fn(&mut Types) -> Vec<datatype::Function> + Send + Sync + 'static;
+
 /// A wrapper around the output of the `collect_commands` macro.
 ///
 /// This acts to seal the implementation details of the macro.
@@ -10,7 +15,7 @@ pub struct Commands<R: Runtime>(
     // TODO: Explain these being public
     // Bounds copied from `tauri::Builder::invoke_handler`
     pub Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
-    pub Arc<dyn Fn(&mut Types) -> Vec<datatype::Function> + Send + Sync + 'static>,
+    pub Arc<CommandTypeCollector>,
 );
 
 impl<R: Runtime> fmt::Debug for Commands<R> {
