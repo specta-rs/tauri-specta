@@ -30,7 +30,12 @@ impl LanguageExt for specta_typescript::Typescript {
                     &cfg,
                     false,
                     if cfg.typed_error_impl.is_empty() {
-                        TYPED_ERROR_IMPL_TS
+                        match cfg.error_handling {
+                            ErrorHandlingMode::DataError => DATA_ERROR_IMPL_TS,
+                            ErrorHandlingMode::Throw | ErrorHandlingMode::Result => {
+                                TYPED_ERROR_IMPL_TS
+                            }
+                        }
                     } else {
                         &cfg.typed_error_impl
                     },
@@ -59,7 +64,12 @@ impl LanguageExt for specta_typescript::JSDoc {
                     &cfg,
                     true,
                     if cfg.typed_error_impl.is_empty() {
-                        TYPED_ERROR_IMPL_JS
+                        match cfg.error_handling {
+                            ErrorHandlingMode::DataError => DATA_ERROR_IMPL_JS,
+                            ErrorHandlingMode::Throw | ErrorHandlingMode::Result => {
+                                TYPED_ERROR_IMPL_JS
+                            }
+                        }
                     } else {
                         &cfg.typed_error_impl
                     },
@@ -129,7 +139,7 @@ fn runtime(
         })
     });
     let has_typed_error = enabled_commands
-        && cfg.error_handling == ErrorHandlingMode::Result
+        && cfg.error_handling != ErrorHandlingMode::Throw
         && cfg.commands.iter().any(|command| {
             command
                 .result()
@@ -243,10 +253,30 @@ fn runtime(
 
             let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
 
-            let body = if cfg.error_handling == ErrorHandlingMode::Result
+            let body = if cfg.error_handling != ErrorHandlingMode::Throw
                 && let Some(result) = command.result()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
             {
+                let semantic_err_type = apply_semantic_type_for_phase(
+                    dt_err,
+                    Phase::Deserialize,
+                    "v.error",
+                    semantic_types_runtime_types,
+                    cfg,
+                )
+                .and_then(|(dt, _)| dt);
+                if cfg.error_handling == ErrorHandlingMode::DataError
+                    && (datatype_can_be_null(dt_err, exporter.types)
+                        || semantic_err_type.as_ref().is_some_and(|dt| {
+                            datatype_can_be_null(dt, semantic_types_runtime_types)
+                        }))
+                {
+                    return Err(Error::framework(
+                        command.name().to_string(),
+                        "DataError mode requires a non-nullable command error type because null marks a successful result",
+                    ));
+                }
+
                 let ok_semantic_type = has_semantic_type_for_phase(
                     dt_ok,
                     Phase::Deserialize,
@@ -319,18 +349,7 @@ fn runtime(
                 if ok_transform.is_none() && err_transform.is_none() {
                     invoke_ts
                 } else {
-                    let mapper = match (ok_transform, err_transform) {
-                        (Some(ok), Some(err)) => format!(
-                            "(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v.status === \"error\" ? {{ ...v, error: {err} }} : v)"
-                        ),
-                        (Some(ok), None) => {
-                            format!("(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v)")
-                        }
-                        (None, Some(err)) => {
-                            format!("(v.status === \"error\" ? {{ ...v, error: {err} }} : v)")
-                        }
-                        (None, None) => "v".to_string(),
-                    };
+                    let mapper = result_mapper(cfg.error_handling, ok_transform, err_transform);
 
                     if jsdoc {
                         format!("{invoke_ts}.then((v) => {mapper})")
@@ -421,7 +440,7 @@ fn runtime(
                         docs.push('\n');
                     }
 
-                    let returns = if cfg.error_handling == ErrorHandlingMode::Result
+                    let returns = if cfg.error_handling != ErrorHandlingMode::Throw
                         && let Some(result) = command.result()
                         && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
                     {
@@ -466,9 +485,7 @@ fn runtime(
                             semantic_types_runtime_types,
                         )?;
 
-                        format!(
-                            "{{ status: \"ok\"; data: {ok} }} | {{ status: \"error\"; error: {err} }}"
-                        )
+                        result_type(cfg.error_handling, &ok, &err)
                     } else {
                         let output_dt = command
                             .result()
@@ -846,6 +863,84 @@ fn datatype_contains_std_result(dt: &DataType, types: &Types) -> bool {
     }
 }
 
+fn datatype_can_be_null(dt: &DataType, types: &Types) -> bool {
+    datatype_can_be_null_with_generics(dt, types, &[])
+}
+
+fn datatype_can_be_null_with_generics(
+    dt: &DataType,
+    types: &Types,
+    generic_scopes: &[&[(specta::datatype::Generic, DataType)]],
+) -> bool {
+    match dt {
+        DataType::Nullable(_) => true,
+        DataType::Tuple(tuple) => tuple.elements.is_empty(),
+        DataType::Struct(s) => fields_can_be_null(&s.fields, types, generic_scopes),
+        DataType::Enum(e) => {
+            let all_variants_untagged = e.attributes.contains_key("serde:container:untagged");
+            e.variants.iter().any(|(_, variant)| {
+                !variant.skip
+                    && (all_variants_untagged
+                        || variant.attributes.contains_key("serde:variant:untagged"))
+                    && fields_can_be_null(&variant.fields, types, generic_scopes)
+            })
+        }
+        DataType::Generic(generic) => generic_scopes
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(scope_index, scope)| {
+                scope
+                    .iter()
+                    .find(|(candidate, _)| candidate == generic)
+                    .map(|(_, dt)| (scope_index, dt))
+            })
+            .is_none_or(|(scope_index, dt)| {
+                datatype_can_be_null_with_generics(dt, types, &generic_scopes[..scope_index])
+            }),
+        DataType::Reference(Reference::Named(r)) => match &r.inner {
+            NamedReferenceType::Inline { dt, .. } => {
+                datatype_can_be_null_with_generics(dt, types, generic_scopes)
+            }
+            NamedReferenceType::Reference { generics, .. } => types
+                .get(r)
+                .and_then(|ndt| ndt.ty.as_ref())
+                .is_some_and(|dt| {
+                    let mut scopes = generic_scopes.to_vec();
+                    scopes.push(generics);
+                    datatype_can_be_null_with_generics(dt, types, &scopes)
+                }),
+            NamedReferenceType::Recursive(_) => false,
+        },
+        DataType::Primitive(Primitive::f16 | Primitive::f32 | Primitive::f64 | Primitive::f128) => {
+            true
+        }
+        DataType::Intersection(dts) => {
+            dts.is_empty()
+                || dts
+                    .iter()
+                    .all(|dt| datatype_can_be_null_with_generics(dt, types, generic_scopes))
+        }
+        DataType::Primitive(_) | DataType::List(_) | DataType::Map(_) => false,
+        DataType::Reference(Reference::Opaque(_)) => true,
+    }
+}
+
+fn fields_can_be_null(
+    fields: &Fields,
+    types: &Types,
+    generic_scopes: &[&[(specta::datatype::Generic, DataType)]],
+) -> bool {
+    match fields {
+        Fields::Unit => true,
+        Fields::Unnamed(fields) if fields.fields.len() == 1 => fields.fields[0]
+            .ty
+            .as_ref()
+            .is_none_or(|dt| datatype_can_be_null_with_generics(dt, types, generic_scopes)),
+        Fields::Unnamed(_) | Fields::Named(_) => false,
+    }
+}
+
 fn fields_contain_std_result(fields: &Fields, types: &Types) -> bool {
     match fields {
         Fields::Unit => false,
@@ -911,6 +1006,46 @@ fn jsdoc_transform(transform: String, input: &str, jsdoc: bool) -> String {
         transform.replace(&format!(" as typeof {input}"), "")
     } else {
         transform
+    }
+}
+
+fn result_mapper(
+    mode: ErrorHandlingMode,
+    ok_transform: Option<String>,
+    err_transform: Option<String>,
+) -> String {
+    match (mode, ok_transform, err_transform) {
+        (ErrorHandlingMode::Result, Some(ok), Some(err)) => format!(
+            "(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v.status === \"error\" ? {{ ...v, error: {err} }} : v)"
+        ),
+        (ErrorHandlingMode::Result, Some(ok), None) => {
+            format!("(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v)")
+        }
+        (ErrorHandlingMode::Result, None, Some(err)) => {
+            format!("(v.status === \"error\" ? {{ ...v, error: {err} }} : v)")
+        }
+        (ErrorHandlingMode::DataError, Some(ok), Some(err)) => {
+            format!("(v.error === null ? {{ ...v, data: {ok} }} : {{ ...v, error: {err} }})")
+        }
+        (ErrorHandlingMode::DataError, Some(ok), None) => {
+            format!("(v.error === null ? {{ ...v, data: {ok} }} : v)")
+        }
+        (ErrorHandlingMode::DataError, None, Some(err)) => {
+            format!("(v.error !== null ? {{ ...v, error: {err} }} : v)")
+        }
+        (ErrorHandlingMode::Throw, _, _) | (_, None, None) => "v".to_string(),
+    }
+}
+
+fn result_type(mode: ErrorHandlingMode, ok: &str, err: &str) -> String {
+    match mode {
+        ErrorHandlingMode::Throw => ok.to_string(),
+        ErrorHandlingMode::Result => {
+            format!("{{ status: \"ok\"; data: {ok} }} | {{ status: \"error\"; error: {err} }}")
+        }
+        ErrorHandlingMode::DataError => {
+            format!("{{ data: {ok}; error: null }} | {{ data: null; error: {err} }}")
+        }
     }
 }
 
@@ -1028,6 +1163,15 @@ const TYPED_ERROR_IMPL_TS: &str = r#"async function typedError<T, E>(result: Pro
     }
 }"#;
 
+const DATA_ERROR_IMPL_TS: &str = r#"async function typedError<T, E>(result: Promise<T>): Promise<{ data: T; error: null } | { data: null; error: E }> {
+    try {
+        return { data: await result, error: null };
+    } catch (e) {
+        if (e instanceof Error) throw e;
+        return { data: null, error: e as any };
+    }
+}"#;
+
 const MAP_CHANNEL_IMPL_TS: &str = r#"function mapChannel<T>(channel: Channel<T>, deserialize: (payload: any) => T): Channel<T> {
     return new Channel((payload) => channel.onmessage(deserialize(payload)));
 }"#;
@@ -1054,6 +1198,21 @@ async function typedError(result) {
     } catch (e) {
         if (e instanceof Error) throw e;
         return { status: "error", error: e };
+    }
+}"#;
+
+const DATA_ERROR_IMPL_JS: &str = r#"/**
+  * @template T
+  * @template E
+  * @param {Promise<T>} result
+  * @returns {Promise<{ data: T; error: null } | { data: null; error: E }>}
+  */
+async function typedError(result) {
+    try {
+        return { data: await result, error: null };
+    } catch (e) {
+        if (e instanceof Error) throw e;
+        return { data: null, error: e };
     }
 }"#;
 
@@ -1111,3 +1270,180 @@ function makeEvent(name, serialize, deserialize) {
 
     return Object.assign(fn, base);
 }"#;
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use serde::Serialize;
+    use specta::{
+        Type,
+        datatype::{DataType, Primitive},
+        specta,
+    };
+    use specta_typescript::{JSDoc, Typescript};
+
+    use crate::{Builder, ErrorHandlingMode, collect_commands};
+
+    #[tauri::command]
+    #[specta]
+    fn nullable_result() -> Result<Option<String>, String> {
+        Ok(None)
+    }
+
+    #[tauri::command]
+    #[specta]
+    fn nullable_error() -> Result<String, ()> {
+        Ok(String::new())
+    }
+
+    #[derive(Serialize, Type)]
+    struct UnitError;
+
+    #[derive(Serialize, Type)]
+    struct GenericError<T>(T);
+
+    #[derive(Serialize, Type)]
+    struct SemanticError(String);
+
+    #[derive(Serialize, Type)]
+    #[serde(untagged)]
+    #[allow(dead_code)]
+    enum UntaggedError {
+        Unit,
+        Message(String),
+    }
+
+    #[tauri::command]
+    #[specta]
+    fn unit_struct_error() -> Result<String, UnitError> {
+        Ok(String::new())
+    }
+
+    #[tauri::command]
+    #[specta]
+    fn generic_nullable_error() -> Result<String, GenericError<()>> {
+        Ok(String::new())
+    }
+
+    #[tauri::command]
+    #[specta]
+    fn untagged_nullable_error() -> Result<String, UntaggedError> {
+        Ok(String::new())
+    }
+
+    #[tauri::command]
+    #[specta]
+    fn floating_point_error() -> Result<String, f64> {
+        Ok(String::new())
+    }
+
+    #[tauri::command]
+    #[specta]
+    fn semantic_nullable_error() -> Result<String, SemanticError> {
+        Ok(String::new())
+    }
+
+    #[test]
+    fn data_error_mode_exports_discriminated_results() {
+        let output_dir = std::env::temp_dir().join(format!(
+            "tauri-specta-data-error-test-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&output_dir).expect("failed to create test output directory");
+
+        let builder = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .error_handling(ErrorHandlingMode::DataError);
+
+        let ts_path = output_dir.join("bindings.ts");
+        builder
+            .clone()
+            .export(Typescript::default(), &ts_path)
+            .expect("failed to export TypeScript bindings");
+        let ts = fs::read_to_string(ts_path).expect("failed to read TypeScript bindings");
+        assert!(ts.contains("typedError<string | null, string>"));
+        assert!(ts.contains("Promise<{ data: T; error: null } | { data: null; error: E }>"));
+        assert!(ts.contains("return { data: await result, error: null };"));
+        assert!(ts.contains("return { data: null, error: e as any };"));
+
+        let js_path = output_dir.join("bindings.js");
+        builder
+            .export(JSDoc::default(), &js_path)
+            .expect("failed to export JSDoc bindings");
+        let js = fs::read_to_string(js_path).expect("failed to read JSDoc bindings");
+        assert!(js.contains(
+            "@returns {Promise<{ data: string | null; error: null } | { data: null; error: string }>}"
+        ));
+        assert!(
+            js.contains("@returns {Promise<{ data: T; error: null } | { data: null; error: E }>}")
+        );
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn data_error_mode_rejects_nullable_error_types() {
+        for (name, builder) in [
+            (
+                "unit",
+                Builder::<tauri::Wry>::new().commands(collect_commands![nullable_error]),
+            ),
+            (
+                "unit-struct",
+                Builder::<tauri::Wry>::new().commands(collect_commands![unit_struct_error]),
+            ),
+            (
+                "generic-unit",
+                Builder::<tauri::Wry>::new().commands(collect_commands![generic_nullable_error]),
+            ),
+            (
+                "untagged-unit",
+                Builder::<tauri::Wry>::new().commands(collect_commands![untagged_nullable_error]),
+            ),
+            (
+                "floating-point",
+                Builder::<tauri::Wry>::new().commands(collect_commands![floating_point_error]),
+            ),
+        ] {
+            let output_path = std::env::temp_dir().join(format!(
+                "tauri-specta-nullable-error-{name}-test-{}.ts",
+                std::process::id()
+            ));
+            let err = builder
+                .error_handling(ErrorHandlingMode::DataError)
+                .export(Typescript::default(), output_path)
+                .expect_err("nullable error type should fail to export");
+
+            assert!(err.to_string().contains(
+                "DataError mode requires a non-nullable command error type because null marks a successful result"
+            ));
+        }
+
+        let semantic_types = specta_typescript::semantic::Configuration::empty()
+            .define::<SemanticError>(
+                |_| {
+                    DataType::Intersection(vec![DataType::Nullable(Box::new(DataType::Primitive(
+                        Primitive::str,
+                    )))])
+                },
+                None,
+                Some(specta_typescript::semantic::Transform::new(|_| {
+                    "null".to_string()
+                })),
+            );
+        let output_path = std::env::temp_dir().join(format!(
+            "tauri-specta-nullable-semantic-error-test-{}.ts",
+            std::process::id()
+        ));
+        let err = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![semantic_nullable_error])
+            .semantic_types(semantic_types)
+            .error_handling(ErrorHandlingMode::DataError)
+            .export(Typescript::default(), output_path)
+            .expect_err("nullable semantic error type should fail to export");
+        assert!(err.to_string().contains(
+            "DataError mode requires a non-nullable command error type because null marks a successful result"
+        ));
+    }
+}
