@@ -99,6 +99,12 @@
 //! calling [`CommandSet::build`]. The returned `tauri_specta::Builder` can then
 //! be configured further—for example with semantic types—before it is exported
 //! and mounted.
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![doc(
+    // TODO: Tauri Specta logo
+    html_logo_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png",
+    html_favicon_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png"
+)]
 
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
