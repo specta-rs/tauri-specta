@@ -512,11 +512,7 @@ fn runtime(
 
         out.push_str("\n/** Commands */");
         out.push_str("\nexport const commands = ");
-        let commands = s.build();
-        out.push_str(&match &commands {
-            DataType::Reference(_) => exporter.reference(&commands)?,
-            dt => exporter.inline(dt)?,
-        });
+        out.push_str(&exporter.reference(&s.build())?);
         out.push_str(";\n");
     }
 
@@ -608,7 +604,7 @@ fn runtime(
 
         out.push_str("\n/** Events */");
         out.push_str("\nexport const events = ");
-        out.push_str(&exporter.inline(&s.build())?);
+        out.push_str(&exporter.reference(&s.build())?);
         out.push_str(";\n");
     }
 
