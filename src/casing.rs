@@ -1,8 +1,6 @@
 use std::borrow::Cow;
 
-use heck::{
-    ToKebabCase, ToLowerCamelCase, ToShoutySnakeCase, ToSnakeCase, ToUpperCamelCase,
-};
+use heck::{ToKebabCase, ToLowerCamelCase, ToShoutySnakeCase, ToSnakeCase, ToUpperCamelCase};
 
 /// The casing convention applied to generated identifiers in the exported bindings.
 ///
@@ -35,8 +33,12 @@ pub enum Casing {
 }
 
 impl Casing {
-    /// Apply the casing convention to a given identifier.
-    pub(crate) fn apply<'a>(&self, ident: &'a str) -> Cow<'a, str> {
+    /// Applies this casing convention to an identifier.
+    ///
+    /// This is useful for companion binding generators that need to use the
+    /// same naming convention as [`Builder`](crate::Builder).
+    #[must_use]
+    pub fn apply<'a>(&self, ident: &'a str) -> Cow<'a, str> {
         match self {
             Casing::CamelCase => Cow::Owned(ident.to_lower_camel_case()),
             Casing::PascalCase => Cow::Owned(ident.to_upper_camel_case()),
@@ -55,13 +57,19 @@ mod tests {
     fn applies_each_casing() {
         assert_eq!(Casing::CamelCase.apply("my_command_name"), "myCommandName");
         assert_eq!(Casing::PascalCase.apply("my_command_name"), "MyCommandName");
-        assert_eq!(Casing::SnakeCase.apply("my_command_name"), "my_command_name");
+        assert_eq!(
+            Casing::SnakeCase.apply("my_command_name"),
+            "my_command_name"
+        );
         assert_eq!(Casing::SnakeCase.apply("myCommandName"), "my_command_name");
         assert_eq!(
             Casing::ScreamingSnakeCase.apply("my_command_name"),
             "MY_COMMAND_NAME"
         );
-        assert_eq!(Casing::KebabCase.apply("my_command_name"), "my-command-name");
+        assert_eq!(
+            Casing::KebabCase.apply("my_command_name"),
+            "my-command-name"
+        );
     }
 
     #[test]

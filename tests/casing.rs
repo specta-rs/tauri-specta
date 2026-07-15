@@ -8,7 +8,9 @@ use specta::Type;
 use specta_typescript::Typescript;
 use tauri::WebviewWindowBuilder;
 use tauri::ipc::{CallbackFn, InvokeBody};
-use tauri::test::{INVOKE_KEY, MockRuntime, get_ipc_response, mock_builder, mock_context, noop_assets};
+use tauri::test::{
+    INVOKE_KEY, MockRuntime, get_ipc_response, mock_builder, mock_context, noop_assets,
+};
 use tauri::webview::InvokeRequest;
 use tauri_specta::{Builder, Casing, Event, collect_commands, collect_events};
 
@@ -89,6 +91,21 @@ fn snake_case_function_and_argument_casing() {
     );
     // The underlying Tauri command string must be unchanged.
     assert!(out.contains(r#""hello_world""#));
+}
+
+#[test]
+fn kebab_case_argument_keys_use_valid_typescript() {
+    let builder = Builder::<MockRuntime>::new()
+        .commands(collect_commands![hello_world])
+        .argument_casing(Casing::KebabCase);
+    let out = export_to_string(&builder);
+
+    assert!(
+        out.contains(
+            r#"helloWorld: (myName: string) => __TAURI_INVOKE<string>("hello_world", { "my-name": myName })"#
+        ),
+        "expected a safe local identifier and kebab-case invoke key, got:\n{out}"
+    );
 }
 
 #[test]

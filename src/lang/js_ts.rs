@@ -11,7 +11,7 @@ use specta_typescript::{Error, Exporter, FrameworkExporter, define, semantic};
 use specta_util::Remapper;
 
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
-use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
+use crate::{BuilderConfiguration, Casing, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
@@ -171,8 +171,16 @@ fn runtime(
                 .args()
                 .iter()
                 .map(|(name, dt)| {
+                    let invoke_name = cfg.argument_casing.apply(name).into_owned();
+                    let binding_name = if is_javascript_identifier(&invoke_name) {
+                        invoke_name.clone()
+                    } else {
+                        Casing::CamelCase.apply(name).into_owned()
+                    };
+
                     Ok((
-                        cfg.argument_casing.apply(name).into_owned(),
+                        binding_name,
+                        invoke_name,
                         render_reference_dt_for_phase(
                             dt,
                             Phase::Deserialize,
@@ -187,7 +195,7 @@ fn runtime(
 
             let fn_arguments = arguments
                 .iter()
-                .map(|(name, dt)| {
+                .map(|(name, _, dt)| {
                     let mut arg = name.to_string();
                     if !jsdoc {
                         arg.push_str(": ");
@@ -206,8 +214,8 @@ fn runtime(
                     command
                         .args()
                         .iter()
-                        .map(|(name, dt)| {
-                            let name = cfg.argument_casing.apply(name).into_owned();
+                        .zip(&arguments)
+                        .map(|((_, dt), (binding_name, invoke_name, _))| {
                             let value = if let Some(generic) =
                                 channel_generic_type(dt, exporter.types)
                             {
@@ -220,20 +228,25 @@ fn runtime(
                                     semantic_types_runtime_types,
                                 )
                                 .map(|transform| jsdoc_transform(transform, "v", jsdoc))
-                                .map(|transform| format!("mapChannel({name}, (v) => {transform})"))
+                                .map(|transform| {
+                                    format!("mapChannel({binding_name}, (v) => {transform})")
+                                })
                             } else {
                                 render_result_transform_for_phase(
                                     dt,
                                     Phase::Serialize,
-                                    &name,
+                                    binding_name,
                                     &exporter,
                                     cfg,
                                     semantic_types_runtime_types,
                                 )
-                                .map(|transform| jsdoc_transform(transform, &name, jsdoc))
+                                .map(|transform| jsdoc_transform(transform, binding_name, jsdoc))
                             };
 
-                            value.map_or(name.clone(), |value| format!("{name}: {value}"))
+                            render_object_property(
+                                invoke_name,
+                                value.as_deref().unwrap_or(binding_name),
+                            )
                         })
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -411,7 +424,7 @@ fn runtime(
                     docs.push_str(
                         &arguments
                             .iter()
-                            .map(|(name, dt)| format!("@param {{{dt}}} {name}"))
+                            .map(|(name, _, dt)| format!("@param {{{dt}}} {name}"))
                             .collect::<Vec<_>>()
                             .join("\n"),
                     );
@@ -506,7 +519,10 @@ fn runtime(
 
                 docs.into()
             };
-            s = s.field(cfg.function_casing.apply(command.name()).into_owned(), field);
+            s = s.field(
+                cfg.function_casing.apply(command.name()).into_owned(),
+                field,
+            );
         }
 
         out.push_str("\n/** Commands */");
@@ -684,6 +700,27 @@ fn runtime(
     }
 
     Ok(Cow::Owned(out))
+}
+
+fn is_javascript_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|c| c == '_' || c == '$' || c.is_ascii_alphabetic())
+        && chars.all(|c| c == '_' || c == '$' || c.is_ascii_alphanumeric())
+}
+
+fn render_object_property(name: &str, value: &str) -> String {
+    if name == value && is_javascript_identifier(name) {
+        name.to_string()
+    } else {
+        let name = if is_javascript_identifier(name) {
+            name.to_string()
+        } else {
+            serde_json::to_string(name).expect("failed to serialize argument name")
+        };
+        format!("{name}: {value}")
+    }
 }
 
 /// Applies `specta_serde` format + also remaps `DataType`'s and does other transformations!

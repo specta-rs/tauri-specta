@@ -5,6 +5,7 @@ version = "2.0.0-rc.25"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2024"
 license = "MIT"
+readme = "README.md"
 include = ["/src", "/README.md", "/LICENCE"]
 repository = "https://github.com/specta-rs/tauri-specta"
 documentation = "https://docs.rs/tauri-specta/latest/tauri-specta"

@@ -197,7 +197,7 @@ fn main() {
 
     #[cfg(debug_assertions)]
     {
-        use specta_typescript::{JSDoc, Layout};
+        use specta_typescript::JSDoc;
 
         builder
             .export(

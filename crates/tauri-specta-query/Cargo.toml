@@ -5,7 +5,8 @@ version = "0.0.1"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2024"
 license = "MIT"
-include = ["/src"]
+readme = "README.md"
+include = ["/src", "/README.md"]
 repository = "https://github.com/specta-rs/tauri-specta"
 documentation = "https://docs.rs/tauri-specta-query/latest/tauri_specta_query"
 keywords = ["tauri", "specta", "tanstack-query", "typescript", "typesafe"]
@@ -26,7 +27,8 @@ tauri-specta = { version = "=2.0.0-rc.25", path = "../.." }
 
 [dev-dependencies]
 specta-typescript.workspace = true
-tauri-specta = { path = "../..", features = ["typescript"] }
+tauri = { workspace = true, features = ["test"] }
+tauri-specta = { path = "../..", features = ["derive", "typescript"] }
 
 [lints]
 workspace = true
