@@ -1000,11 +1000,98 @@ fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<St
         };
         Ok(format!("Channel<{generic}>"))
     } else {
-        match &dt {
+        match dt {
             DataType::Reference(r) => exporter.reference(r),
-            dt => exporter.inline(dt),
+            dt => {
+                // `FrameworkExporter::inline` expands named references nested inside nullable
+                // types. Render those references first and protect them as opaque TypeScript so
+                // `Option<Thing>` remains `Thing | null`, while explicitly inline types still
+                // expand as requested.
+                let mut rules = Vec::new();
+                collect_named_reference_rules(dt, exporter, &mut rules)?;
+                let dt = rules
+                    .into_iter()
+                    .fold(Remapper::new(), |remapper, (from, to)| {
+                        remapper.rule(from, to)
+                    })
+                    .remap_dt(dt.clone());
+                exporter.inline(&dt)
+            }
         }
     }
+}
+
+fn collect_named_reference_rules(
+    dt: &DataType,
+    exporter: &FrameworkExporter,
+    rules: &mut Vec<(DataType, DataType)>,
+) -> Result<(), Error> {
+    match dt {
+        DataType::Primitive(_) | DataType::Generic(_) => {}
+        DataType::List(list) => collect_named_reference_rules(&list.ty, exporter, rules)?,
+        DataType::Map(map) => {
+            collect_named_reference_rules(map.key_ty(), exporter, rules)?;
+            collect_named_reference_rules(map.value_ty(), exporter, rules)?;
+        }
+        DataType::Struct(s) => {
+            collect_named_reference_rules_from_fields(&s.fields, exporter, rules)?
+        }
+        DataType::Enum(e) => {
+            for (_, variant) in &e.variants {
+                collect_named_reference_rules_from_fields(&variant.fields, exporter, rules)?;
+            }
+        }
+        DataType::Tuple(tuple) => {
+            for dt in &tuple.elements {
+                collect_named_reference_rules(dt, exporter, rules)?;
+            }
+        }
+        DataType::Nullable(dt) => collect_named_reference_rules(dt, exporter, rules)?,
+        DataType::Intersection(dts) => {
+            for dt in dts {
+                collect_named_reference_rules(dt, exporter, rules)?;
+            }
+        }
+        DataType::Reference(Reference::Named(r)) => match &r.inner {
+            NamedReferenceType::Reference { .. } => rules.push((
+                dt.clone(),
+                define(exporter.reference(&Reference::Named(r.clone()))?).into(),
+            )),
+            NamedReferenceType::Inline { dt, .. } => {
+                collect_named_reference_rules(dt, exporter, rules)?;
+            }
+            NamedReferenceType::Recursive(_) => {}
+        },
+        DataType::Reference(Reference::Opaque(_)) => {}
+    }
+
+    Ok(())
+}
+
+fn collect_named_reference_rules_from_fields(
+    fields: &Fields,
+    exporter: &FrameworkExporter,
+    rules: &mut Vec<(DataType, DataType)>,
+) -> Result<(), Error> {
+    let fields: Vec<&DataType> = match fields {
+        Fields::Unit => return Ok(()),
+        Fields::Unnamed(fields) => fields
+            .fields
+            .iter()
+            .filter_map(|field| field.ty.as_ref())
+            .collect(),
+        Fields::Named(fields) => fields
+            .fields
+            .iter()
+            .filter_map(|(_, field)| field.ty.as_ref())
+            .collect(),
+    };
+
+    for dt in fields {
+        collect_named_reference_rules(dt, exporter, rules)?;
+    }
+
+    Ok(())
 }
 
 const RESERVED_NDT_NAMES: &[&str] = &[
