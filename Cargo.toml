@@ -79,8 +79,8 @@ specta-util = { version = "0.0.13" }
 
 # TODO: Remove once the rc.26 Specta crates are published.
 [patch.crates-io]
-specta = { git = "https://github.com/specta-rs/specta.git", rev = "c297f26c478766d1cdec11fc804b43f98e8932ad" }
-specta-macros = { git = "https://github.com/specta-rs/specta.git", rev = "c297f26c478766d1cdec11fc804b43f98e8932ad" }
-specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "c297f26c478766d1cdec11fc804b43f98e8932ad" }
-specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "c297f26c478766d1cdec11fc804b43f98e8932ad" }
-specta-util = { git = "https://github.com/specta-rs/specta.git", rev = "c297f26c478766d1cdec11fc804b43f98e8932ad" }
+specta = { git = "https://github.com/specta-rs/specta.git", rev = "1e8ce31311205058c502056b6c5a4e20149cb9f1" }
+specta-macros = { git = "https://github.com/specta-rs/specta.git", rev = "1e8ce31311205058c502056b6c5a4e20149cb9f1" }
+specta-serde = { git = "https://github.com/specta-rs/specta.git", rev = "1e8ce31311205058c502056b6c5a4e20149cb9f1" }
+specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "1e8ce31311205058c502056b6c5a4e20149cb9f1" }
+specta-util = { git = "https://github.com/specta-rs/specta.git", rev = "1e8ce31311205058c502056b6c5a4e20149cb9f1" }
