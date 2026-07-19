@@ -19,7 +19,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 heck = "0.5"
-tauri.workspace = true
+tauri = { version = "2", default-features = false }
 specta.workspace = true
 serde = "1"
 serde_json = "1"
