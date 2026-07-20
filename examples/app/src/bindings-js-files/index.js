@@ -46,7 +46,7 @@ export const commands = {
 	 * @returns {Promise<tauri_specta_example_app.PhaseSpecificRename_Serialize>}
 	 */
 	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
-	/** @returns {Promise<{ status: "ok"; data: null } | { status: "error"; error: tauri_specta_example_app.MyError }>} */
+	/** @returns {Promise<{ status: "ok"; data: null } | { status: "error"; error: tauri_specta_example_app.MyError_Serialize }>} */
 	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	/** @returns {Promise<{ status: "ok"; data: null } | { status: "error"; error: tauri_specta_example_app.MyError2 }>} */
 	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),

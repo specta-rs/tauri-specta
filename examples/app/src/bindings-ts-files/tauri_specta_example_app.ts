@@ -5,9 +5,13 @@ export type DemoEvent = string;
 
 export type EmptyEvent = null;
 
-export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
+export type MyError = MyError_Serialize | MyError_Deserialize;
 
 export type MyError2 = { type: "IoError"; data: string };
+
+export type MyError_Deserialize = { type: "IoError"; data: null } | { type: "AnotherError"; data: string };
+
+export type MyError_Serialize = { type: "IoError" } | { type: "AnotherError"; data: string };
 
 export type PhaseSpecificRename = PhaseSpecificRename_Serialize | PhaseSpecificRename_Deserialize;
 

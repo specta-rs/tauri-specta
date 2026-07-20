@@ -8,12 +8,20 @@
 	*
 	* @typedef {null} EmptyEvent
 	*
-	* @typedef {{ type: "IoError" } | { type: "AnotherError"; data: string }} MyError
-	* @property {{ type: "IoError" }} IoError
-	* @property {{ type: "AnotherError"; data: string }} AnotherError
+	* @typedef {MyError_Serialize | MyError_Deserialize} MyError
+	* @property {MyError_Serialize} Serialize
+	* @property {MyError_Deserialize} Deserialize
 	*
 	* @typedef {{ type: "IoError"; data: string }} MyError2
 	* @property {{ type: "IoError"; data: string }} IoError
+	*
+	* @typedef {{ type: "IoError"; data: null } | { type: "AnotherError"; data: string }} MyError_Deserialize
+	* @property {{ type: "IoError"; data: null }} IoError
+	* @property {{ type: "AnotherError"; data: string }} AnotherError
+	*
+	* @typedef {{ type: "IoError" } | { type: "AnotherError"; data: string }} MyError_Serialize
+	* @property {{ type: "IoError" }} IoError
+	* @property {{ type: "AnotherError"; data: string }} AnotherError
 	*
 	* @typedef {PhaseSpecificRename_Serialize | PhaseSpecificRename_Deserialize} PhaseSpecificRename
 	* @property {PhaseSpecificRename_Serialize} Serialize

@@ -22,16 +22,16 @@ export const commands = {
 	deprecated: () => __TAURI_INVOKE<void>("deprecated"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
 	phaseSpecificRename: (input: $s$.tauri_specta_example_app.PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<$s$.tauri_specta_example_app.PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
-	typesafeErrorsUsingThiserror: () => typedError<null, $s$.tauri_specta_example_app.MyError>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
+	typesafeErrorsUsingThiserror: () => typedError<null, $s$.tauri_specta_example_app.MyError_Serialize>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
 	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, $s$.tauri_specta_example_app.MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
 	semanticTypes: (arg: $s$.tauri_specta_example_app.SemanticTypes, channel: Channel<$s$.tauri_specta_example_app.SemanticTypes>) => __TAURI_INVOKE<$s$.tauri_specta_example_app.SemanticTypes>("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel: mapChannel(channel, (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
 };
 
 /** Events */
 export const events = {
-	emptyEvent: makeEvent<$s$.tauri_specta_example_app.EmptyEvent>("empty-event"),
-	myDemoEvent: makeEvent<$s$.tauri_specta_example_app.DemoEvent>("myDemoEvent"),
-	semanticTypesEvent: makeEvent<$s$.tauri_specta_example_app.SemanticTypesEvent>("semantic-types-event", (v) => ({...v,bytes:[...v.bytes]}), (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})),
+	emptyEvent: makeEvent<$s$.tauri_specta_example_app.EmptyEvent, $s$.tauri_specta_example_app.EmptyEvent>("empty-event"),
+	myDemoEvent: makeEvent<$s$.tauri_specta_example_app.DemoEvent, $s$.tauri_specta_example_app.DemoEvent>("myDemoEvent"),
+	semanticTypesEvent: makeEvent<$s$.tauri_specta_example_app.SemanticTypesEvent, $s$.tauri_specta_example_app.SemanticTypesEvent>("semantic-types-event", (v) => ({...v,bytes:[...v.bytes]}), (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})),
 };
 
 /* Constants */
@@ -47,9 +47,13 @@ namespace $s$ {
 
 		export type EmptyEvent = null;
 
-		export type MyError = { type: "IoError" } | { type: "AnotherError"; data: string };
+		export type MyError = $s$.tauri_specta_example_app.MyError_Serialize | $s$.tauri_specta_example_app.MyError_Deserialize;
 
 		export type MyError2 = { type: "IoError"; data: string };
+
+		export type MyError_Deserialize = { type: "IoError"; data: null } | { type: "AnotherError"; data: string };
+
+		export type MyError_Serialize = { type: "IoError" } | { type: "AnotherError"; data: string };
 
 		export type PhaseSpecificRename = $s$.tauri_specta_example_app.PhaseSpecificRename_Serialize | $s$.tauri_specta_example_app.PhaseSpecificRename_Deserialize;
 
@@ -102,20 +106,20 @@ async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; dat
 
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
-function makeEvent<T>(name: string, serialize?: (payload: T) => unknown, deserialize?: (payload: any) => T) {
-    const mapEvent = (cb: __TAURI_EVENT.EventCallback<T>) => (event: __TAURI_EVENT.Event<any>) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
-    const mapPayload = (payload: T) => serialize ? serialize(payload) : payload;
+function makeEvent<TListen, TEmit = TListen>(name: string, serialize?: (payload: TEmit) => unknown, deserialize?: (payload: any) => TListen) {
+    const mapEvent = (cb: __TAURI_EVENT.EventCallback<TListen>) => (event: __TAURI_EVENT.Event<any>) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapPayload = (payload: TEmit) => serialize ? serialize(payload) : payload;
 
     const base = {
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.listen(name, mapEvent(cb)),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => __TAURI_EVENT.once(name, mapEvent(cb)),
-        emit: ((payload: T) => __TAURI_EVENT.emit(name, mapPayload(payload)) as unknown) as EventEmit<T>
+        listen: (cb: __TAURI_EVENT.EventCallback<TListen>) => __TAURI_EVENT.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<TListen>) => __TAURI_EVENT.once(name, mapEvent(cb)),
+        emit: ((payload: TEmit) => __TAURI_EVENT.emit(name, mapPayload(payload)) as unknown) as EventEmit<TEmit>
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
-        listen: (cb: __TAURI_EVENT.EventCallback<T>) => target.listen(name, mapEvent(cb)),
-        once: (cb: __TAURI_EVENT.EventCallback<T>) => target.once(name, mapEvent(cb)),
-        emit: ((payload: T) => target.emit(name, mapPayload(payload)) as unknown) as EventEmit<T>
+        listen: (cb: __TAURI_EVENT.EventCallback<TListen>) => target.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<TListen>) => target.once(name, mapEvent(cb)),
+        emit: ((payload: TEmit) => target.emit(name, mapPayload(payload)) as unknown) as EventEmit<TEmit>
     });
 
     return Object.assign(fn, base);
