@@ -15,7 +15,7 @@ tauri-build = { workspace = true, features = [] }
 serde_json = "1.0"
 specta = { workspace = true, features = ["bytes", "chrono", "url"] }
 serde = { version = "1.0", features = ["derive"] }
-tauri = { workspace = true, features = [] }
+tauri = { workspace = true, features = ["default"] }
 tauri-specta = { path = "../../../", features = ["derive", "typescript", "javascript"] }
 tauri-specta-query = { path = "../../../crates/tauri-specta-query" }
 specta-typescript = { workspace = true }

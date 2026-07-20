@@ -12,7 +12,7 @@ publish = false
 tauri-build = { workspace = true, features = [] }
 
 [dependencies]
-tauri = { workspace = true, features = [] }
+tauri = { workspace = true, features = ["default"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tauri-plugin-specta-example = { path = "../../plugin" }
