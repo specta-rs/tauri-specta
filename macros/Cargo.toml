@@ -18,5 +18,5 @@ proc-macro = true
 heck = "0.5"
 proc-macro2 = "1"
 quote = "1"
-syn = "2"
+syn = "3"
 darling = "0.23"

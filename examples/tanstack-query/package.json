@@ -10,12 +10,12 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.101.2",
+    "@tanstack/react-query": "^5.101.4",
     "@tauri-apps/api": "^2.11.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
     "typescript": "^7.0.2",
-    "vite": "^8.1.4"
+    "vite": "^8.1.5"
   }
 }
