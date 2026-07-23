@@ -119,6 +119,29 @@ fn runtime(
         ));
     }
 
+    {
+        let mut seen = std::collections::BTreeMap::new();
+        for command in cfg.commands.iter() {
+            let accessor = cfg.function_casing.apply(command.name()).into_owned();
+            if let Some(first) = seen.insert(accessor.clone(), command.name()) {
+                return Err(Error::framework(
+                    "",
+                    if first == command.name() {
+                        format!(
+                            "Command '{}' is registered multiple times. Remove the duplicate registration.",
+                            command.name()
+                        )
+                    } else {
+                        format!(
+                            "Commands '{first}' and '{}' would both export as '{accessor}'. Rename one of them so the generated bindings don't conflict.",
+                            command.name()
+                        )
+                    },
+                ));
+            }
+        }
+    }
+
     let is_channel_used = cfg.commands.iter().any(|command| {
         // Check if any argument is a Channel
         command
