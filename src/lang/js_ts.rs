@@ -1,4 +1,4 @@
-use std::{borrow::Cow, path::Path};
+use std::{borrow::Cow, collections::BTreeMap, path::Path};
 
 use heck::ToLowerCamelCase;
 use specta::{
@@ -111,12 +111,36 @@ fn runtime(
         })
     {
         return Err(Error::framework(
-            "",
             format!(
                 "User defined type '{}' defined in {} must be renamed so it doesn't conflict with Tauri Specta runtime.",
                 name, ndt.location
             ),
+            "",
         ));
+    }
+
+    {
+        let mut seen: BTreeMap<String, &str> = BTreeMap::new();
+        for command in cfg.commands.iter() {
+            let accessor = cfg.function_casing.apply(command.name()).into_owned();
+            if let Some(first) = seen.get(&accessor) {
+                return Err(Error::framework(
+                    if *first == command.name() {
+                        format!(
+                            "Command '{}' is registered multiple times. Remove the duplicate registration.",
+                            command.name()
+                        )
+                    } else {
+                        format!(
+                            "Commands '{first}' and '{}' would both export as '{accessor}'. Rename one of them so the generated bindings don't conflict.",
+                            command.name()
+                        )
+                    },
+                    "",
+                ));
+            }
+            seen.insert(accessor, command.name());
+        }
     }
 
     let is_channel_used = cfg.commands.iter().any(|command| {
