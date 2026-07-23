@@ -5,56 +5,51 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
-	/**
-	 *  HELLO
-	 *  WORLD
-	 *  !!!!
-	 */
-	helloWorld: (myName: string) => __TAURI_INVOKE<string>("hello_world", { myName }),
-	goodbyeWorld: () => __TAURI_INVOKE<string>("goodbye_world"),
-	asyncHelloWorld: (myName: string) => __TAURI_INVOKE<string>("async_hello_world", { myName }),
-	hasError: () => typedError<string, number>(__TAURI_INVOKE("has_error")),
-	someStruct: () => __TAURI_INVOKE<MyStruct>("some_struct"),
+	/**  A command with a doc comment. */
+	greet: (myName: string) => __TAURI_INVOKE<string>("greet", { myName }),
+	unitCommand: () => __TAURI_INVOKE<void>("unit_command"),
+	asyncCommand: (delayMs: number) => __TAURI_INVOKE<number>("async_command", { delayMs }),
+	manyArgs: (a: string, b: number, c: boolean, d: string[], e: string | null) => __TAURI_INVOKE<boolean>("many_args", { a, b, c, d, e }),
+	echoProfile: (profile: Profile) => __TAURI_INVOKE<Profile>("echo_profile", { profile }),
+	tupleTypes: (point: Point) => __TAURI_INVOKE<Wrapper>("tuple_types", { point }),
+	enums: (tagged: TaggedEnum, untagged: UntaggedEnum) => __TAURI_INVOKE<TaggedEnum>("enums", { tagged, untagged }),
+	phaseSpecificRename: (input: PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
+	plainError: () => typedError<string, PlainError>(__TAURI_INVOKE("plain_error")),
+	taggedError: () => typedError<Profile, TaggedError>(__TAURI_INVOKE("tagged_error")),
+	nullableResult: () => typedError<string | null, PlainError>(__TAURI_INVOKE("nullable_result")),
+	maybe: () => __TAURI_INVOKE<string | null>("maybe"),
+	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
+	skippedArgs: (visible: string) => __TAURI_INVOKE<string>("skipped_args", { visible }),
 	generic: () => __TAURI_INVOKE<void>("generic"),
 	/**
-	 * @deprecated This is a deprecated function
+	 * @deprecated This is a deprecated command
 	 */
-	deprecated: () => __TAURI_INVOKE<void>("deprecated"),
-	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
-	phaseSpecificRename: (input: PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
-	typesafeErrorsUsingThiserror: () => typedError<null, MyError_Serialize>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
-	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
-	semanticTypes: (arg: SemanticTypes, channel: Channel<SemanticTypes>) => __TAURI_INVOKE<SemanticTypes>("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel: mapChannel(channel, (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
+	deprecatedCommand: () => __TAURI_INVOKE<void>("deprecated_command"),
 };
 
 /** Events */
 export const events = {
 	emptyEvent: makeEvent<EmptyEvent, EmptyEvent>("empty-event"),
-	myDemoEvent: makeEvent<DemoEvent, DemoEvent>("myDemoEvent"),
-	semanticTypesEvent: makeEvent<SemanticTypesEvent, SemanticTypesEvent>("semantic-types-event", (v) => ({...v,bytes:[...v.bytes]}), (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})),
+	messageEvent: makeEvent<MessageEvent, MessageEvent>("message-event"),
+	structEvent: makeEvent<StructEvent, StructEvent>("struct-event"),
 };
 
 /* Constants */
-export const universalConstant = 42 as const;
+export const APP_NAME = "Kitchen Sink" as const;
+
+export const DEBUG_DEFAULT = false as const;
+
+export const MAX_RETRIES = 3 as const;
 
 /* Types */
-export type Custom = string;
-
-export type DemoEvent = string;
-
 export type EmptyEvent = null;
 
-export type MyError = MyError_Serialize | MyError_Deserialize;
-
-export type MyError2 = { type: "IoError"; data: string };
-
-export type MyError_Deserialize = { type: "IoError"; data: null } | { type: "AnotherError"; data: string };
-
-export type MyError_Serialize = { type: "IoError" } | { type: "AnotherError"; data: string };
-
-export type MyStruct = {
-	some_field: string,
+/**  Registered via `Builder::typ` without being referenced by a command. */
+export type ManuallyRegistered = {
+	name: string,
 };
+
+export type MessageEvent = string;
 
 export type PhaseSpecificRename = PhaseSpecificRename_Serialize | PhaseSpecificRename_Deserialize;
 
@@ -66,27 +61,37 @@ export type PhaseSpecificRename_Serialize = {
 	serialized_value: string,
 };
 
-export type SemanticTypes = {
-	date: Date,
-	bytes: Uint8Array,
-	url: URL,
+export type PlainError = "NotFound" | { PermissionDenied: string };
+
+export type Point = [number | null, number | null];
+
+/**  A struct with a doc comment and common field shapes. */
+export type Profile = {
+	userId: number,
+	displayName: string,
+	tags: string[],
+	homepage: string | null,
+	scores: { [key in string]: number },
 };
 
-export type SemanticTypesEvent = {
-	date: Date,
-	bytes: Uint8Array,
-	url: URL,
+export type StructEvent = {
+	eventId: number,
+	payload: string,
 };
 
-export type Testing = {
-	a: string,
-};
+export type TaggedEnum = { type: "Unit" } | { type: "Tuple"; data: string } | { type: "Struct"; data: {
+	id: number,
+} };
+
+export type TaggedError = { type: "Io"; data: string } | { type: "Parse"; data: {
+	line: number,
+} };
+
+export type UntaggedEnum = number | string;
+
+export type Wrapper = string;
 
 /* Tauri Specta runtime */
-function mapChannel<T>(channel: Channel<T>, deserialize: (payload: any) => T): Channel<T> {
-    return new Channel((payload) => channel.onmessage(deserialize(payload)));
-}
-
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
     try {
         return { status: "ok", data: await result };

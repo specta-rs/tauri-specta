@@ -177,6 +177,11 @@ function makeEvent(name, serialize, deserialize) {
         once: (cb) => __TAURI_EVENT.once(name, mapEvent(cb)),
         /** @param {T} payload */
         emit: (payload) => __TAURI_EVENT.emit(name, mapPayload(payload)),
+        /**
+         * @param {__TAURI_EVENT.EventTarget | string} to
+         * @param {T} payload
+         */
+        emitTo: (to, payload) => __TAURI_EVENT.emitTo(to, name, mapPayload(payload)),
     };
 
     /** @param {import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window} target */
@@ -187,6 +192,11 @@ function makeEvent(name, serialize, deserialize) {
         once: (cb) => target.once(name, mapEvent(cb)),
         /** @param {T} payload */
         emit: (payload) => target.emit(name, mapPayload(payload)),
+        /**
+         * @param {__TAURI_EVENT.EventTarget | string} to
+         * @param {T} payload
+         */
+        emitTo: (to, payload) => target.emitTo(to, name, mapPayload(payload)),
     });
 
     return Object.assign(fn, base);
