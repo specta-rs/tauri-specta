@@ -13,8 +13,8 @@
 //! To get started run the following commands to add the required dependencies to your `Cargo.toml`:
 //!
 //! ```sh
-//! cargo add tauri@2.0 specta@=2.0.0-rc.26 specta-typescript@0.0.13
-//! cargo add tauri-specta@=2.0.0-rc.26 --features derive,typescript,javascript # `javascript` for JSDoc, `typescript` for Typescript
+//! cargo add tauri@2.0 specta@=2.0.0-rc.27 specta-typescript@0.0.14
+//! cargo add tauri-specta@=2.0.0-rc.27 --features derive,typescript,javascript # `javascript` for JSDoc, `typescript` for Typescript
 //! ```
 //!
 //! ## Features

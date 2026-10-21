@@ -3,7 +3,7 @@ name = "tauri-specta-query"
 description = "Generate typesafe TanStack Query helpers for Tauri Specta commands"
 # Versioned in lockstep with `tauri-specta` and `tauri-specta-macros`; the
 # `release` workflow requires all three to match the `v*` tag.
-version = "2.0.0-rc.26"
+version = "2.0.0-rc.27"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2024"
 license = "MIT"
@@ -25,7 +25,7 @@ tauri = { version = "2", default-features = false }
 specta.workspace = true
 serde = "1"
 serde_json = "1"
-tauri-specta = { version = "=2.0.0-rc.26", path = "../.." }
+tauri-specta = { version = "=2.0.0-rc.27", path = "../.." }
 
 [dev-dependencies]
 specta-typescript.workspace = true
