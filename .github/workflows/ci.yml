@@ -42,3 +42,22 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Run Clippy
         run: cargo clippy --all-features
+
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        # Only the root package is needed: the fixtures import `@tauri-apps/api` and the
+        # checker runs `tsc`. Skips installing the examples' dependencies.
+        run: pnpm install --frozen-lockfile --filter .
+      - name: Type-check generated bindings
+        run: pnpm run check:bindings
+

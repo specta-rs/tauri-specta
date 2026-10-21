@@ -5,7 +5,10 @@
 //! against the committed fixtures in `tests/snapshots/`.
 //!
 //! Run `UPDATE_SNAPSHOTS=1 cargo test --all-features` to regenerate fixtures
-//! after an intentional output change, then review and commit the diff.
+//! after an intentional output change, then review and commit the diff. The
+//! TypeScript fixtures are also type-checked by `pnpm run check:bindings`
+//! (`tests/typescript/tsconfig.json`) so an invalid binding can't be blessed
+//! into a fixture.
 //!
 //! https://github.com/specta-rs/tauri-specta/issues/197
 //! https://github.com/specta-rs/tauri-specta/issues/208
