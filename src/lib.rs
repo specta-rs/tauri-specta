@@ -313,6 +313,8 @@ mod name;
 
 pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
 pub use casing::Casing;
+#[doc(hidden)]
+pub use commands::CollectedCommands;
 pub use commands::Commands;
 pub use event::{Event, Events, TypedEvent};
 pub use lang::LanguageExt;
@@ -333,7 +335,7 @@ pub mod internal {
     //! Nothing in this module has to conform to semver so it should not be used outside of this crate.
     //! It has to be public so the macro's can access it.
 
-    use std::{any::TypeId, sync::Arc};
+    use std::{any::TypeId, collections::BTreeMap, sync::Arc};
 
     use specta::{
         Types,
@@ -341,14 +343,35 @@ pub mod internal {
     };
     use tauri::{Runtime, ipc::Invoke};
 
+    use crate::commands::{CollectedCommands, apply_command_renames};
+
     use super::*;
 
+    /// Re-exported so `collect_commands!` can build the `__tauri_command_name_*` idents
+    /// without requiring users to depend on `paste` themselves.
+    #[doc(hidden)]
+    pub use paste::paste as _tauri_specta_paste;
+
     /// called by `collect_commands` to construct `Commands`
-    pub fn command<R: Runtime, F, T>(f: F, types: T) -> Commands<R>
+    pub fn command<R: Runtime, F, T>(
+        f: F,
+        types: T,
+        renames: &[(&'static str, &'static str)],
+    ) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
         T: Fn(&mut Types) -> Vec<datatype::Function> + Send + Sync + 'static,
     {
+        let renames = renames.to_vec();
+        let types = move |registry: &mut Types| {
+            let mut collected = CollectedCommands {
+                functions: types(registry),
+                accessor_names: BTreeMap::new(),
+            };
+            apply_command_renames(&mut collected, &renames);
+            collected
+        };
+
         Commands(Arc::new(f), Arc::new(types))
     }
 

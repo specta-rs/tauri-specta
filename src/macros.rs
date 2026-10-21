@@ -1,3 +1,40 @@
+/// Returns the Rust identifier of the last segment of a command path, as a string.
+///
+/// `collect_commands!` passes a generics-stripped path, so the recursion only has to walk
+/// `a::b::command` down to `command`. This is used to match a Tauri rename against the name
+/// Specta collected the function under.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __tauri_command_ident {
+    ($b:ident) => {
+        stringify!($b)
+    };
+    ($b:ident :: $($rest:tt)*) => {
+        $crate::__tauri_command_ident!($($rest)*)
+    };
+}
+
+/// Builds the path to Tauri's hidden `__tauri_command_name_<fn>!()` macro for a command path.
+///
+/// `#[tauri::command]` emits `macro_rules! __tauri_command_name_<fn>` and imports it at the
+/// function's path, so `a::b::command` maps to `a::b::__tauri_command_name_command!()`.
+/// `paste` constructs the final ident because `macro_rules!` can't rewrite the last segment
+/// of a path on its own. The module path is accumulated first and passed to a single `paste!`
+/// call, because a macro invocation can't appear as an interior path segment.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __tauri_command_name {
+    (@acc [$($prefix:ident ::)*] $b:ident :: $($rest:tt)*) => {
+        $crate::__tauri_command_name!(@acc [$($prefix ::)* $b ::] $($rest)*)
+    };
+    (@acc [$($prefix:ident ::)*] $b:ident) => {
+        $crate::internal::_tauri_specta_paste! { $($prefix ::)* [<__tauri_command_name_ $b>]!() }
+    };
+    ($($path:tt)*) => {
+        $crate::__tauri_command_name!(@acc [] $($path)*)
+    };
+}
+
 /// Collect commands and their types.
 ///
 /// This is a combination of Tauri's [`generate_handler`](tauri::generate_handler) and Specta's [`collect_functions`](specta::function),
@@ -59,6 +96,9 @@
 ///   trait `impl` method fails to compile with "macro definition is not supported
 ///   in `trait`s or `impl`s", and `#[tauri::command]` does not support them
 ///   either.
+/// - `#[tauri::command(rename = "...")]` is honoured: the generated bindings invoke
+///   the renamed IPC name while the frontend accessor keeps following the Rust
+///   identifier and [`Builder::function_casing`](crate::Builder::function_casing).
 ///
 #[macro_export]
 macro_rules! collect_commands {
@@ -67,6 +107,14 @@ macro_rules! collect_commands {
         $crate::internal::command(
             ::tauri::generate_handler![$($b $($(::$p)? )* ),*],
             ::specta::function::collect_functions![$($b $($(::$p)? $(::<$($g),*>)? )* ),*],
+            // Pair each command's Rust identifier with the name Tauri's handler accepts.
+            // `internal::command` matches these onto the collected functions by name.
+            &[$(
+                (
+                    $crate::__tauri_command_ident!($b $($(::$p)? )*),
+                    $crate::__tauri_command_name!($b $($(::$p)? )*),
+                )
+            ),*],
         )
     };
 }
