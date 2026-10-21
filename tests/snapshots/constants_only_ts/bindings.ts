@@ -5,4 +5,3 @@
 export const APP_NAME = "Kitchen Sink" as const;
 
 export const MAX_RETRIES = 3 as const;
-

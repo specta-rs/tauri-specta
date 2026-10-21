@@ -38,4 +38,3 @@ async function typedError(result) {
         return { status: "error", error: e };
     }
 }
-
