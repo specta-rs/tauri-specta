@@ -8,7 +8,8 @@ use heck::ToLowerCamelCase;
 use specta::{
     Format, Type, Types,
     datatype::{
-        DataType, Field, Fields, NamedDataType, NamedReferenceType, Primitive, Reference, Struct,
+        DataType, Deprecated, Field, Fields, NamedDataType, NamedReferenceType, Primitive,
+        Reference, Struct,
     },
 };
 use specta_serde::Phase;
@@ -16,7 +17,7 @@ use specta_typescript::{Error, Exporter, FrameworkExporter, Layout, define, sema
 use specta_util::Remapper;
 
 use crate::name::{resolve_tauri_command_name, resolve_tauri_event_name};
-use crate::{BuilderConfiguration, ErrorHandlingMode, LanguageExt};
+use crate::{BuilderConfiguration, CommandExports, ErrorHandlingMode, LanguageExt};
 
 impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
@@ -214,7 +215,9 @@ fn runtime(
 
     // Commands
     if enabled_commands {
+        let top_level = cfg.command_exports == CommandExports::TopLevel;
         let mut s = Struct::named();
+        let mut top_level_out = String::new();
         for command in &cfg.commands {
             let command_name_escaped =
                 serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
@@ -471,7 +474,8 @@ fn runtime(
                 }
             };
 
-            let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
+            let fn_value = format!("({fn_arguments}) => {body}");
+            let mut field = Field::new(define(fn_value.clone()).into());
             field.deprecated = command.deprecated.clone();
             field.docs = {
                 let mut docs = command.docs.to_string();
@@ -577,18 +581,38 @@ fn runtime(
 
                 docs.into()
             };
-            s = s.field(
-                cfg.function_casing
-                    .apply(cfg.command_accessor_name(command))
-                    .into_owned(),
-                field,
-            );
+            let accessor = cfg
+                .function_casing
+                .apply(cfg.command_accessor_name(command))
+                .into_owned();
+
+            if top_level {
+                if !is_valid_js_identifier(&accessor) {
+                    return Err(Error::framework(
+                        format!(
+                            "Command '{}' would export as '{accessor}', which is not a valid JavaScript identifier. Pick a `Builder::function_casing` that produces valid identifiers when using `CommandExports::TopLevel`.",
+                            command.name()
+                        ),
+                        "",
+                    ));
+                }
+
+                top_level_out
+                    .push_str(&render_command_docs(&field.docs, field.deprecated.as_ref()));
+                top_level_out.push_str(&format!("export const {accessor} = {fn_value};\n"));
+            } else {
+                s = s.field(accessor, field);
+            }
         }
 
-        out.push_str("\n/** Commands */");
-        out.push_str("\nexport const commands = ");
-        out.push_str(&exporter.reference(&s.build())?);
-        out.push_str(";\n");
+        out.push_str("\n/** Commands */\n");
+        if top_level {
+            out.push_str(&top_level_out);
+        } else {
+            out.push_str("export const commands = ");
+            out.push_str(&exporter.reference(&s.build())?);
+            out.push_str(";\n");
+        }
     }
 
     // Events
@@ -596,10 +620,9 @@ fn runtime(
         let mut s = Struct::named();
         for (name, (_, r)) in &cfg.events {
             let event_name_escaped =
-                serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name))
-                    .map_err(|err| {
-                        Error::framework("failed to serialize an event name for bindings", err)
-                    })?;
+                serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name)).map_err(
+                    |err| Error::framework("failed to serialize an event name for bindings", err),
+                )?;
 
             let event_dt = DataType::Reference(r.clone());
             let mut field_ts = "makeEvent".to_string();
@@ -769,6 +792,47 @@ fn runtime(
     }
 
     Ok(Cow::Owned(out))
+}
+
+/// Whether `name` can be used as a bare JavaScript identifier.
+fn is_valid_js_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars
+        .next()
+        .is_some_and(|c| c == '_' || c == '$' || c.is_ascii_alphabetic())
+        && chars.all(|c| c == '_' || c == '$' || c.is_ascii_alphanumeric())
+}
+
+/// Renders command docs and an optional `@deprecated` tag as a JSDoc block.
+///
+/// Used for [`CommandExports::TopLevel`], where a command is a top-level binding rather
+/// than a property the exporter can attach its own field comments to.
+fn render_command_docs(docs: &str, deprecated: Option<&Deprecated>) -> String {
+    if docs.is_empty() && deprecated.is_none() {
+        return String::new();
+    }
+
+    let mut out = String::from("/**\n");
+    for line in docs.lines() {
+        out.push_str(" * ");
+        out.push_str(&line.replace("*/", "*\\/"));
+        out.push('\n');
+    }
+    if let Some(deprecated) = deprecated {
+        out.push_str(" * @deprecated");
+        if let Some(note) = deprecated
+            .note
+            .as_deref()
+            .map(str::trim)
+            .filter(|note| !note.is_empty())
+        {
+            out.push(' ');
+            out.push_str(note);
+        }
+        out.push('\n');
+    }
+    out.push_str(" */\n");
+    out
 }
 
 fn runtime_scope_name(
@@ -1971,6 +2035,7 @@ mod tests {
         Builder::<tauri::Wry>::new()
             .commands(collect_commands![bigint_error])
             .semantic_types(semantic_types)
+            .error_handling(ErrorHandlingMode::Result)
             .export(Typescript::default(), &result_path)
             .expect("failed to export TypeScript bindings");
         let ts = fs::read_to_string(&result_path).expect("failed to read TypeScript bindings");

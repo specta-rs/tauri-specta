@@ -29,9 +29,13 @@ pub type CommandTypeCollector = dyn Fn(&mut Types) -> CollectedCommands + Send +
 ///
 /// This acts to seal the implementation details of the macro.
 pub struct Commands<R: Runtime>(
-    // TODO: Explain these being public
-    // Bounds copied from `tauri::Builder::invoke_handler`
+    /// The Tauri invoke handler built by [`tauri::generate_handler`] for the registered
+    /// commands. Public so the macro expansion and companion crates can construct a
+    /// `Commands` from their own handler. The bounds are copied from
+    /// [`tauri::Builder::invoke_handler`].
     pub Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
+    /// Type-erased collector that registers the commands' Specta functions. Public for the
+    /// same reason as the handler.
     pub Arc<CommandTypeCollector>,
 );
 

@@ -93,6 +93,28 @@
 //! console.log(await commands.greet("Brendan"));
 //! ```
 //!
+//! ## Error handling
+//!
+//! By default a failed command rejects the promise the binding returns, matching a plain
+//! `invoke`. Command results are typed as the command's success type: for
+//! `fn has_error() -> Result<String, i32>`, `commands.hasError()` returns `Promise<string>`.
+//!
+//! [`Builder::error_handling`] changes how a `Result`-returning command is exposed:
+//!
+//! - [`ErrorHandlingMode::Throw`] (the default) — the promise rejects.
+//! - [`ErrorHandlingMode::Result`] — resolves to `{ status: "ok"; data: T }` or
+//!   `{ status: "error"; error: E }`.
+//! - [`ErrorHandlingMode::ResultUnknown`] — as `Result`, but the error is typed `unknown`
+//!   and the injected runtime never rethrows.
+//! - [`ErrorHandlingMode::DataError`] — resolves to `{ data: T; error: null }` or
+//!   `{ data: null; error: E }`.
+//!
+//! A rejected `invoke` can carry either the command's own error value or a framework-level
+//! failure (an unknown command, a badly typed argument, an ACL denial), and the two are
+//! indistinguishable at the JavaScript boundary. That is why `Result` rethrows anything
+//! that is an `Error` instance and why `ResultUnknown` types the error as `unknown`.
+//! [`Builder::typed_error_impl`] replaces the injected runtime entirely.
+//!
 //! ## Channels
 //!
 //! A [`tauri::ipc::Channel`] streams values from a command to the frontend. A
@@ -310,7 +332,7 @@ mod lang;
 mod macros;
 mod name;
 
-pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
+pub use builder::{Builder, BuilderConfiguration, CommandExports, ErrorHandlingMode};
 pub use casing::Casing;
 #[doc(hidden)]
 pub use commands::CollectedCommands;

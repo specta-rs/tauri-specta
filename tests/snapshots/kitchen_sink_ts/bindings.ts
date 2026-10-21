@@ -14,9 +14,9 @@ export const commands = {
 	tupleTypes: (point: Point) => __TAURI_INVOKE<Wrapper>("tuple_types", { point }),
 	enums: (tagged: TaggedEnum, untagged: UntaggedEnum) => __TAURI_INVOKE<TaggedEnum>("enums", { tagged, untagged }),
 	phaseSpecificRename: (input: PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
-	plainError: () => typedError<string, PlainError>(__TAURI_INVOKE("plain_error")),
-	taggedError: () => typedError<Profile_Serialize, TaggedError>(__TAURI_INVOKE("tagged_error")),
-	nullableResult: () => typedError<string | null, PlainError>(__TAURI_INVOKE("nullable_result")),
+	plainError: () => __TAURI_INVOKE<string>("plain_error"),
+	taggedError: () => __TAURI_INVOKE<Profile_Serialize>("tagged_error"),
+	nullableResult: () => __TAURI_INVOKE<string | null>("nullable_result"),
 	maybe: () => __TAURI_INVOKE<string | null>("maybe"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
 	skippedArgs: (visible: string) => __TAURI_INVOKE<string>("skipped_args", { visible }),
@@ -104,15 +104,6 @@ export type UntaggedEnum = number | string;
 export type Wrapper = string;
 
 /* Tauri Specta runtime */
-async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
-    try {
-        return { status: "ok", data: await result };
-    } catch (e) {
-        if (e instanceof Error) throw e;
-        return { status: "error", error: e as any };
-    }
-}
-
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
 type EventEmitTo<T> = [T] extends [null] ? (target: __TAURI_EVENT.EventTarget | string) => Promise<void> : (target: __TAURI_EVENT.EventTarget | string, payload: T) => Promise<void>;

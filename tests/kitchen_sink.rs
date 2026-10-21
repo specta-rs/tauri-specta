@@ -27,7 +27,8 @@ use specta::Type;
 use specta_typescript::{JSDoc, Layout, Typescript};
 use tauri::test::MockRuntime;
 use tauri_specta::{
-    Builder, ErrorHandlingMode, Event, LanguageExt, collect_commands, collect_events,
+    Builder, CommandExports, ErrorHandlingMode, Event, LanguageExt, collect_commands,
+    collect_events,
 };
 
 // ----- types -----
@@ -245,6 +246,11 @@ fn events_only() -> Builder<MockRuntime> {
     Builder::<MockRuntime>::new().events(collect_events![EmptyEvent, StructEvent])
 }
 
+// Commands as top-level named exports instead of properties of `commands`.
+fn top_level_exports() -> Builder<MockRuntime> {
+    kitchen_sink().command_exports(CommandExports::TopLevel)
+}
+
 fn constants_only() -> Builder<MockRuntime> {
     Builder::<MockRuntime>::new()
         .constant("APP_NAME", "Kitchen Sink")
@@ -300,6 +306,8 @@ fn unified() -> Builder<MockRuntime> {
 const SCENARIOS: &[&str] = &[
     "bigints_as_number_jsdoc",
     "bigints_as_number_ts",
+    "command_exports_top_level_jsdoc",
+    "command_exports_top_level_ts",
     "commands_only_jsdoc",
     "commands_only_ts",
     "constants_only_jsdoc",
@@ -538,6 +546,26 @@ fn commands_only_jsdoc() {
         "commands_only_jsdoc",
         "bindings.js",
         &commands_only(),
+        JSDoc::default(),
+    );
+}
+
+#[test]
+fn command_exports_top_level_ts() {
+    assert_export(
+        "command_exports_top_level_ts",
+        "bindings.ts",
+        &top_level_exports(),
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn command_exports_top_level_jsdoc() {
+    assert_export(
+        "command_exports_top_level_jsdoc",
+        "bindings.js",
+        &top_level_exports(),
         JSDoc::default(),
     );
 }

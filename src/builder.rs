@@ -1,4 +1,4 @@
-use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
+use std::{any::TypeId, borrow::Cow, collections::BTreeMap, fmt, path::Path, sync::Arc};
 
 use crate::{Casing, Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
 use serde::Serialize;
@@ -13,10 +13,17 @@ use tauri::{Manager, Runtime, ipc::Invoke};
 /// The mode which the error handling is done in the bindings.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub enum ErrorHandlingMode {
-    /// Errors will be thrown
+    /// Errors will be thrown.
+    ///
+    /// This is the default and matches what a plain [`tauri::command`] does: a failed
+    /// command rejects the returned promise. Command results are typed as `T`, and the
+    /// error type is not represented in the bindings.
+    #[default]
     Throw,
     /// Errors will be returned as a status-tagged result object.
-    #[default]
+    ///
+    /// Successful commands return `{ status: "ok"; data: T }`, failed commands return
+    /// `{ status: "error"; error: E }`.
     Result,
     /// Errors will be returned as a status-tagged result object, with the error
     /// typed as `unknown`.
@@ -40,6 +47,28 @@ pub enum ErrorHandlingMode {
     /// Successful commands return `{ data: T, error: null }`, while failed
     /// commands return `{ data: null, error: E }`.
     DataError,
+}
+
+/// How command accessors are exposed in the generated bindings.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CommandExports {
+    /// Commands are grouped into the exported `commands` object.
+    ///
+    /// This is the default: each command is a property, e.g. `commands.helloWorld()`.
+    #[default]
+    Namespaced,
+    /// Each command is exported as its own top-level binding.
+    ///
+    /// A command becomes a named export rather than a property of `commands`, so a
+    /// consumer can write `import { helloWorld } from "./bindings"`. This suits plugins,
+    /// whose bindings are imported directly instead of through a hand-written wrapper.
+    ///
+    /// Accessors still follow [`Builder::function_casing`]. A casing that produces an
+    /// invalid JavaScript identifier (for example [`Casing::KebabCase`]) fails the export
+    /// instead of emitting an invalid binding. The `events` object and exported constants
+    /// are unchanged.
+    TopLevel,
 }
 
 /// Builder for configuring Tauri Specta in your application.
@@ -104,11 +133,19 @@ pub enum ErrorHandlingMode {
 ///     .run(tauri::test::mock_context(tauri::test::noop_assets()))
 ///     .expect("error while running tauri application");
 /// ```
-#[derive(Debug)]
 #[non_exhaustive]
 pub struct Builder<R: Runtime> {
-    commands: Commands<R>,
+    /// The accumulated invoke handler. Every [`Builder::commands`] call chains onto this so
+    /// commands registered across multiple calls are all dispatched.
+    // Bounds copied from `tauri::Builder::invoke_handler`.
+    invoke_handler: Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
     cfg: BuilderConfiguration,
+}
+
+impl<R: Runtime> fmt::Debug for Builder<R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Builder").field("cfg", &self.cfg).finish()
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -143,6 +180,8 @@ pub struct BuilderConfiguration {
     pub disable_serde_phases: bool,
     /// Casing applied to generated command and event accessor names.
     pub function_casing: Casing,
+    /// How command accessors are exposed in generated bindings.
+    pub command_exports: CommandExports,
 }
 
 impl BuilderConfiguration {
@@ -160,7 +199,7 @@ impl BuilderConfiguration {
 impl<R: Runtime> Default for Builder<R> {
     fn default() -> Self {
         Self {
-            commands: Default::default(),
+            invoke_handler: Arc::new(tauri::generate_handler![]),
             cfg: Default::default(),
         }
     }
@@ -169,7 +208,7 @@ impl<R: Runtime> Default for Builder<R> {
 impl<R: Runtime> Clone for Builder<R> {
     fn clone(&self) -> Self {
         Self {
-            commands: self.commands.clone(),
+            invoke_handler: self.invoke_handler.clone(),
             cfg: self.cfg.clone(),
         }
     }
@@ -191,7 +230,8 @@ impl<R: Runtime> Builder<R> {
 
     /// Register commands with the builder.
     ///
-    /// **WARNING:** This method will overwrite any previously registered commands.
+    /// Commands registered by an earlier call are kept, so this can be called more than
+    /// once to accumulate commands (for example one call per module).
     ///
     /// # Panics
     ///
@@ -215,23 +255,42 @@ impl<R: Runtime> Builder<R> {
     /// ```
     #[allow(clippy::panic)]
     pub fn commands(mut self, commands: Commands<R>) -> Self {
-        let collected = (commands.1)(&mut self.cfg.types);
-        self.cfg.commands = collected.functions;
-        self.cfg.command_accessor_names = collected.accessor_names;
+        let Commands(next_handler, collector) = commands;
+        let collected = collector(&mut self.cfg.types);
+        self.cfg.commands.extend(collected.functions);
+        self.cfg
+            .command_accessor_names
+            .extend(collected.accessor_names);
         if let Some(name) = crate::commands::duplicate_command_name(&self.cfg.commands) {
             panic!(
                 "Command '{name}' is registered multiple times. Remove the duplicate registration."
             );
         }
-        Self {
-            commands,
-            cfg: self.cfg,
-        }
+
+        // Chain the invoke handlers so commands from every call are dispatched. A command
+        // name is registered at most once (checked above), so only one handler can match a
+        // given invoke.
+        let previous = self.invoke_handler;
+        self.invoke_handler = Arc::new(move |invoke: Invoke<R>| {
+            (previous)(Invoke {
+                message: invoke.message.clone(),
+                resolver: invoke.resolver.clone(),
+                acl: invoke.acl.clone(),
+            }) || (next_handler)(invoke)
+        });
+
+        self
     }
 
     /// Register events with the builder.
     ///
-    /// **WARNING:** This method will overwrite any previously registered events.
+    /// Events registered by an earlier call are kept, so this can be called more than once
+    /// to accumulate events.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the same event is registered twice. Generated bindings key events by name,
+    /// so a duplicate would silently keep only the last registration.
     ///
     /// # Example
     ///
@@ -245,12 +304,18 @@ impl<R: Runtime> Builder<R> {
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![DemoEvent]);
     /// ```
+    #[allow(clippy::panic)]
     pub fn events(mut self, events: Events) -> Self {
-        self.cfg.events = events
-            .0
-            .iter()
-            .map(|(k, build)| (*k, build(&mut self.cfg.types)))
-            .collect();
+        for (name, build) in events.0 {
+            if self.cfg.events.contains_key(name) {
+                panic!(
+                    "Event '{name}' is registered multiple times. Remove the duplicate registration."
+                );
+            }
+
+            self.cfg.events.insert(name, build(&mut self.cfg.types));
+        }
+
         self
     }
 
@@ -414,10 +479,27 @@ impl<R: Runtime> Builder<R> {
         self
     }
 
+    /// Set how command accessors are exposed in the generated bindings.
+    ///
+    /// The default is [`CommandExports::Namespaced`], which groups commands into the
+    /// exported `commands` object. [`CommandExports::TopLevel`] exports each command as
+    /// its own named binding instead, which is useful for plugins.
+    ///
+    /// ```rust
+    /// use tauri_specta::{Builder, CommandExports};
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new()
+    ///     .command_exports(CommandExports::TopLevel);
+    /// ```
+    pub fn command_exports(mut self, command_exports: CommandExports) -> Self {
+        self.cfg.command_exports = command_exports;
+        self
+    }
+
     /// The Tauri invoke handler to trigger commands registered with the builder.
     pub fn invoke_handler(&self) -> impl Fn(Invoke<R>) -> bool + Send + Sync + 'static {
-        let commands = self.commands.0.clone();
-        move |invoke| commands(invoke)
+        let handler = self.invoke_handler.clone();
+        move |invoke| handler(invoke)
     }
 
     /// Mount all of the events in the builder onto a Tauri app.

@@ -12,8 +12,8 @@ export const commands = {
 	greet: (myName) => __TAURI_INVOKE("greet", { myName }),
 	/** @returns {Promise<void>} */
 	unitCommand: () => __TAURI_INVOKE("unit_command"),
-	/** @returns {Promise<{ status: "ok"; data: string } | { status: "error"; error: PlainError }>} */
-	plainError: () => typedError(__TAURI_INVOKE("plain_error")),
+	/** @returns {Promise<string>} */
+	plainError: () => __TAURI_INVOKE("plain_error"),
 };
 
 /* Types */
@@ -22,19 +22,3 @@ export const commands = {
 	* @property {"NotFound"} NotFound
 	* @property {{ PermissionDenied: string }} PermissionDenied
 	*/
-
-/* Tauri Specta runtime */
-/**
-  * @template T
-  * @template E
-  * @param {Promise<T>} result
-  * @returns {Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>}
-  */
-async function typedError(result) {
-    try {
-        return { status: "ok", data: await result };
-    } catch (e) {
-        if (e instanceof Error) throw e;
-        return { status: "error", error: e };
-    }
-}
