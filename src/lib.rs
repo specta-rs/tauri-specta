@@ -93,6 +93,59 @@
 //! console.log(await commands.greet("Brendan"));
 //! ```
 //!
+//! ## Channels
+//!
+//! A [`tauri::ipc::Channel`] streams values from a command to the frontend. A
+//! channel is only valid as a direct argument or return value of a command, and
+//! the generated binding types it as `Channel<T>`.
+//!
+//! ```rust,no_run
+//! use tauri::ipc::Channel;
+//!
+//! #[tauri::command]
+//! #[specta::specta]
+//! fn download(url: String, on_progress: Channel<u32>) {
+//!     for chunk in [10, 20, 100] {
+//!         let _ = on_progress.send(chunk);
+//!     }
+//! }
+//! ```
+//!
+//! ```ts
+//! import { Channel } from "@tauri-apps/api/core";
+//! import { commands } from "./bindings";
+//!
+//! const onProgress = new Channel<number>();
+//! onProgress.onmessage = (progress) => console.log(progress);
+//!
+//! await commands.download("https://example.com/file.zip", onProgress);
+//! ```
+//!
+//! A channel cannot be nested inside a struct, enum, or event payload. Only a
+//! top-level command argument or return value is turned into a channel, so a
+//! channel in a nested position is invalid. To send a channel alongside other
+//! data, put a [`tauri::ipc::JavaScriptChannelId`] in the payload and call
+//! `channel_on` to get a `Channel`:
+//!
+//! ```rust,ignore
+//! use tauri::ipc::{Channel, JavaScriptChannelId};
+//!
+//! // `JavaScriptChannelId` has no `specta::Type` impl, so export it as a string.
+//! #[derive(serde::Deserialize, specta::Type)]
+//! struct DownloadRequest {
+//!     url: String,
+//!     #[specta(type = String)]
+//!     on_progress: JavaScriptChannelId,
+//! }
+//!
+//! #[tauri::command]
+//! #[specta::specta]
+//! fn download(request: DownloadRequest, webview: tauri::Webview<tauri::Wry>) {
+//!     let on_progress: Channel<u32> = request.on_progress.channel_on(webview);
+//!     // ...
+//! }
+//! ```
+//!
 //! ## Custom types
 //!
 //! Similar to [`serde::Serialize`] you must put the [`specta::Type`] derive macro on your own types to allow Specta to understand your types. For example:
