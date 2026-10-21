@@ -90,6 +90,25 @@ pub enum CommandAccessors {
     ModuleIndexed,
 }
 
+impl CommandAccessors {
+    /// The accessor name for a command, before [`Casing`] is applied.
+    ///
+    /// `ident` is the command's Rust identifier and `module_path` is the module it was
+    /// registered from, if it was not registered from the crate root.
+    #[must_use]
+    pub fn accessor_name<'a>(&self, ident: &'a str, module_path: Option<&'a str>) -> Cow<'a, str> {
+        match self {
+            CommandAccessors::Flat => Cow::Borrowed(ident),
+            CommandAccessors::ModuleIndexed => module_path
+                .filter(|module_path| !module_path.is_empty())
+                .map_or_else(
+                    || Cow::Borrowed(ident),
+                    |module_path| Cow::Owned(format!("{module_path}_{ident}")),
+                ),
+        }
+    }
+}
+
 /// Builder for configuring Tauri Specta in your application.
 ///
 /// # Example
@@ -221,17 +240,12 @@ impl BuilderConfiguration {
             .get(command.name())
             .map_or_else(|| command.name(), |name| name.as_ref());
 
-        match self.command_accessors {
-            CommandAccessors::Flat => Cow::Borrowed(ident),
-            CommandAccessors::ModuleIndexed => self
-                .command_module_paths
+        self.command_accessors.accessor_name(
+            ident,
+            self.command_module_paths
                 .get(command.name())
-                .filter(|module_path| !module_path.is_empty())
-                .map_or_else(
-                    || Cow::Borrowed(ident),
-                    |module_path| Cow::Owned(format!("{module_path}_{ident}")),
-                ),
-        }
+                .map(|module_path| module_path.as_ref()),
+        )
     }
 }
 

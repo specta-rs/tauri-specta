@@ -117,7 +117,7 @@ use heck::ToLowerCamelCase;
 use serde::Serialize;
 use specta::{Type, Types, datatype};
 use tauri::{Runtime, ipc::Invoke};
-use tauri_specta::{Casing, CollectedCommands, Commands, Events};
+use tauri_specta::{Casing, CollectedCommands, CommandAccessors, Commands, Events};
 
 /// A collection of query commands, mutation commands, and their shared bindings.
 ///
@@ -128,18 +128,31 @@ pub struct CommandSet<R: Runtime> {
     queries: Vec<datatype::Function>,
     mutations: Vec<datatype::Function>,
     accessor_names: BTreeMap<Cow<'static, str>, Cow<'static, str>>,
+    module_paths: BTreeMap<Cow<'static, str>, Cow<'static, str>>,
     types: Types,
     events: Events,
     constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
     function_casing: Casing,
+    command_accessors: CommandAccessors,
 }
 
 impl<R: Runtime> CommandSet<R> {
     /// The name a function's generated accessor is derived from, before casing.
-    fn accessor_name<'a>(&'a self, function: &'a datatype::Function) -> &'a str {
-        self.accessor_names
+    ///
+    /// This mirrors [`tauri_specta::BuilderConfiguration::command_accessor_name`] so the
+    /// generated helpers reference the same accessors the command bindings export.
+    fn accessor_name<'a>(&'a self, function: &'a datatype::Function) -> Cow<'a, str> {
+        let ident = self
+            .accessor_names
             .get(function.name())
-            .map_or_else(|| function.name(), |name| name.as_ref())
+            .map_or_else(|| function.name(), |name| name.as_ref());
+
+        self.command_accessors.accessor_name(
+            ident,
+            self.module_paths
+                .get(function.name())
+                .map(|module_path| module_path.as_ref()),
+        )
     }
 
     /// Creates a command set from query commands and mutation commands.
@@ -158,6 +171,9 @@ impl<R: Runtime> CommandSet<R> {
         let mut accessor_names = query_collected.accessor_names;
         accessor_names.extend(mutation_collected.accessor_names);
 
+        let mut module_paths = query_collected.module_paths;
+        module_paths.extend(mutation_collected.module_paths);
+
         Self {
             handler: Arc::new(move |i| {
                 (query_invoke)(Invoke {
@@ -169,10 +185,12 @@ impl<R: Runtime> CommandSet<R> {
             queries: query_collected.functions,
             mutations: mutation_collected.functions,
             accessor_names,
+            module_paths,
             types,
             events: Default::default(),
             constants: Default::default(),
             function_casing: Default::default(),
+            command_accessors: Default::default(),
         }
     }
 
@@ -249,6 +267,29 @@ impl<R: Runtime> CommandSet<R> {
         self
     }
 
+    /// Sets how the generated helpers name command accessors.
+    ///
+    /// This must match [`tauri_specta::Builder::command_accessors`] on the builder returned
+    /// by [`CommandSet::build`], which is why this forwards it: the helpers reference
+    /// `commands.<accessor>`, so the two have to agree. The default is
+    /// [`CommandAccessors::Flat`].
+    ///
+    /// ```rust
+    /// use tauri_specta::{CommandAccessors, collect_commands};
+    /// use tauri_specta_query::CommandSet;
+    ///
+    /// let commands = CommandSet::<tauri::Wry>::new(
+    ///     collect_commands![],
+    ///     collect_commands![],
+    /// )
+    /// .command_accessors(CommandAccessors::ModuleIndexed);
+    /// ```
+    #[must_use]
+    pub fn command_accessors(mut self, command_accessors: CommandAccessors) -> Self {
+        self.command_accessors = command_accessors;
+        self
+    }
+
     /// Combines two command sets.
     ///
     /// Commands and types from both sets are retained. Events and constants
@@ -267,6 +308,9 @@ impl<R: Runtime> CommandSet<R> {
         let mut accessor_names = self.accessor_names.clone();
         accessor_names.extend(other.accessor_names.clone());
 
+        let mut module_paths = self.module_paths.clone();
+        module_paths.extend(other.module_paths.clone());
+
         Self {
             handler: Arc::new(move |i| {
                 (handler)(Invoke {
@@ -283,10 +327,12 @@ impl<R: Runtime> CommandSet<R> {
                 .cloned()
                 .collect(),
             accessor_names,
+            module_paths,
             types,
             events: self.events.clone().merge(other.events.clone()),
             constants,
             function_casing: self.function_casing,
+            command_accessors: self.command_accessors,
         }
     }
 
@@ -311,7 +357,7 @@ impl<R: Runtime> CommandSet<R> {
                 for function in &self.queries {
                     let name = self
                         .function_casing
-                        .apply(self.accessor_name(function))
+                        .apply(&self.accessor_name(function))
                         .into_owned();
                     let name_json =
                         serde_json::to_string(&name).expect("failed to serialize query name");
@@ -336,7 +382,7 @@ impl<R: Runtime> CommandSet<R> {
                 for function in &self.queries {
                     let name = self
                         .function_casing
-                        .apply(self.accessor_name(function))
+                        .apply(&self.accessor_name(function))
                         .into_owned();
                     let name_json =
                         serde_json::to_string(&name).expect("failed to serialize query name");
@@ -355,7 +401,7 @@ impl<R: Runtime> CommandSet<R> {
                 for function in &self.mutations {
                     let name = self
                         .function_casing
-                        .apply(self.accessor_name(function))
+                        .apply(&self.accessor_name(function))
                         .into_owned();
                     let name_json =
                         serde_json::to_string(&name).expect("failed to serialize mutation name");
@@ -407,7 +453,7 @@ impl<R: Runtime> CommandSet<R> {
                 for function in &self.mutations {
                     let name = self
                         .function_casing
-                        .apply(self.accessor_name(function))
+                        .apply(&self.accessor_name(function))
                         .into_owned();
                     let name_json =
                         serde_json::to_string(&name).expect("failed to serialize mutation name");
@@ -433,6 +479,7 @@ impl<R: Runtime> CommandSet<R> {
         commands.extend(self.mutations);
         let types = self.types;
         let accessor_names = self.accessor_names;
+        let module_paths = self.module_paths;
 
         let mut builder = tauri_specta::Builder::<R>::new()
             .commands(Commands(
@@ -442,11 +489,13 @@ impl<R: Runtime> CommandSet<R> {
                     CollectedCommands {
                         functions: commands.clone(),
                         accessor_names: accessor_names.clone(),
+                        module_paths: module_paths.clone(),
                     }
                 }),
             ))
             .events(self.events)
-            .function_casing(self.function_casing);
+            .function_casing(self.function_casing)
+            .command_accessors(self.command_accessors);
 
         for (k, v) in self.constants {
             builder = builder.constant(k, v);
