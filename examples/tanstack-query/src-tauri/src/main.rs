@@ -163,9 +163,10 @@ pub struct Testing {
     a: String,
 }
 
+/// Builds the TanStack Query command set and the Tauri Specta builder for the example.
 #[allow(deprecated)]
-fn main() {
-    let builder = tauri_specta_query::CommandSet::new(
+fn builder() -> (String, tauri_specta::Builder<tauri::Wry>) {
+    let command_set = tauri_specta_query::CommandSet::new(
         collect_commands![
             hello_world,
             async_hello_world,
@@ -190,53 +191,45 @@ fn main() {
     .typ::<Testing>()
     .constant("universalConstant", 42);
 
-    let (tsq_bindings, builder) = builder.build(TanstackQueryFramework::React);
+    let (tsq_bindings, builder) = command_set.build(TanstackQueryFramework::React);
 
     // This enables `Date`, `Uint8Array`, and `URL` for supported types.
     let builder = builder.semantic_types(semantic::Configuration::default());
 
-    #[cfg(debug_assertions)]
-    {
-        use specta_typescript::JSDoc;
+    (tsq_bindings, builder)
+}
 
-        builder
-            .export(
-                Typescript::default().with_raw(tsq_bindings.clone()),
-                // .header("/* eslint-disable */")
-                "../src/bindings.ts",
-            )
-            .expect("Failed to export typescript bindings");
+/// Exports the bindings into `dir`.
+fn export_bindings(
+    builder: &tauri_specta::Builder<tauri::Wry>,
+    tsq_bindings: &str,
+    dir: &std::path::Path,
+) {
+    use specta_typescript::JSDoc;
 
-        builder
-            .export(
-                JSDoc::default().with_raw(tsq_bindings.clone()),
-                "../src/bindings-js.js",
-            )
-            .expect("Failed to export typescript bindings");
+    builder
+        .export(
+            Typescript::default().with_raw(tsq_bindings.to_owned()),
+            // .header("/* eslint-disable */")
+            dir.join("bindings.ts"),
+        )
+        .expect("Failed to export typescript bindings");
 
-        // builder
-        //     .export(
-        //         Typescript::default().layout(Layout::Files),
-        //         "../src/bindings-ts-files",
-        //     )
-        //     .expect("Failed to export typescript bindings");
+    builder
+        .export(
+            JSDoc::default().with_raw(tsq_bindings.to_owned()),
+            dir.join("bindings-js.js"),
+        )
+        .expect("Failed to export typescript bindings");
+}
 
-        // builder
-        //     .export(
-        //         JSDoc::default().layout(Layout::Files),
-        //         "../src/bindings-js-files",
-        //     )
-        //     .expect("Failed to export typescript bindings");
-
-        // builder
-        //     .export(
-        //         Typescript::default().layout(Layout::Namespaces),
-        //         "../src/bindings-ts-namespaces.ts",
-        //     )
-        //     .expect("Failed to export typescript bindings");
-    }
+#[allow(deprecated)]
+fn main() {
+    let (tsq_bindings, builder) = builder();
 
     #[cfg(debug_assertions)]
+    export_bindings(&builder, &tsq_bindings, std::path::Path::new("../src"));
+
     tauri::Builder::default()
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
@@ -256,4 +249,15 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn export_types() {
+        let (tsq_bindings, builder) = builder();
+        export_bindings(&builder, &tsq_bindings, std::path::Path::new("../src"));
+    }
 }

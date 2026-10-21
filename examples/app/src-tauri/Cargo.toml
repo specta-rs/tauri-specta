@@ -8,6 +8,10 @@ repository = ""
 edition = "2024"
 publish = false
 
+[lib]
+name = "tauri_specta_example_app"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { workspace = true, features = [] }
 

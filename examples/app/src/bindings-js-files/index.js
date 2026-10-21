@@ -25,8 +25,8 @@ export const commands = {
 	 * @returns {Promise<string>}
 	 */
 	asyncHelloWorld: (myName) => __TAURI_INVOKE("async_hello_world", { myName }),
-	/** @returns {Promise<{ status: "ok"; data: string } | { status: "error"; error: number }>} */
-	hasError: () => typedError(__TAURI_INVOKE("has_error")),
+	/** @returns {Promise<string>} */
+	hasError: () => __TAURI_INVOKE("has_error"),
 	/** @returns {Promise<tauri_specta_example_app$nested.MyStruct>} */
 	someStruct: () => __TAURI_INVOKE("some_struct"),
 	/** @returns {Promise<void>} */
@@ -46,10 +46,10 @@ export const commands = {
 	 * @returns {Promise<tauri_specta_example_app.PhaseSpecificRename_Serialize>}
 	 */
 	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
-	/** @returns {Promise<{ status: "ok"; data: null } | { status: "error"; error: tauri_specta_example_app.MyError_Serialize }>} */
-	typesafeErrorsUsingThiserror: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
-	/** @returns {Promise<{ status: "ok"; data: null } | { status: "error"; error: tauri_specta_example_app.MyError2 }>} */
-	typesafeErrorsUsingThiserrorWithValue: () => typedError(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
+	/** @returns {Promise<null>} */
+	typesafeErrorsUsingThiserror: () => __TAURI_INVOKE("typesafe_errors_using_thiserror"),
+	/** @returns {Promise<null>} */
+	typesafeErrorsUsingThiserrorWithValue: () => __TAURI_INVOKE("typesafe_errors_using_thiserror_with_value"),
 	/**
 	 * @param {tauri_specta_example_app.SemanticTypes} arg
 	 * @param {Channel<tauri_specta_example_app.SemanticTypes>} channel
@@ -80,21 +80,6 @@ export const universalConstant = 42;
  */
 function mapChannel(channel, deserialize) {
     return new Channel((payload) => channel.onmessage(deserialize(payload)));
-}
-
-/**
-  * @template T
-  * @template E
-  * @param {Promise<T>} result
-  * @returns {Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>}
-  */
-async function typedError(result) {
-    try {
-        return { status: "ok", data: await result };
-    } catch (e) {
-        if (e instanceof Error) throw e;
-        return { status: "error", error: e };
-    }
 }
 
 /**

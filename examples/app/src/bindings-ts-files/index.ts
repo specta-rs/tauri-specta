@@ -16,7 +16,7 @@ export const commands = {
 	helloWorld: (myName: string) => __TAURI_INVOKE<string>("hello_world", { myName }),
 	goodbyeWorld: () => __TAURI_INVOKE<string>("goodbye_world"),
 	asyncHelloWorld: (myName: string) => __TAURI_INVOKE<string>("async_hello_world", { myName }),
-	hasError: () => typedError<string, number>(__TAURI_INVOKE("has_error")),
+	hasError: () => __TAURI_INVOKE<string>("has_error"),
 	someStruct: () => __TAURI_INVOKE<tauri_specta_example_app$nested.MyStruct>("some_struct"),
 	generic: () => __TAURI_INVOKE<void>("generic"),
 	/**
@@ -25,8 +25,8 @@ export const commands = {
 	deprecated: () => __TAURI_INVOKE<void>("deprecated"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
 	phaseSpecificRename: (input: tauri_specta_example_app.PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<tauri_specta_example_app.PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
-	typesafeErrorsUsingThiserror: () => typedError<null, tauri_specta_example_app.MyError_Serialize>(__TAURI_INVOKE("typesafe_errors_using_thiserror")),
-	typesafeErrorsUsingThiserrorWithValue: () => typedError<null, tauri_specta_example_app.MyError2>(__TAURI_INVOKE("typesafe_errors_using_thiserror_with_value")),
+	typesafeErrorsUsingThiserror: () => __TAURI_INVOKE<null>("typesafe_errors_using_thiserror"),
+	typesafeErrorsUsingThiserrorWithValue: () => __TAURI_INVOKE<null>("typesafe_errors_using_thiserror_with_value"),
 	semanticTypes: (arg: tauri_specta_example_app.SemanticTypes, channel: Channel<tauri_specta_example_app.SemanticTypes>) => __TAURI_INVOKE<tauri_specta_example_app.SemanticTypes>("semantic_types", { arg: ({...arg,bytes:[...arg.bytes]}), channel: mapChannel(channel, (v) => ({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)})) }).then((v) => (({...v,date:new Date(v.date),bytes:new Uint8Array(v.bytes),url:new URL(v.url)}) as typeof v)),
 };
 
@@ -43,15 +43,6 @@ export const universalConstant = 42 as const;
 /* Tauri Specta runtime */
 function mapChannel<T>(channel: Channel<T>, deserialize: (payload: any) => T): Channel<T> {
     return new Channel((payload) => channel.onmessage(deserialize(payload)));
-}
-
-async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
-    try {
-        return { status: "ok", data: await result };
-    } catch (e) {
-        if (e instanceof Error) throw e;
-        return { status: "error", error: e as any };
-    }
 }
 
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
