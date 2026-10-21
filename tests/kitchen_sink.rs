@@ -308,6 +308,8 @@ const SCENARIOS: &[&str] = &[
     "empty_ts",
     "error_data_error_jsdoc",
     "error_data_error_ts",
+    "error_result_unknown_jsdoc",
+    "error_result_unknown_ts",
     "error_throw_jsdoc",
     "error_throw_ts",
     "events_only_jsdoc",
@@ -630,6 +632,28 @@ fn error_data_error_jsdoc() {
     let builder = kitchen_sink().error_handling(ErrorHandlingMode::DataError);
     assert_export(
         "error_data_error_jsdoc",
+        "bindings.js",
+        &builder,
+        JSDoc::default(),
+    );
+}
+
+#[test]
+fn error_result_unknown_ts() {
+    let builder = kitchen_sink().error_handling(ErrorHandlingMode::ResultUnknown);
+    assert_export(
+        "error_result_unknown_ts",
+        "bindings.ts",
+        &builder,
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn error_result_unknown_jsdoc() {
+    let builder = kitchen_sink().error_handling(ErrorHandlingMode::ResultUnknown);
+    assert_export(
+        "error_result_unknown_jsdoc",
         "bindings.js",
         &builder,
         JSDoc::default(),
