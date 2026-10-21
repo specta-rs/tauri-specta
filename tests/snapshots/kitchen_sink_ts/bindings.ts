@@ -10,12 +10,12 @@ export const commands = {
 	unitCommand: () => __TAURI_INVOKE<void>("unit_command"),
 	asyncCommand: (delayMs: number) => __TAURI_INVOKE<number>("async_command", { delayMs }),
 	manyArgs: (a: string, b: number, c: boolean, d: string[], e: string | null) => __TAURI_INVOKE<boolean>("many_args", { a, b, c, d, e }),
-	echoProfile: (profile: Profile) => __TAURI_INVOKE<Profile>("echo_profile", { profile }),
+	echoProfile: (profile: Profile_Deserialize) => __TAURI_INVOKE<Profile_Serialize>("echo_profile", { profile }),
 	tupleTypes: (point: Point) => __TAURI_INVOKE<Wrapper>("tuple_types", { point }),
 	enums: (tagged: TaggedEnum, untagged: UntaggedEnum) => __TAURI_INVOKE<TaggedEnum>("enums", { tagged, untagged }),
 	phaseSpecificRename: (input: PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
 	plainError: () => typedError<string, PlainError>(__TAURI_INVOKE("plain_error")),
-	taggedError: () => typedError<Profile, TaggedError>(__TAURI_INVOKE("tagged_error")),
+	taggedError: () => typedError<Profile_Serialize, TaggedError>(__TAURI_INVOKE("tagged_error")),
 	nullableResult: () => typedError<string | null, PlainError>(__TAURI_INVOKE("nullable_result")),
 	maybe: () => __TAURI_INVOKE<string | null>("maybe"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
@@ -66,7 +66,19 @@ export type PlainError = "NotFound" | { PermissionDenied: string };
 export type Point = [number | null, number | null];
 
 /**  A struct with a doc comment and common field shapes. */
-export type Profile = {
+export type Profile = Profile_Serialize | Profile_Deserialize;
+
+/**  A struct with a doc comment and common field shapes. */
+export type Profile_Deserialize = {
+	userId: number,
+	displayName: string,
+	tags: string[],
+	homepage?: string | null,
+	scores: { [key in string]: number },
+};
+
+/**  A struct with a doc comment and common field shapes. */
+export type Profile_Serialize = {
 	userId: number,
 	displayName: string,
 	tags: string[],

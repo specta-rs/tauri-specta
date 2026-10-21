@@ -32,8 +32,8 @@ export const commands = {
 	 */
 	manyArgs: (a, b, c, d, e) => __TAURI_INVOKE("many_args", { a, b, c, d, e }),
 	/**
-	 * @param {kitchen_sink.Profile} profile
-	 * @returns {Promise<kitchen_sink.Profile>}
+	 * @param {kitchen_sink.Profile_Deserialize} profile
+	 * @returns {Promise<kitchen_sink.Profile_Serialize>}
 	 */
 	echoProfile: (profile) => __TAURI_INVOKE("echo_profile", { profile }),
 	/**
@@ -54,7 +54,7 @@ export const commands = {
 	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
 	/** @returns {Promise<{ status: "ok"; data: string } | { status: "error"; error: kitchen_sink.PlainError }>} */
 	plainError: () => typedError(__TAURI_INVOKE("plain_error")),
-	/** @returns {Promise<{ status: "ok"; data: kitchen_sink.Profile } | { status: "error"; error: kitchen_sink.TaggedError }>} */
+	/** @returns {Promise<{ status: "ok"; data: kitchen_sink.Profile_Serialize } | { status: "error"; error: kitchen_sink.TaggedError }>} */
 	taggedError: () => typedError(__TAURI_INVOKE("tagged_error")),
 	/** @returns {Promise<{ status: "ok"; data: string | null } | { status: "error"; error: kitchen_sink.PlainError }>} */
 	nullableResult: () => typedError(__TAURI_INVOKE("nullable_result")),

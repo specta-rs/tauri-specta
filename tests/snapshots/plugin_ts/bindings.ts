@@ -10,12 +10,12 @@ export const commands = {
 	unitCommand: () => __TAURI_INVOKE<void>("plugin:kitchen-sink|unit_command"),
 	asyncCommand: (delayMs: number) => __TAURI_INVOKE<number>("plugin:kitchen-sink|async_command", { delayMs }),
 	manyArgs: (a: string, b: number, c: boolean, d: string[], e: string | null) => __TAURI_INVOKE<boolean>("plugin:kitchen-sink|many_args", { a, b, c, d, e }),
-	echoProfile: (profile: Profile) => __TAURI_INVOKE<Profile>("plugin:kitchen-sink|echo_profile", { profile }),
+	echoProfile: (profile: Profile_Deserialize) => __TAURI_INVOKE<Profile_Serialize>("plugin:kitchen-sink|echo_profile", { profile }),
 	tupleTypes: (point: Point) => __TAURI_INVOKE<Wrapper>("plugin:kitchen-sink|tuple_types", { point }),
 	enums: (tagged: TaggedEnum, untagged: UntaggedEnum) => __TAURI_INVOKE<TaggedEnum>("plugin:kitchen-sink|enums", { tagged, untagged }),
 	phaseSpecificRename: (input: PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<PhaseSpecificRename_Serialize>("plugin:kitchen-sink|phase_specific_rename", { input }),
 	plainError: () => typedError<string, PlainError>(__TAURI_INVOKE("plugin:kitchen-sink|plain_error")),
-	taggedError: () => typedError<Profile, TaggedError>(__TAURI_INVOKE("plugin:kitchen-sink|tagged_error")),
+	taggedError: () => typedError<Profile_Serialize, TaggedError>(__TAURI_INVOKE("plugin:kitchen-sink|tagged_error")),
 	nullableResult: () => typedError<string | null, PlainError>(__TAURI_INVOKE("plugin:kitchen-sink|nullable_result")),
 	maybe: () => __TAURI_INVOKE<string | null>("plugin:kitchen-sink|maybe"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("plugin:kitchen-sink|with_channel", { channel }),
@@ -66,7 +66,19 @@ export type PlainError = "NotFound" | { PermissionDenied: string };
 export type Point = [number | null, number | null];
 
 /**  A struct with a doc comment and common field shapes. */
-export type Profile = {
+export type Profile = Profile_Serialize | Profile_Deserialize;
+
+/**  A struct with a doc comment and common field shapes. */
+export type Profile_Deserialize = {
+	userId: number,
+	displayName: string,
+	tags: string[],
+	homepage?: string | null,
+	scores: { [key in string]: number },
+};
+
+/**  A struct with a doc comment and common field shapes. */
+export type Profile_Serialize = {
 	userId: number,
 	displayName: string,
 	tags: string[],
