@@ -28,7 +28,13 @@ jobs:
     - name: Build
       run: cargo build --workspace --all-features
     - name: Run tests
+      if: matrix.os != 'windows-latest'
       run: cargo test --workspace --all-features
+    - name: Run tests (libraries only)
+      # The examples' test binaries fail to load on the Windows runner
+      # (STATUS_ENTRYPOINT_NOT_FOUND), so only the published libraries are tested there.
+      if: matrix.os == 'windows-latest'
+      run: cargo test -p tauri-specta -p tauri-specta-query -p tauri-specta-macros --all-features
 
   clippy:
     runs-on: ubuntu-latest
