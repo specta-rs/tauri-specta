@@ -133,7 +133,10 @@ fn runtime(
         // registered (see `Builder::commands`).
         let mut seen: BTreeMap<String, &str> = BTreeMap::new();
         for command in cfg.commands.iter() {
-            let accessor = cfg.function_casing.apply(command.name()).into_owned();
+            let accessor = cfg
+                .function_casing
+                .apply(cfg.command_accessor_name(command))
+                .into_owned();
             if let Some(first) = seen.get(&accessor) {
                 return Err(Error::framework(
                     format!(
@@ -573,7 +576,9 @@ fn runtime(
                 docs.into()
             };
             s = s.field(
-                cfg.function_casing.apply(command.name()).into_owned(),
+                cfg.function_casing
+                    .apply(cfg.command_accessor_name(command))
+                    .into_owned(),
                 field,
             );
         }

@@ -3404,6 +3404,7 @@ name = "tauri-specta"
 version = "2.0.0-rc.25"
 dependencies = [
  "heck 0.5.0",
+ "paste",
  "serde",
  "serde_json",
  "specta",

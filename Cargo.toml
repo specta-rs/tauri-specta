@@ -40,6 +40,7 @@ tauri = { workspace = true, features = ["specta"] }
 
 # Private
 heck = "0.5"
+paste = "1"
 specta-serde = { workspace = true }
 specta-util = { workspace = true }
 
