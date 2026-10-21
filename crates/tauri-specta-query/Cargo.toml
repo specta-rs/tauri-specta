@@ -17,7 +17,6 @@ categories = ["web-programming", "asynchronous"]
 
 [package.metadata."docs.rs"]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 heck = "0.5"

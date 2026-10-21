@@ -17,7 +17,6 @@ categories = ["web-programming", "asynchronous"]
 # dependencies still gate removed nightly features behind `cfg(docsrs)`.
 [package.metadata."docs.rs"]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
