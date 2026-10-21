@@ -36,6 +36,7 @@ impl LanguageExt for specta_typescript::Typescript {
                     if cfg.typed_error_impl.is_empty() {
                         match cfg.error_handling {
                             ErrorHandlingMode::DataError => DATA_ERROR_IMPL_TS,
+                            ErrorHandlingMode::ResultUnknown => TYPED_ERROR_UNKNOWN_IMPL_TS,
                             ErrorHandlingMode::Throw | ErrorHandlingMode::Result => {
                                 TYPED_ERROR_IMPL_TS
                             }
@@ -70,6 +71,7 @@ impl LanguageExt for specta_typescript::JSDoc {
                     if cfg.typed_error_impl.is_empty() {
                         match cfg.error_handling {
                             ErrorHandlingMode::DataError => DATA_ERROR_IMPL_JS,
+                            ErrorHandlingMode::ResultUnknown => TYPED_ERROR_UNKNOWN_IMPL_JS,
                             ErrorHandlingMode::Throw | ErrorHandlingMode::Result => {
                                 TYPED_ERROR_IMPL_JS
                             }
@@ -339,15 +341,24 @@ fn runtime(
                     semantic_types_runtime_types,
                 )
                 .map(|transform| jsdoc_transform(transform, "v.data", jsdoc));
+                // `ResultUnknown` declares the error as `unknown`, so the transform must
+                // accept whatever the rejection was. Widen the input so a transform written
+                // against the command's error type still type-checks; the runtime value is
+                // unchanged.
+                let err_input = if cfg.error_handling == ErrorHandlingMode::ResultUnknown {
+                    "(v.error as any)"
+                } else {
+                    "v.error"
+                };
                 let err_transform = render_result_transform_for_phase(
                     dt_err,
                     Phase::Deserialize,
-                    "v.error",
+                    err_input,
                     &exporter,
                     cfg,
                     semantic_types_runtime_types,
                 )
-                .map(|transform| jsdoc_transform(transform, "v.error", jsdoc));
+                .map(|transform| jsdoc_transform(transform, err_input, jsdoc));
 
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
@@ -1253,13 +1264,15 @@ fn result_mapper(
     err_transform: Option<String>,
 ) -> String {
     match (mode, ok_transform, err_transform) {
-        (ErrorHandlingMode::Result, Some(ok), Some(err)) => format!(
-            "(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v.status === \"error\" ? {{ ...v, error: {err} }} : v)"
-        ),
-        (ErrorHandlingMode::Result, Some(ok), None) => {
+        (ErrorHandlingMode::Result | ErrorHandlingMode::ResultUnknown, Some(ok), Some(err)) => {
+            format!(
+                "(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v.status === \"error\" ? {{ ...v, error: {err} }} : v)"
+            )
+        }
+        (ErrorHandlingMode::Result | ErrorHandlingMode::ResultUnknown, Some(ok), None) => {
             format!("(v.status === \"ok\" ? {{ ...v, data: {ok} }} : v)")
         }
-        (ErrorHandlingMode::Result, None, Some(err)) => {
+        (ErrorHandlingMode::Result | ErrorHandlingMode::ResultUnknown, None, Some(err)) => {
             format!("(v.status === \"error\" ? {{ ...v, error: {err} }} : v)")
         }
         (ErrorHandlingMode::DataError, Some(ok), Some(err)) => {
@@ -1280,6 +1293,9 @@ fn result_type(mode: ErrorHandlingMode, ok: &str, err: &str) -> String {
         ErrorHandlingMode::Throw => ok.to_string(),
         ErrorHandlingMode::Result => {
             format!("{{ status: \"ok\"; data: {ok} }} | {{ status: \"error\"; error: {err} }}")
+        }
+        ErrorHandlingMode::ResultUnknown => {
+            format!("{{ status: \"ok\"; data: {ok} }} | {{ status: \"error\"; error: unknown }}")
         }
         ErrorHandlingMode::DataError => {
             format!("{{ data: {ok}; error: null }} | {{ data: null; error: {err} }}")
@@ -1402,6 +1418,14 @@ const TYPED_ERROR_IMPL_TS: &str = r#"async function typedError<T, E>(result: Pro
     }
 }"#;
 
+const TYPED_ERROR_UNKNOWN_IMPL_TS: &str = r#"async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: unknown }> {
+    try {
+        return { status: "ok", data: await result };
+    } catch (e) {
+        return { status: "error", error: e };
+    }
+}"#;
+
 const DATA_ERROR_IMPL_TS: &str = r#"async function typedError<T, E>(result: Promise<T>): Promise<{ data: T; error: null } | { data: null; error: E }> {
     try {
         return { data: await result, error: null };
@@ -1436,6 +1460,20 @@ async function typedError(result) {
         return { status: "ok", data: await result };
     } catch (e) {
         if (e instanceof Error) throw e;
+        return { status: "error", error: e };
+    }
+}"#;
+
+const TYPED_ERROR_UNKNOWN_IMPL_JS: &str = r#"/**
+  * @template T
+  * @template E
+  * @param {Promise<T>} result
+  * @returns {Promise<{ status: "ok"; data: T } | { status: "error"; error: unknown }>}
+  */
+async function typedError(result) {
+    try {
+        return { status: "ok", data: await result };
+    } catch (e) {
         return { status: "error", error: e };
     }
 }"#;
@@ -1624,6 +1662,12 @@ mod tests {
         Ok(String::new())
     }
 
+    #[tauri::command]
+    #[specta]
+    fn bigint_error() -> Result<String, u64> {
+        Ok(String::new())
+    }
+
     #[test]
     fn reserved_runtime_names_use_exported_type_names() {
         let output_dir = std::path::Path::new("target/tests/reserved-runtime-names");
@@ -1752,6 +1796,66 @@ mod tests {
     }
 
     #[test]
+    fn result_unknown_mode_types_error_as_unknown_without_rethrow() {
+        let output_dir = std::env::temp_dir().join(format!(
+            "tauri-specta-result-unknown-test-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&output_dir).expect("failed to create test output directory");
+
+        let builder = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .error_handling(ErrorHandlingMode::ResultUnknown);
+
+        let ts_path = output_dir.join("bindings.ts");
+        builder
+            .clone()
+            .export(Typescript::default(), &ts_path)
+            .expect("failed to export TypeScript bindings");
+        let ts = fs::read_to_string(ts_path).expect("failed to read TypeScript bindings");
+        assert!(
+            ts.contains(
+                "Promise<{ status: \"ok\"; data: T } | { status: \"error\"; error: unknown }>"
+            ),
+            "TypeScript runtime should declare the error as `unknown`:\n{ts}"
+        );
+        assert!(
+            ts.contains("return { status: \"error\", error: e };"),
+            "TypeScript runtime should return the rejection in the result object:\n{ts}"
+        );
+        assert!(
+            !ts.contains("instanceof Error"),
+            "TypeScript runtime should not rethrow:\n{ts}"
+        );
+        // The `Err` type argument is still passed even though it no longer types the error.
+        assert!(ts.contains("typedError<string | null, string>"));
+
+        let js_path = output_dir.join("bindings.js");
+        builder
+            .export(JSDoc::default(), &js_path)
+            .expect("failed to export JSDoc bindings");
+        let js = fs::read_to_string(js_path).expect("failed to read JSDoc bindings");
+        assert!(
+            js.contains(
+                "@returns {Promise<{ status: \"ok\"; data: string | null } | { status: \"error\"; error: unknown }>}"
+            ),
+            "JSDoc command typedef should declare the error as `unknown`:\n{js}"
+        );
+        assert!(
+            js.contains(
+                "@returns {Promise<{ status: \"ok\"; data: T } | { status: \"error\"; error: unknown }>}"
+            ),
+            "JSDoc runtime typedef should declare the error as `unknown`:\n{js}"
+        );
+        assert!(
+            !js.contains("instanceof Error"),
+            "JSDoc runtime should not rethrow:\n{js}"
+        );
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
     fn data_error_mode_rejects_nullable_error_types() {
         for (name, builder) in [
             (
@@ -1814,5 +1918,46 @@ mod tests {
         assert!(err.to_string().contains(
             "DataError mode requires a non-nullable command error type because null marks a successful result"
         ));
+    }
+
+    #[test]
+    fn result_unknown_mode_widens_error_transform_input() {
+        // The error is typed `unknown`, so a transform written against the command's
+        // error type (`BigInt(v.error)`) would not type-check. The generated mapper
+        // widens the input; the runtime value is unchanged.
+        let semantic_types =
+            specta_typescript::semantic::Configuration::empty().enable_lossless_bigints();
+
+        let unknown_path = std::env::temp_dir().join(format!(
+            "tauri-specta-result-unknown-semantic-error-test-{}.ts",
+            std::process::id()
+        ));
+        Builder::<tauri::Wry>::new()
+            .commands(collect_commands![bigint_error])
+            .semantic_types(semantic_types.clone())
+            .error_handling(ErrorHandlingMode::ResultUnknown)
+            .export(Typescript::default(), &unknown_path)
+            .expect("failed to export TypeScript bindings");
+        let ts = fs::read_to_string(&unknown_path).expect("failed to read TypeScript bindings");
+        assert!(
+            ts.contains("BigInt((v.error as any))"),
+            "the error transform should be widened to accept `unknown`:\n{ts}"
+        );
+
+        // `Result` types the error as the command's own type, so the transform stays narrow.
+        let result_path = std::env::temp_dir().join(format!(
+            "tauri-specta-result-semantic-error-test-{}.ts",
+            std::process::id()
+        ));
+        Builder::<tauri::Wry>::new()
+            .commands(collect_commands![bigint_error])
+            .semantic_types(semantic_types)
+            .export(Typescript::default(), &result_path)
+            .expect("failed to export TypeScript bindings");
+        let ts = fs::read_to_string(&result_path).expect("failed to read TypeScript bindings");
+        assert!(
+            ts.contains("BigInt(v.error)") && !ts.contains("(v.error as any)"),
+            "`Result` should keep the narrow error transform:\n{ts}"
+        );
     }
 }

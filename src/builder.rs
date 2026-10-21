@@ -18,6 +18,23 @@ pub enum ErrorHandlingMode {
     /// Errors will be returned as a status-tagged result object.
     #[default]
     Result,
+    /// Errors will be returned as a status-tagged result object, with the error
+    /// typed as `unknown`.
+    ///
+    /// This is the same shape as [`ErrorHandlingMode::Result`] — successful
+    /// commands return `{ status: "ok"; data: T }`, failed commands return
+    /// `{ status: "error"; error: unknown }` — but the injected runtime never
+    /// rethrows, so every rejection is delivered inside the result object.
+    ///
+    /// A rejected `invoke` may carry the command's own error value or a
+    /// framework-level failure (an unknown command, a badly typed argument, an
+    /// ACL denial) and the two are indistinguishable at the JavaScript
+    /// boundary. [`ErrorHandlingMode::Result`] assumes the value is the
+    /// command's declared error type and rethrows anything that is an `Error`
+    /// instance, which escapes the result union. Use this mode when you want
+    /// exhaustive handling with no escape hatch and are happy to narrow the
+    /// error yourself.
+    ResultUnknown,
     /// Errors will be returned as a data/error result object.
     ///
     /// Successful commands return `{ data: T, error: null }`, while failed
@@ -280,6 +297,16 @@ impl<R: Runtime> Builder<R> {
     }
 
     /// Set the error handling mode for the generated bindings.
+    ///
+    /// [`ErrorHandlingMode::Result`] and [`ErrorHandlingMode::DataError`] inject a runtime
+    /// that rethrows when the rejected value is an `Error` instance — a genuine
+    /// JavaScript-level failure rather than a value the command returned — instead of
+    /// returning it in the result object. [`ErrorHandlingMode::ResultUnknown`] (or a custom
+    /// [`Builder::typed_error_impl`]) is how you opt out of that.
+    ///
+    /// Note that framework-level Tauri failures (an unknown command, a badly typed
+    /// argument, an ACL denial) reject with a free-form string, so a command's declared
+    /// error type `E` only describes errors the command itself returned.
     pub fn error_handling(mut self, error_handling: ErrorHandlingMode) -> Self {
         self.cfg.error_handling = error_handling;
         self
@@ -288,6 +315,11 @@ impl<R: Runtime> Builder<R> {
     /// Replace the internal implementation of the `typedError` function.
     /// This would allow integrating with Effect or any other result library.
     /// The implementation must return the shape selected by [`ErrorHandlingMode`].
+    ///
+    /// The built-in runtime rethrows when the rejection is an `Error` instance (a genuine
+    /// JavaScript-level failure) rather than returning it in the result object. A custom
+    /// implementation is how you opt out of that, alongside
+    /// [`ErrorHandlingMode::ResultUnknown`].
     ///
     /// ```rust
     /// use tauri_specta::Builder;
