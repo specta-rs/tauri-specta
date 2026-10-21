@@ -7,6 +7,12 @@ name: Dependabot Auto-Merge
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to enable auto-merge on"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,11 +20,18 @@ permissions:
 
 jobs:
   auto-merge:
-    if: github.actor == 'dependabot[bot]'
+    # Gate on the PR author rather than `github.actor`: a human pushing to a
+    # Dependabot branch (e.g. to fix a breaking bump) still needs auto-merge
+    # to be enabled.
+    if: >-
+      (github.event_name == 'pull_request_target'
+        && github.event.pull_request.user.login == 'dependabot[bot]')
+      || (github.event_name == 'workflow_dispatch'
+        && github.event.inputs.pr_number != '')
     runs-on: ubuntu-latest
     steps:
       - name: Enable auto-merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
         run: gh pr merge "$PR_NUMBER" --auto --merge
