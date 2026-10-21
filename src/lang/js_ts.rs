@@ -1,4 +1,8 @@
-use std::{borrow::Cow, collections::BTreeMap, path::Path};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
 use heck::ToLowerCamelCase;
 use specta::{
@@ -140,6 +144,12 @@ fn runtime(
             seen.insert(accessor, command.name());
         }
     }
+
+    // A `Channel` is only usable as a whole command argument or result. Anywhere else it
+    // renders as a bare reference name with no definition, so fail the export rather than
+    // emitting bindings that don't type-check. This runs for both the TypeScript and JSDoc
+    // exporters because it is part of the shared runtime path.
+    validate_channel_placement(cfg, exporter.types)?;
 
     let is_channel_used = cfg.commands.iter().any(|command| {
         // Check if any argument is a Channel
@@ -1011,6 +1021,11 @@ fn is_result_ndt(ndt: &NamedDataType) -> bool {
     ndt.name == "Result" && matches!(&*ndt.module_path, "std::result" | "core::result")
 }
 
+/// Whether `ndt` is the stand-in Tauri derives for `tauri::ipc::Channel`.
+fn is_channel_ndt(ndt: &NamedDataType) -> bool {
+    ndt.name == "TAURI_CHANNEL" && ndt.module_path.starts_with("tauri::")
+}
+
 fn is_channel_type(dt: &DataType, types: &Types) -> bool {
     channel_generic_type(dt, types).is_some()
 }
@@ -1020,13 +1035,186 @@ fn channel_generic_type<'a>(dt: &'a DataType, types: &Types) -> Option<&'a DataT
         return None;
     };
     let ndt = types.get(r)?;
-    if ndt.name != "TAURI_CHANNEL" || !ndt.module_path.starts_with("tauri::") {
+    if !is_channel_ndt(ndt) {
         return None;
     }
     match &r.inner {
         NamedReferenceType::Reference { generics, .. } => generics.first().map(|(_, dt)| dt),
         NamedReferenceType::Inline { .. } | NamedReferenceType::Recursive(_) => None,
     }
+}
+
+/// Where a `Channel` was found in a position Tauri can't use it.
+enum ChannelSite<'a> {
+    /// The channel is nested in this named type's definition.
+    NamedType(&'a NamedDataType),
+    /// The channel is nested in a command or event signature without an intervening
+    /// named type.
+    Signature,
+}
+
+/// Walk `dt` looking for a `Channel` reference that is not the root datatype.
+///
+/// Named references are resolved through `types` so a channel reached through another
+/// struct or alias is caught. `owner` is the named type whose body is being walked, so the
+/// error can point at it. `visited` holds the addresses of named type bodies that were
+/// already walked, which keeps recursive type definitions finite.
+fn find_nested_channel<'a>(
+    dt: &DataType,
+    types: &'a Types,
+    owner: Option<&'a NamedDataType>,
+    visited: &mut BTreeSet<usize>,
+) -> Option<ChannelSite<'a>> {
+    match dt {
+        DataType::Primitive(_) | DataType::Generic(_) => None,
+        DataType::List(list) => find_nested_channel(&list.ty, types, owner, visited),
+        DataType::Map(map) => find_nested_channel(map.key_ty(), types, owner, visited)
+            .or_else(|| find_nested_channel(map.value_ty(), types, owner, visited)),
+        DataType::Struct(s) => fields_nested_channel(&s.fields, types, owner, visited),
+        DataType::Enum(e) => e
+            .variants
+            .iter()
+            .find_map(|(_, variant)| fields_nested_channel(&variant.fields, types, owner, visited)),
+        DataType::Tuple(tuple) => tuple
+            .elements
+            .iter()
+            .find_map(|dt| find_nested_channel(dt, types, owner, visited)),
+        DataType::Nullable(dt) => find_nested_channel(dt, types, owner, visited),
+        DataType::Intersection(parts) => parts
+            .iter()
+            .find_map(|dt| find_nested_channel(dt, types, owner, visited)),
+        DataType::Reference(Reference::Opaque(_)) => None,
+        DataType::Reference(Reference::Named(r)) => {
+            let ndt = types.get(r)?;
+            if is_channel_ndt(ndt) {
+                return Some(owner.map_or(ChannelSite::Signature, ChannelSite::NamedType));
+            }
+
+            match &r.inner {
+                NamedReferenceType::Recursive(_) => None,
+                NamedReferenceType::Inline { dt, .. } => {
+                    find_nested_channel(dt, types, owner, visited)
+                }
+                NamedReferenceType::Reference { generics, .. } => generics
+                    .iter()
+                    .find_map(|(_, dt)| find_nested_channel(dt, types, owner, visited))
+                    .or_else(|| nested_channel_in_named_type(ndt, types, visited)),
+            }
+        }
+    }
+}
+
+/// Walk a named type's body for a nested channel, skipping bodies that were already seen.
+fn nested_channel_in_named_type<'a>(
+    ndt: &'a NamedDataType,
+    types: &'a Types,
+    visited: &mut BTreeSet<usize>,
+) -> Option<ChannelSite<'a>> {
+    let body = ndt.ty.as_ref()?;
+    if !visited.insert(std::ptr::from_ref(ndt).addr()) {
+        return None;
+    }
+    find_nested_channel(body, types, Some(ndt), visited)
+}
+
+fn fields_nested_channel<'a>(
+    fields: &Fields,
+    types: &'a Types,
+    owner: Option<&'a NamedDataType>,
+    visited: &mut BTreeSet<usize>,
+) -> Option<ChannelSite<'a>> {
+    match fields {
+        Fields::Unit => None,
+        Fields::Unnamed(fields) => fields
+            .fields
+            .iter()
+            .filter_map(|field| field.ty.as_ref())
+            .find_map(|dt| find_nested_channel(dt, types, owner, visited)),
+        Fields::Named(fields) => fields
+            .fields
+            .iter()
+            .filter_map(|(_, field)| field.ty.as_ref())
+            .find_map(|dt| find_nested_channel(dt, types, owner, visited)),
+    }
+}
+
+/// Reject `Channel`s that aren't the whole command argument or result.
+fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Result<(), Error> {
+    // Covers events, `Builder::typ`, and command results that are named types: a channel
+    // anywhere in a definition renders as an undefined reference name.
+    for ndt in types.into_unsorted_iter() {
+        let mut visited = BTreeSet::new();
+        if let Some(site) = nested_channel_in_named_type(ndt, types, &mut visited) {
+            return Err(channel_nested_error(site, ""));
+        }
+    }
+
+    for command in cfg.commands.iter() {
+        for (name, dt) in command.args() {
+            validate_channel_signature_datatype(
+                dt,
+                types,
+                &format!("argument '{name}' of command '{}'", command.name()),
+            )?;
+        }
+        if let Some(dt) = command.result() {
+            validate_channel_signature_datatype(
+                dt,
+                types,
+                &format!("the result of command '{}'", command.name()),
+            )?;
+        }
+    }
+
+    // Event payloads are exported as plain types, so a channel at their root is just as
+    // invalid as a channel nested in one.
+    for (name, (_, reference)) in cfg.events.iter() {
+        validate_channel_signature_datatype(
+            &DataType::Reference(reference.clone()),
+            types,
+            &format!("event '{name}'"),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn validate_channel_signature_datatype(
+    dt: &DataType,
+    types: &Types,
+    subject: &str,
+) -> Result<(), Error> {
+    // A channel is allowed as the whole argument or result, but its payload is plain
+    // serialized data so a channel can't hide in there either.
+    if let Some(payload) = channel_generic_type(dt, types) {
+        let mut visited = BTreeSet::new();
+        if let Some(site) = find_nested_channel(payload, types, None, &mut visited) {
+            return Err(channel_nested_error(site, subject));
+        }
+        return Ok(());
+    }
+
+    let mut visited = BTreeSet::new();
+    match find_nested_channel(dt, types, None, &mut visited) {
+        Some(site) => Err(channel_nested_error(site, subject)),
+        None => Ok(()),
+    }
+}
+
+fn channel_nested_error(site: ChannelSite<'_>, signature_subject: &str) -> Error {
+    let subject = match site {
+        ChannelSite::NamedType(ndt) => {
+            format!("type '{}' defined in {}", ndt.name, ndt.location)
+        }
+        ChannelSite::Signature => signature_subject.to_string(),
+    };
+
+    Error::framework(
+        format!(
+            "`tauri::ipc::Channel` is nested inside {subject}. A channel must be a direct command argument (or the whole command result), so move it to the top level. To send a channel id inside a payload, use `tauri::ipc::JavaScriptChannelId` and resolve it with `channel_on` instead."
+        ),
+        "",
+    )
 }
 
 fn render_result_transform_for_phase(
@@ -1167,8 +1355,7 @@ fn semantic_types_runtime_types(cfg: &BuilderConfiguration) -> Result<Option<Typ
 fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt
         && let Some(ndt) = exporter.types.get(r)
-        && ndt.name == "TAURI_CHANNEL"
-        && ndt.module_path.starts_with("tauri::")
+        && is_channel_ndt(ndt)
     {
         let generics = match &r.inner {
             NamedReferenceType::Reference { generics, .. } => generics.as_slice(),
