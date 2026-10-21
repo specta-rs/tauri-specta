@@ -300,7 +300,11 @@ impl<R: Runtime> CommandSet<R> {
     #[must_use]
     pub fn build(self, framework: TanstackQueryFramework) -> (String, tauri_specta::Builder<R>) {
         let output = {
-            let mut output = format!("/** Tanstack Query */\n{}\n", framework.import());
+            // The fragment is appended after the framework runtime by `with_raw`, so it
+            // starts with a newline to keep a blank line between the two, and does not end
+            // with one because a single-file export appends a newline of its own (a
+            // trailing newline here would leave a blank line at the end of the file).
+            let mut output = format!("\n/** Tanstack Query */\n{}\n", framework.import());
 
             if !self.queries.is_empty() {
                 output.push_str("\nexport const queries = {");
@@ -416,6 +420,10 @@ impl<R: Runtime> CommandSet<R> {
 
             if !self.queries.is_empty() && !self.mutations.is_empty() {
                 output.push('\n');
+            }
+
+            while output.ends_with('\n') {
+                output.pop();
             }
 
             output
@@ -589,5 +597,28 @@ mod tests {
         assert!(output.contains(r#"queryFn: () => commands["get-user"](...args)"#));
         assert!(output.contains(r#""rename-user": () => mutationOptions"#));
         assert!(output.contains(r#"commands["rename-user"](input.userId, input.displayName)"#));
+    }
+
+    #[test]
+    fn raw_fragment_is_blank_line_separated_and_has_no_trailing_newline() {
+        // The fragment is concatenated after the framework runtime, so it needs a leading
+        // newline for a blank line between the two and no trailing newline (the exporter
+        // adds one, and a second would leave a blank line at the end of the file).
+        let (fragment, _) = CommandSet::<MockRuntime>::new(
+            collect_commands![get_user],
+            collect_commands![rename_user],
+        )
+        .build(TanstackQueryFramework::React);
+
+        assert!(fragment.starts_with('\n'), "{fragment:?}");
+        assert!(!fragment.ends_with('\n'), "{fragment:?}");
+    }
+
+    #[test]
+    fn exported_bindings_end_with_a_single_newline() {
+        let output = export(Casing::CamelCase);
+
+        assert!(output.ends_with("};\n"), "{output:?}");
+        assert!(!output.ends_with("\n\n"), "{output:?}");
     }
 }
