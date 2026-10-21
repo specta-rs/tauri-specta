@@ -45,19 +45,15 @@ fn distinct_commands_export() {
 }
 
 #[test]
-fn duplicate_registration_errors() {
-    let builder = Builder::<MockRuntime>::new().commands(collect_commands![my_command, my_command]);
-    let err = export(&builder)
-        .expect_err("registering the same command twice should fail to export")
-        .to_string();
-    assert!(
-        err.contains("Command 'my_command' is registered multiple times"),
-        "unexpected error: {err}"
-    );
+#[should_panic(expected = "Command 'my_command' is registered multiple times")]
+fn duplicate_registration_panics() {
+    // Registration, not export, so this also fails in release builds that never export.
+    let _ = Builder::<MockRuntime>::new().commands(collect_commands![my_command, my_command]);
 }
 
 #[test]
 fn casing_collision_errors() {
+    // The accessor depends on the final `function_casing`, so this can only be caught at export.
     let builder = Builder::<MockRuntime>::new().commands(collect_commands![my_command, myCommand]);
     let err = export(&builder)
         .expect_err("commands that collide after casing should fail to export")

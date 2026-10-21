@@ -1,0 +1,16 @@
+{
+  // Type-checks the committed TypeScript fixtures in `tests/snapshots/*_ts/`.
+  // The JSDoc fixtures are excluded: they only type-check under `--checkJs`, and
+  // carry pre-existing diagnostics unrelated to the generated runtime.
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["../snapshots/*_ts/**/*.ts"]
+}

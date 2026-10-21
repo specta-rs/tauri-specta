@@ -1,8 +1,13 @@
 {
   "private": true,
   "version": "0.0.0",
-  "scripts": {},
+  "scripts": {
+    "check:bindings": "tsc -p tests/typescript/tsconfig.json"
+  },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }

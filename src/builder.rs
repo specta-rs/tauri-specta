@@ -160,6 +160,13 @@ impl<R: Runtime> Builder<R> {
     ///
     /// **WARNING:** This method will overwrite any previously registered commands.
     ///
+    /// # Panics
+    ///
+    /// Panics if the same command is registered twice. Generated bindings key commands by
+    /// name, so a duplicate would silently keep only the last registration. This is checked
+    /// here rather than at export so it also fires in release builds, which usually don't
+    /// export bindings.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -173,8 +180,14 @@ impl<R: Runtime> Builder<R> {
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().commands(collect_commands![hello_world]);
     /// ```
+    #[allow(clippy::panic)]
     pub fn commands(mut self, commands: Commands<R>) -> Self {
         self.cfg.commands = (commands.1)(&mut self.cfg.types);
+        if let Some(name) = crate::commands::duplicate_command_name(&self.cfg.commands) {
+            panic!(
+                "Command '{name}' is registered multiple times. Remove the duplicate registration."
+            );
+        }
         Self {
             commands,
             cfg: self.cfg,
