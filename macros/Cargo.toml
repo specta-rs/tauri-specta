@@ -15,8 +15,8 @@ categories = ["web-programming", "asynchronous"]
 proc-macro = true
 
 [dependencies]
+darling = "0.24"
 heck = "0.5"
 proc-macro2 = "1"
 quote = "1"
 syn = "3"
-darling = "0.24"
