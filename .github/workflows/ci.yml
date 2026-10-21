@@ -26,9 +26,9 @@ jobs:
     - name: Rust cache
       uses: Swatinem/rust-cache@v2
     - name: Build
-      run: cargo build --all-features
+      run: cargo build --workspace --all-features
     - name: Run tests
-      run: cargo test --all-features
+      run: cargo test --workspace --all-features
 
   clippy:
     runs-on: ubuntu-latest
@@ -41,7 +41,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
       - name: Run Clippy
-        run: cargo clippy --all-features
+        run: cargo clippy --workspace --all-features
 
   typescript:
     runs-on: ubuntu-latest
