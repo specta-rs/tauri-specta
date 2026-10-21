@@ -36,13 +36,34 @@
 	*
 	*  A struct with a doc comment and common field shapes.
 	*
+	* @typedef {Profile_Serialize | Profile_Deserialize} Profile
+	* @property {Profile_Serialize} Serialize
+	* @property {Profile_Deserialize} Deserialize
+	*
+	*  A struct with a doc comment and common field shapes.
+	*
+	* @typedef {{
+	*		userId: number,
+	*		displayName: string,
+	*		tags: string[],
+	*		homepage?: string | null,
+	*		scores: { [key in string]: number },
+	*	}} Profile_Deserialize
+	* @property {number} userId
+	* @property {string} displayName
+	* @property {string[]} tags
+	* @property {string | null} [homepage]
+	* @property {{ [key in string]: number }} scores
+	*
+	*  A struct with a doc comment and common field shapes.
+	*
 	* @typedef {{
 	*		userId: number,
 	*		displayName: string,
 	*		tags: string[],
 	*		homepage: string | null,
 	*		scores: { [key in string]: number },
-	*	}} Profile
+	*	}} Profile_Serialize
 	* @property {number} userId
 	* @property {string} displayName
 	* @property {string[]} tags

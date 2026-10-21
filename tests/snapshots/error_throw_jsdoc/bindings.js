@@ -28,8 +28,8 @@ export const commands = {
 	 */
 	manyArgs: (a, b, c, d, e) => __TAURI_INVOKE("many_args", { a, b, c, d, e }),
 	/**
-	 * @param {Profile} profile
-	 * @returns {Promise<Profile>}
+	 * @param {Profile_Deserialize} profile
+	 * @returns {Promise<Profile_Serialize>}
 	 */
 	echoProfile: (profile) => __TAURI_INVOKE("echo_profile", { profile }),
 	/**
@@ -50,7 +50,7 @@ export const commands = {
 	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
 	/** @returns {Promise<string>} */
 	plainError: () => __TAURI_INVOKE("plain_error"),
-	/** @returns {Promise<Profile>} */
+	/** @returns {Promise<Profile_Serialize>} */
 	taggedError: () => __TAURI_INVOKE("tagged_error"),
 	/** @returns {Promise<string | null>} */
 	nullableResult: () => __TAURI_INVOKE("nullable_result"),
@@ -130,13 +130,34 @@ export const MAX_RETRIES = 3;
 	*
 	*  A struct with a doc comment and common field shapes.
 	*
+	* @typedef {Profile_Serialize | Profile_Deserialize} Profile
+	* @property {Profile_Serialize} Serialize
+	* @property {Profile_Deserialize} Deserialize
+	*
+	*  A struct with a doc comment and common field shapes.
+	*
+	* @typedef {{
+	*		userId: number,
+	*		displayName: string,
+	*		tags: string[],
+	*		homepage?: string | null,
+	*		scores: { [key in string]: number },
+	*	}} Profile_Deserialize
+	* @property {number} userId
+	* @property {string} displayName
+	* @property {string[]} tags
+	* @property {string | null} [homepage]
+	* @property {{ [key in string]: number }} scores
+	*
+	*  A struct with a doc comment and common field shapes.
+	*
 	* @typedef {{
 	*		userId: number,
 	*		displayName: string,
 	*		tags: string[],
 	*		homepage: string | null,
 	*		scores: { [key in string]: number },
-	*	}} Profile
+	*	}} Profile_Serialize
 	* @property {number} userId
 	* @property {string} displayName
 	* @property {string[]} tags

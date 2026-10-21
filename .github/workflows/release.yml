@@ -1,0 +1,118 @@
+name: release
+
+# crates.io *trusted publishing*: crates.io mints a short-lived token from this
+# workflow's OIDC identity, so no long-lived `CARGO_REGISTRY_TOKEN` is stored in
+# this repository or in Actions secrets.
+#
+# The four crates.io values must match this file exactly, or the token exchange
+# is refused:
+#   owner        specta-rs
+#   repository   tauri-specta
+#   workflow     release.yml
+#   environment  release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify the release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # `tauri` links WebKitGTK/GTK on Linux, so the crates cannot even be
+      # compiled without these.
+      - name: Install Tauri's Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install Rust
+        run: rustup update --no-self-update stable && rustup default stable
+      - run: rustc --version && cargo --version
+
+      # `tauri-specta`, `tauri-specta-macros` and `tauri-specta-query` are
+      # versioned in lockstep, so a single tag releases all three.
+      - name: The tag must match the crate versions
+        run: |
+          set -euo pipefail
+          metadata="$(cargo metadata --no-deps --format-version 1)"
+          for crate in tauri-specta tauri-specta-macros tauri-specta-query; do
+            version="$(jq -r --arg crate "$crate" \
+              '.packages[] | select(.name == $crate) | .version' <<< "$metadata")"
+            if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+              echo "::error::tag $GITHUB_REF_NAME does not match $crate's version v$version"
+              exit 1
+            fi
+          done
+
+      - run: cargo test --all-features
+
+  publish:
+    name: Publish to crates.io
+    needs: verify
+    runs-on: ubuntu-latest
+    # Must match the `environment` of the trusted publisher configured on
+    # crates.io. Require reviewers on that environment to gate publishing.
+    environment: release
+    permissions:
+      id-token: write # exchange the GitHub OIDC token for a crates.io token
+      contents: write # create the GitHub release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # `tauri` links WebKitGTK/GTK on Linux, so `cargo publish`'s verification
+      # build cannot run without these.
+      - name: Install Tauri's Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install Rust
+        run: rustup update --no-self-update stable && rustup default stable
+
+      - name: Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1
+
+      # Publish in dependency order. `cargo publish` polls the index until each
+      # crate is visible, so the dependents resolve the crate published before
+      # them: `tauri-specta` depends on `tauri-specta-macros`, and
+      # `tauri-specta-query` depends on `tauri-specta`.
+      - name: Publish tauri-specta-macros
+        run: cargo publish -p tauri-specta-macros
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Publish tauri-specta
+        run: cargo publish -p tauri-specta
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Publish tauri-specta-query
+        run: cargo publish -p tauri-specta-query
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Create the GitHub release
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ github.token }}

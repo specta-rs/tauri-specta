@@ -23,7 +23,19 @@ export type PlainError = "NotFound" | { PermissionDenied: string };
 export type Point = [number | null, number | null];
 
 /**  A struct with a doc comment and common field shapes. */
-export type Profile = {
+export type Profile = Profile_Serialize | Profile_Deserialize;
+
+/**  A struct with a doc comment and common field shapes. */
+export type Profile_Deserialize = {
+	userId: number,
+	displayName: string,
+	tags: string[],
+	homepage?: string | null,
+	scores: { [key in string]: number },
+};
+
+/**  A struct with a doc comment and common field shapes. */
+export type Profile_Serialize = {
 	userId: number,
 	displayName: string,
 	tags: string[],

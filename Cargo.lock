@@ -2963,7 +2963,8 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "2.0.0-rc.26"
-source = "git+https://github.com/specta-rs/specta.git?rev=2757fa8899926dce7da999780c7edf2dc08a732a#2757fa8899926dce7da999780c7edf2dc08a732a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed155e448f42fc4be7a5cbc12bd43f6c549981f7c32fcba429ff6bc57cc4f30c"
 dependencies = [
  "bytes",
  "chrono",
@@ -2976,7 +2977,8 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.26"
-source = "git+https://github.com/specta-rs/specta.git?rev=2757fa8899926dce7da999780c7edf2dc08a732a#2757fa8899926dce7da999780c7edf2dc08a732a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b34b2516e16a9ddd3dc4e73cd6454cfe21fe209f8cb5a6f37346fe3774d759b3"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -2987,7 +2989,8 @@ dependencies = [
 [[package]]
 name = "specta-serde"
 version = "0.0.13"
-source = "git+https://github.com/specta-rs/specta.git?rev=2757fa8899926dce7da999780c7edf2dc08a732a#2757fa8899926dce7da999780c7edf2dc08a732a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4983177ed0eb28235080261953de5f9ebae8a2d107851b5852420bd2ab246245"
 dependencies = [
  "specta",
  "specta-macros",
@@ -2996,7 +2999,8 @@ dependencies = [
 [[package]]
 name = "specta-typescript"
 version = "0.0.13"
-source = "git+https://github.com/specta-rs/specta.git?rev=2757fa8899926dce7da999780c7edf2dc08a732a#2757fa8899926dce7da999780c7edf2dc08a732a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ecbe75dc1d27b36141b50b02b7c73bed00945710cee6edffa86d296a159a6f9"
 dependencies = [
  "specta",
 ]
@@ -3004,7 +3008,8 @@ dependencies = [
 [[package]]
 name = "specta-util"
 version = "0.0.13"
-source = "git+https://github.com/specta-rs/specta.git?rev=2757fa8899926dce7da999780c7edf2dc08a732a#2757fa8899926dce7da999780c7edf2dc08a732a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9bf531215ea70fba8264edecf98f12600462cf359f2038602a47aeda5ecd5b8"
 dependencies = [
  "specta",
 ]
@@ -3401,7 +3406,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta"
-version = "2.0.0-rc.25"
+version = "2.0.0-rc.26"
 dependencies = [
  "heck 0.5.0",
  "paste",
@@ -3466,7 +3471,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta-macros"
-version = "2.0.0-rc.25"
+version = "2.0.0-rc.26"
 dependencies = [
  "darling 0.24.1",
  "heck 0.5.0",
@@ -3477,7 +3482,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta-query"
-version = "0.0.1"
+version = "2.0.0-rc.26"
 dependencies = [
  "heck 0.5.0",
  "serde",

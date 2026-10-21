@@ -28,8 +28,8 @@ export const commands = {
 	 */
 	manyArgs: (a, b, c, d, e) => __TAURI_INVOKE("plugin:kitchen-sink|many_args", { a, b, c, d, e }),
 	/**
-	 * @param {Profile} profile
-	 * @returns {Promise<Profile>}
+	 * @param {Profile_Deserialize} profile
+	 * @returns {Promise<Profile_Serialize>}
 	 */
 	echoProfile: (profile) => __TAURI_INVOKE("plugin:kitchen-sink|echo_profile", { profile }),
 	/**
@@ -50,7 +50,7 @@ export const commands = {
 	phaseSpecificRename: (input) => __TAURI_INVOKE("plugin:kitchen-sink|phase_specific_rename", { input }),
 	/** @returns {Promise<{ status: "ok"; data: string } | { status: "error"; error: PlainError }>} */
 	plainError: () => typedError(__TAURI_INVOKE("plugin:kitchen-sink|plain_error")),
-	/** @returns {Promise<{ status: "ok"; data: Profile } | { status: "error"; error: TaggedError }>} */
+	/** @returns {Promise<{ status: "ok"; data: Profile_Serialize } | { status: "error"; error: TaggedError }>} */
 	taggedError: () => typedError(__TAURI_INVOKE("plugin:kitchen-sink|tagged_error")),
 	/** @returns {Promise<{ status: "ok"; data: string | null } | { status: "error"; error: PlainError }>} */
 	nullableResult: () => typedError(__TAURI_INVOKE("plugin:kitchen-sink|nullable_result")),
@@ -130,13 +130,34 @@ export const MAX_RETRIES = 3;
 	*
 	*  A struct with a doc comment and common field shapes.
 	*
+	* @typedef {Profile_Serialize | Profile_Deserialize} Profile
+	* @property {Profile_Serialize} Serialize
+	* @property {Profile_Deserialize} Deserialize
+	*
+	*  A struct with a doc comment and common field shapes.
+	*
+	* @typedef {{
+	*		userId: number,
+	*		displayName: string,
+	*		tags: string[],
+	*		homepage?: string | null,
+	*		scores: { [key in string]: number },
+	*	}} Profile_Deserialize
+	* @property {number} userId
+	* @property {string} displayName
+	* @property {string[]} tags
+	* @property {string | null} [homepage]
+	* @property {{ [key in string]: number }} scores
+	*
+	*  A struct with a doc comment and common field shapes.
+	*
 	* @typedef {{
 	*		userId: number,
 	*		displayName: string,
 	*		tags: string[],
 	*		homepage: string | null,
 	*		scores: { [key in string]: number },
-	*	}} Profile
+	*	}} Profile_Serialize
 	* @property {number} userId
 	* @property {string} displayName
 	* @property {string[]} tags
