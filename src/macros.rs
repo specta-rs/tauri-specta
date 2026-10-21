@@ -38,6 +38,28 @@
 ///     ]);
 /// ```
 ///
+/// # Requirements and limitations
+///
+/// - Every command needs both `#[tauri::command]` and `#[specta::specta]`. Tauri
+///   builds the invoke handler from the first, and Specta generates the bindings
+///   from the second.
+/// - The command function must be visible at the `collect_commands!` call site. A
+///   command defined in another module has to be `pub` (or `pub(crate)`), or the
+///   expansion fails with ``E0603: macro import `__cmd__my_command` is private``,
+///   along with the same error for `__specta__fn__my_command`. It is the
+///   function's visibility that matters, not the visibility of the types used in
+///   its arguments: a private `tauri::State<T>` argument on a `pub` command is
+///   fine.
+/// - Generic commands need their generics spelled at the call site, like
+///   `generic_command::<tauri::Wry>` above. A generic parameter belonging to an
+///   enclosing function cannot be used, because the macro expands into a new
+///   item (`E0401: can't use generic parameters from outer item`). Pass the
+///   concrete runtime instead.
+/// - Only free functions are supported. `#[specta::specta]` on an inherent or
+///   trait `impl` method fails to compile with "macro definition is not supported
+///   in `trait`s or `impl`s", and `#[tauri::command]` does not support them
+///   either.
+///
 #[macro_export]
 macro_rules! collect_commands {
     ($($b:ident $(:: $($p:ident)? $(<$($g:path),*>)? )* ),* $(,)?) => {
