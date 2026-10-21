@@ -1,4 +1,4 @@
-use std::{fmt, sync::Arc};
+use std::{collections::BTreeSet, fmt, sync::Arc};
 
 use specta::{Types, datatype};
 use tauri::{Runtime, ipc::Invoke};
@@ -37,4 +37,20 @@ impl<R: Runtime> Clone for Commands<R> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1.clone())
     }
+}
+
+/// The first command name registered more than once, if any.
+///
+/// Checked when commands are registered rather than when bindings are exported, so the
+/// mistake is caught in release builds too — `export` is usually `#[cfg(debug_assertions)]`.
+/// Collisions between *differently* named commands are a separate, export-time check,
+/// because the accessor they share depends on the final `function_casing`.
+pub(crate) fn duplicate_command_name(commands: &[datatype::Function]) -> Option<&str> {
+    let mut seen = BTreeSet::new();
+    for command in commands {
+        if !seen.insert(command.name()) {
+            return Some(command.name());
+        }
+    }
+    None
 }
