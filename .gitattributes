@@ -1,0 +1,4 @@
+# Snapshot fixtures are compared byte-for-byte against generated output, which is
+# always written with LF endings. Pin them so a Windows checkout with
+# `core.autocrlf=true` cannot fail the suite for every scenario.
+tests/snapshots/** text eol=lf

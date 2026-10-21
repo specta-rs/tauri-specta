@@ -12,10 +12,11 @@ documentation = "https://docs.rs/tauri-specta/latest/tauri-specta"
 keywords = ["async", "specta", "rspc", "typescript", "typesafe"]
 categories = ["web-programming", "asynchronous"]
 
-# /bin/sh RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
+# /bin/sh RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features --no-deps
+# `--no-deps` matters: RUSTDOCFLAGS applies to every crate rustdoc builds, and some
+# dependencies still gate removed nightly features behind `cfg(docsrs)`.
 [package.metadata."docs.rs"]
 all-features = true
-rustc-args = ["--cfg", "docsrs"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
