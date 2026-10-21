@@ -136,7 +136,7 @@ fn runtime(
         for command in cfg.commands.iter() {
             let accessor = cfg
                 .function_casing
-                .apply(cfg.command_accessor_name(command))
+                .apply(&cfg.command_accessor_name(command))
                 .into_owned();
             if let Some(first) = seen.get(&accessor) {
                 return Err(Error::framework(
@@ -583,7 +583,7 @@ fn runtime(
             };
             let accessor = cfg
                 .function_casing
-                .apply(cfg.command_accessor_name(command))
+                .apply(&cfg.command_accessor_name(command))
                 .into_owned();
 
             if top_level {

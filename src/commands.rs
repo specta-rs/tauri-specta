@@ -19,6 +19,9 @@ pub struct CollectedCommands {
     /// its generated frontend accessor is derived from. Empty for commands without a
     /// rename.
     pub accessor_names: BTreeMap<Cow<'static, str>, Cow<'static, str>>,
+    /// The module path a command was registered from, keyed by its effective Tauri name.
+    /// Commands registered from the crate root are absent.
+    pub module_paths: BTreeMap<Cow<'static, str>, Cow<'static, str>>,
 }
 
 /// Type-erased collector used by [`Commands`] to register command metadata.
@@ -52,6 +55,7 @@ impl<R: Runtime> Default for Commands<R> {
             Arc::new(|types: &mut Types| CollectedCommands {
                 functions: ::specta::function::collect_functions![](types),
                 accessor_names: BTreeMap::new(),
+                module_paths: BTreeMap::new(),
             }),
         )
     }
@@ -79,25 +83,37 @@ pub(crate) fn duplicate_command_name(commands: &[datatype::Function]) -> Option<
     None
 }
 
-/// Applies each command's effective Tauri command name to its collected Specta function.
+/// Applies each command's effective Tauri name and module path to its collected Specta
+/// function.
 ///
 /// `#[tauri::command(rename = "...")]` changes the name the invoke handler matches against,
-/// while `#[specta::specta]` names the function after its Rust identifier. `renames` pairs
-/// the Rust identifier with the name Tauri's hidden `__tauri_command_name_*!()` macro
-/// reports, so the generated bindings invoke the name the handler actually accepts.
+/// while `#[specta::specta]` names the function after its Rust identifier. `metadata` pairs
+/// the Rust identifier with the name Tauri's hidden `__tauri_command_name_*!()` macro reports
+/// and the module path `__tauri_command_module!` reports, so the generated bindings invoke
+/// the name the handler actually accepts and can name a module-indexed accessor after the
+/// module the command came from.
 ///
 /// The rename is applied by matching on the *original* Specta name, so the order of
-/// `renames` can't shift a name onto the wrong function.
+/// `metadata` can't shift a name onto the wrong function.
 ///
 /// # Panics
 ///
 /// Panics if a renamed command doesn't correspond to exactly one collected function, rather
 /// than silently leaving the binding with a name the handler rejects.
 #[allow(clippy::panic)]
-pub(crate) fn apply_command_renames(
+pub(crate) fn apply_command_metadata(
     collected: &mut CollectedCommands,
-    renames: &[(&'static str, &'static str)],
+    metadata: &[(&'static str, &'static str, &'static str)],
 ) {
+    for (_, tauri_name, module_path) in metadata {
+        let module_path = normalize_module_path(module_path);
+        if !module_path.is_empty() {
+            collected
+                .module_paths
+                .insert(Cow::Borrowed(*tauri_name), module_path);
+        }
+    }
+
     // Snapshot the names so a rename can't match a function an earlier rename already
     // touched.
     let original: Vec<Cow<'static, str>> = collected
@@ -106,7 +122,7 @@ pub(crate) fn apply_command_renames(
         .map(|function| function.name.clone())
         .collect();
 
-    for (rust_name, tauri_name) in renames {
+    for (rust_name, tauri_name, _) in metadata {
         // Without an explicit `rename`, Tauri's name is the Rust identifier and the
         // Specta name already matches.
         if rust_name == tauri_name {
@@ -137,4 +153,25 @@ pub(crate) fn apply_command_renames(
             ),
         }
     }
+}
+
+/// Normalises the `::`-separated module path reported by `__tauri_command_module!` into the
+/// `_`-separated prefix module-indexed accessors are built from.
+///
+/// The macro can't tell whether it is at the end of the path, so the raw string ends with a
+/// trailing `::`; splitting and dropping empty segments handles that. A command registered
+/// from the crate root yields the empty string.
+fn normalize_module_path(module_path: &'static str) -> Cow<'static, str> {
+    if module_path.is_empty() {
+        return Cow::Borrowed("");
+    }
+
+    Cow::Owned(
+        module_path
+            .split("::")
+            .map(str::trim)
+            .filter(|segment| !segment.is_empty())
+            .collect::<Vec<_>>()
+            .join("_"),
+    )
 }

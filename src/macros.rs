@@ -35,6 +35,25 @@ macro_rules! __tauri_command_name {
     };
 }
 
+/// Returns the module path of a command path, as a `::`-separated string.
+///
+/// This is every segment except the last, so `a::b::command` yields `a::b` and a command at
+/// the crate root yields the empty string. The `::` separators are normalised away by
+/// [`Builder::command_accessors`](crate::Builder::command_accessors).
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __tauri_command_module {
+    (@acc [$($prefix:ident ::)*] $b:ident :: $($rest:tt)*) => {
+        $crate::__tauri_command_module!(@acc [$($prefix ::)* $b ::] $($rest)*)
+    };
+    (@acc [$($prefix:ident ::)*] $b:ident) => {
+        stringify!($($prefix)*)
+    };
+    ($($path:tt)*) => {
+        $crate::__tauri_command_module!(@acc [] $($path)*)
+    };
+}
+
 /// Collect commands and their types.
 ///
 /// This is a combination of Tauri's [`generate_handler`](tauri::generate_handler) and Specta's [`collect_functions`](specta::function),
@@ -107,12 +126,14 @@ macro_rules! collect_commands {
         $crate::internal::command(
             ::tauri::generate_handler![$($b $($(::$p)? )* ),*],
             ::specta::function::collect_functions![$($b $($(::$p)? $(::<$($g),*>)? )* ),*],
-            // Pair each command's Rust identifier with the name Tauri's handler accepts.
-            // `internal::command` matches these onto the collected functions by name.
+            // Pair each command's Rust identifier with the name Tauri's handler accepts and
+            // the module it was registered from. `internal::command` matches these onto the
+            // collected functions by name.
             &[$(
                 (
                     $crate::__tauri_command_ident!($b $($(::$p)? )*),
                     $crate::__tauri_command_name!($b $($(::$p)? )*),
+                    $crate::__tauri_command_module!($b $($(::$p)? )*),
                 )
             ),*],
         )

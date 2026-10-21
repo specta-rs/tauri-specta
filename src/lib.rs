@@ -318,6 +318,19 @@
 //!     .function_casing(Casing::SnakeCase);
 //! ```
 //!
+//! [`Builder::command_accessors`] decides what the name is built from.
+//! [`CommandAccessors::ModuleIndexed`] prefixes the module a command was registered from, so
+//! `collect_commands![some_module::greet]` becomes `commands.someModuleGreet()` instead of
+//! `commands.greet` — useful when you would otherwise encode the module in the function name.
+//! The casing above still applies, to the combined name.
+//!
+//! ```rust
+//! use tauri_specta::{Builder, CommandAccessors};
+//!
+//! let mut builder = Builder::<tauri::Wry>::new()
+//!     .command_accessors(CommandAccessors::ModuleIndexed);
+//! ```
+//!
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
     html_logo_url = "https://github.com/specta-rs/tauri-specta/raw/main/.github/logo.png",
@@ -332,7 +345,9 @@ mod lang;
 mod macros;
 mod name;
 
-pub use builder::{Builder, BuilderConfiguration, CommandExports, ErrorHandlingMode};
+pub use builder::{
+    Builder, BuilderConfiguration, CommandAccessors, CommandExports, ErrorHandlingMode,
+};
 pub use casing::Casing;
 #[doc(hidden)]
 pub use commands::CollectedCommands;
@@ -364,7 +379,7 @@ pub mod internal {
     };
     use tauri::{Runtime, ipc::Invoke};
 
-    use crate::commands::{CollectedCommands, apply_command_renames};
+    use crate::commands::{CollectedCommands, apply_command_metadata};
 
     use super::*;
 
@@ -373,23 +388,27 @@ pub mod internal {
     #[doc(hidden)]
     pub use paste::paste as _tauri_specta_paste;
 
-    /// called by `collect_commands` to construct `Commands`
+    /// Called by `collect_commands!` to construct [`Commands`].
+    ///
+    /// `metadata` holds one `(Rust identifier, effective Tauri name, module path)` triple per
+    /// command, as reported by the `#[tauri::command]` expansion.
     pub fn command<R: Runtime, F, T>(
         f: F,
         types: T,
-        renames: &[(&'static str, &'static str)],
+        metadata: &[(&'static str, &'static str, &'static str)],
     ) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
         T: Fn(&mut Types) -> Vec<datatype::Function> + Send + Sync + 'static,
     {
-        let renames = renames.to_vec();
+        let metadata = metadata.to_vec();
         let types = move |registry: &mut Types| {
             let mut collected = CollectedCommands {
                 functions: types(registry),
                 accessor_names: BTreeMap::new(),
+                module_paths: BTreeMap::new(),
             };
-            apply_command_renames(&mut collected, &renames);
+            apply_command_metadata(&mut collected, &metadata);
             collected
         };
 

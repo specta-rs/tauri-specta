@@ -71,6 +71,25 @@ pub enum CommandExports {
     TopLevel,
 }
 
+/// How command accessor names are derived in the generated bindings.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CommandAccessors {
+    /// Named after the command's Rust identifier, e.g. `commands.helloWorld()`.
+    ///
+    /// This is the default.
+    #[default]
+    Flat,
+    /// Prefixed with the module the command was registered from.
+    ///
+    /// `collect_commands![some_module::greet]` becomes `commands.someModuleGreet()`, so a
+    /// command can keep a short Rust name while the accessor still says which module it came
+    /// from, instead of encoding the module in the function name. The module path is the one
+    /// written in `collect_commands!`, and [`Builder::function_casing`] is applied to the
+    /// combined name.
+    ModuleIndexed,
+}
+
 /// Builder for configuring Tauri Specta in your application.
 ///
 /// # Example
@@ -160,6 +179,9 @@ pub struct BuilderConfiguration {
     /// generated frontend accessor is derived from. Populated for commands that use
     /// `#[tauri::command(rename = "...")]`.
     pub command_accessor_names: BTreeMap<Cow<'static, str>, Cow<'static, str>>,
+    /// Maps each command's effective Tauri name to the module path it was registered from.
+    /// Commands registered from the crate root are absent.
+    pub command_module_paths: BTreeMap<Cow<'static, str>, Cow<'static, str>>,
     /// Error handling mode used by generated bindings.
     pub error_handling: ErrorHandlingMode,
     /// Event names mapped to their type metadata.
@@ -180,6 +202,8 @@ pub struct BuilderConfiguration {
     pub disable_serde_phases: bool,
     /// Casing applied to generated command and event accessor names.
     pub function_casing: Casing,
+    /// How command accessor names are derived.
+    pub command_accessors: CommandAccessors,
     /// How command accessors are exposed in generated bindings.
     pub command_exports: CommandExports,
 }
@@ -188,11 +212,26 @@ impl BuilderConfiguration {
     /// The name a command's generated frontend accessor is derived from, before casing.
     ///
     /// This is the command's Rust identifier even when `#[tauri::command(rename = "...")]`
-    /// changed the IPC name the bindings invoke.
-    pub fn command_accessor_name<'a>(&'a self, command: &'a Function) -> &'a str {
-        self.command_accessor_names
+    /// changed the IPC name the bindings invoke. With [`CommandAccessors::ModuleIndexed`] the
+    /// module the command was registered from is prefixed, joined by `_` so
+    /// [`Builder::function_casing`] sees a single name.
+    pub fn command_accessor_name<'a>(&'a self, command: &'a Function) -> Cow<'a, str> {
+        let ident = self
+            .command_accessor_names
             .get(command.name())
-            .map_or_else(|| command.name(), |name| name.as_ref())
+            .map_or_else(|| command.name(), |name| name.as_ref());
+
+        match self.command_accessors {
+            CommandAccessors::Flat => Cow::Borrowed(ident),
+            CommandAccessors::ModuleIndexed => self
+                .command_module_paths
+                .get(command.name())
+                .filter(|module_path| !module_path.is_empty())
+                .map_or_else(
+                    || Cow::Borrowed(ident),
+                    |module_path| Cow::Owned(format!("{module_path}_{ident}")),
+                ),
+        }
     }
 }
 
@@ -261,6 +300,7 @@ impl<R: Runtime> Builder<R> {
         self.cfg
             .command_accessor_names
             .extend(collected.accessor_names);
+        self.cfg.command_module_paths.extend(collected.module_paths);
         if let Some(name) = crate::commands::duplicate_command_name(&self.cfg.commands) {
             panic!(
                 "Command '{name}' is registered multiple times. Remove the duplicate registration."
@@ -476,6 +516,24 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn function_casing(mut self, casing: Casing) -> Self {
         self.cfg.function_casing = casing;
+        self
+    }
+
+    /// Set how command accessor names are derived in the generated bindings.
+    ///
+    /// The default is [`CommandAccessors::Flat`], which names each command after its Rust
+    /// identifier. [`CommandAccessors::ModuleIndexed`] prefixes the module the command was
+    /// registered from, so `collect_commands![some_module::greet]` becomes
+    /// `commands.someModuleGreet()`.
+    ///
+    /// ```rust
+    /// use tauri_specta::{Builder, CommandAccessors};
+    ///
+    /// let mut builder = Builder::<tauri::Wry>::new()
+    ///     .command_accessors(CommandAccessors::ModuleIndexed);
+    /// ```
+    pub fn command_accessors(mut self, command_accessors: CommandAccessors) -> Self {
+        self.cfg.command_accessors = command_accessors;
         self
     }
 
