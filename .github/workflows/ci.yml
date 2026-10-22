@@ -66,6 +66,8 @@ jobs:
         run: pnpm install --frozen-lockfile --filter .
       - name: Type-check generated bindings
         run: pnpm run check:bindings
+      - name: Test generated mocks
+        run: pnpm run test:mocks
 
   docs:
     runs-on: ubuntu-latest

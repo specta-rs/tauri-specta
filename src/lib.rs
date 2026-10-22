@@ -240,6 +240,55 @@
 //!
 //! Refer to [`Event`] for all the possible methods for listening and emitting events.
 //!
+//! ## Testing
+//!
+//! [`Builder::mocks`] exports a typed mock helper alongside your bindings, so a frontend
+//! test can stub commands without hand-writing a module that satisfies the bindings'
+//! types:
+//!
+//! ```rust
+//! # use tauri_specta::Builder;
+//! let builder = Builder::<tauri::Wry>::new().mocks();
+//! ```
+//!
+//! The bindings then export `MockCommandHandlers`, which is one handler per command
+//! accessor, and `mockCommands`, which installs them through
+//! [`@tauri-apps/api/mocks`](https://v2.tauri.app/develop/tests/mocking/)'s `mockIPC`.
+//! This needs `@tauri-apps/api` v2.7 or newer.
+//!
+//! Because the mock sits at the IPC boundary, the application under test keeps importing
+//! the real `commands` and `events` objects, and everything around the call — argument
+//! transforms, the configured [`ErrorHandlingMode`], event plumbing — behaves as it does
+//! in the app:
+//!
+//! ```ts
+//! import { afterEach, expect, test } from "vitest";
+//! import { clearMocks } from "@tauri-apps/api/mocks";
+//! import { commands, mockCommands } from "./bindings";
+//!
+//! afterEach(() => clearMocks());
+//!
+//! test("greet", async () => {
+//!     mockCommands({ greet: ({ myName }) => `Hello, ${myName}!` });
+//!
+//!     await expect(commands.greet("Brendan")).resolves.toBe("Hello, Brendan!");
+//! });
+//! ```
+//!
+//! A handler receives the command's arguments as a single object and returns the
+//! command's success value; throw, or return a rejected promise, to fail the command.
+//! A command with no handler rejects rather than resolving `undefined`, so a test can't
+//! pass by accident.
+//!
+//! Events need no extra setup. Tauri's own event mocking is enabled as part of the
+//! install, so `events.demoEvent.listen` and friends keep working under test. Tauri's
+//! mock does not implement `emitTo`, which resolves without reaching any listener.
+//!
+//! Mocks and [`Builder::semantic_types`] don't mix: where a semantic rule applies a
+//! transform, the value a handler sees is not the type the bindings declare, and the
+//! transform's output type can't be recovered to type the handler. Rather than emit a
+//! binding that lies, the export fails and says which command is responsible.
+//!
 //! ## Phase-specific types
 //!
 //! By default, Tauri Specta exports types using Serde-aware serialize and deserialize phases. When a Rust type has different Serde shapes for serialization and deserialization, Tauri Specta emits separate TypeScript aliases for those phases:

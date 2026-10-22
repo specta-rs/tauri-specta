@@ -8,7 +8,8 @@ use heck::ToLowerCamelCase;
 use specta::{
     Format, Type, Types,
     datatype::{
-        DataType, Field, Fields, NamedDataType, NamedReferenceType, Primitive, Reference, Struct,
+        DataType, Field, Fields, Function, NamedDataType, NamedReferenceType, Primitive, Reference,
+        Struct,
     },
 };
 use specta_serde::Phase;
@@ -99,6 +100,9 @@ fn runtime(
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
+    // A builder with nothing registered has no commands to stub and no events to mock, so
+    // installing the IPC handler would only buy an import and an always-rejecting switch.
+    let enabled_mocks = cfg.mocks && (enabled_commands || enabled_events);
     let semantic_types_runtime_types = semantic_types_runtime_types(cfg)?;
     let semantic_types_runtime_types = semantic_types_runtime_types
         .as_ref()
@@ -112,7 +116,7 @@ fn runtime(
         .filter(|ndt| ndt.ty.is_some())
         .find_map(|ndt| {
             runtime_scope_name(jsdoc, exporter.layout, ndt)
-                .filter(|name| is_reserved_ndt_name(name, jsdoc))
+                .filter(|name| is_reserved_ndt_name(name, jsdoc, enabled_mocks))
                 .map(|name| (ndt, name))
         })
     {
@@ -211,6 +215,9 @@ fn runtime(
     if enabled_events {
         out.push_str("import * as __TAURI_EVENT from \"@tauri-apps/api/event\";\n");
     }
+    if enabled_mocks {
+        out.push_str("import { mockIPC as __TAURI_MOCK_IPC } from \"@tauri-apps/api/mocks\";\n");
+    }
 
     // Commands
     if enabled_commands {
@@ -220,23 +227,8 @@ fn runtime(
                 serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
                     .expect("failed to serialize string");
 
-            let arguments = command
-                .args()
-                .iter()
-                .map(|(name, dt)| {
-                    Ok((
-                        name.to_lower_camel_case(),
-                        render_reference_dt_for_phase(
-                            dt,
-                            Phase::Deserialize,
-                            Phase::Serialize,
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                        )?,
-                    ))
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
+            let arguments =
+                command_argument_types(command, &exporter, cfg, semantic_types_runtime_types)?;
 
             let fn_arguments = arguments
                 .iter()
@@ -754,7 +746,330 @@ fn runtime(
         }
     }
 
+    // Mocks
+    if enabled_mocks {
+        out.push_str("\n/* Tauri Specta mocks */\n\n");
+        out.push_str(&mock_handlers_declaration(
+            cfg,
+            &exporter,
+            semantic_types_runtime_types,
+            jsdoc,
+        )?);
+        out.push('\n');
+        out.push_str(&mock_commands_impl(cfg, jsdoc));
+        if enabled_commands {
+            out.push('\n');
+            out.push_str(if jsdoc {
+                MOCK_COMMAND_HANDLER_IMPL_JS
+            } else {
+                MOCK_COMMAND_HANDLER_IMPL_TS
+            });
+            out.push('\n');
+        }
+    }
+
     Ok(Cow::Owned(out))
+}
+
+/// A command accessor as it should appear as an object key.
+///
+/// Accessors are usually plain identifiers, but [`Casing::KebabCase`](crate::Casing)
+/// produces keys like `hello-world`, which have to be quoted. This is the same rule
+/// `specta_typescript` applies to struct field names.
+fn js_object_key(accessor: &str) -> String {
+    if is_js_identifier(accessor) {
+        accessor.to_string()
+    } else {
+        serde_json::to_string(accessor).expect("failed to serialize string")
+    }
+}
+
+/// A read of `object`'s [`js_object_key`] property named `accessor`.
+fn js_member_access(object: &str, accessor: &str) -> String {
+    if is_js_identifier(accessor) {
+        format!("{object}.{accessor}")
+    } else {
+        format!(
+            "{object}[{}]",
+            serde_json::to_string(accessor).expect("failed to serialize string")
+        )
+    }
+}
+
+fn is_js_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+
+    (first.is_ascii_alphabetic() || first == '_' || first == '$')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '$')
+}
+
+/// The `MockCommandHandlers` type, listing one handler per generated command.
+///
+/// Handlers are keyed by command accessor (the name under `commands.*`) rather than the
+/// Tauri command name, so `#[tauri::command(rename = "...")]` doesn't leak into the
+/// frontend-facing API here any more than it does for `commands` itself.
+fn mock_handlers_declaration(
+    cfg: &BuilderConfiguration,
+    exporter: &FrameworkExporter,
+    semantic_types_runtime_types: &Types,
+    jsdoc: bool,
+) -> Result<String, Error> {
+    let mut handlers = Vec::new();
+
+    for command in cfg.commands.iter() {
+        let key = js_object_key(
+            &cfg.function_casing
+                .apply(cfg.command_accessor_name(command)),
+        );
+        let (arguments, result) =
+            mock_handler_signature(command, exporter, cfg, semantic_types_runtime_types)?;
+        handlers.push(format!(
+            "{key}: {arguments} => {result} | Promise<{result}>,"
+        ));
+    }
+
+    let mut out = String::new();
+
+    // JSDoc gets one object literal rather than an `@property` per command: an
+    // `@property` name has to be an identifier, which `Casing::KebabCase` accessors
+    // aren't.
+    if jsdoc {
+        out.push_str("/**\n * @typedef {{\n");
+        for handler in &handlers {
+            out.push_str(&format!(" *     {handler}\n"));
+        }
+        out.push_str(" * }} MockCommandHandlers\n */\n");
+    } else {
+        out.push_str(
+            "/** A handler for each generated command, keyed by its `commands` accessor. */\n",
+        );
+        out.push_str("export type MockCommandHandlers = {\n");
+        for handler in &handlers {
+            out.push_str(&format!("    {handler}\n"));
+        }
+        out.push_str("};\n");
+    }
+
+    Ok(out)
+}
+
+/// The frontend-facing name and type of each of a command's arguments.
+///
+/// This is what the generated `commands` accessor declares and what its IPC payload uses,
+/// so anything else describing the same command — mock handlers, for instance — is
+/// written in exactly these terms.
+fn command_argument_types(
+    command: &Function,
+    exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
+    semantic_types_runtime_types: &Types,
+) -> Result<Vec<(String, String)>, Error> {
+    command
+        .args()
+        .iter()
+        .map(|(name, dt)| {
+            Ok((
+                name.to_lower_camel_case(),
+                render_reference_dt_for_phase(
+                    dt,
+                    Phase::Deserialize,
+                    Phase::Serialize,
+                    exporter,
+                    cfg,
+                    semantic_types_runtime_types,
+                )?,
+            ))
+        })
+        .collect()
+}
+
+/// The `(arguments, result)` signature of one command's mock handler.
+///
+/// This mirrors how `commands` types the same command, so a handler is written in the
+/// same terms as the call it stands in for, rather than in terms of the IPC payload.
+fn mock_handler_signature(
+    command: &Function,
+    exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
+    semantic_types_runtime_types: &Types,
+) -> Result<(String, String), Error> {
+    validate_mock_transforms(command, exporter, cfg, semantic_types_runtime_types)?;
+
+    let arguments = command_argument_types(command, exporter, cfg, semantic_types_runtime_types)?;
+
+    let arguments = if arguments.is_empty() {
+        "()".to_string()
+    } else {
+        format!(
+            "(args: {{ {} }})",
+            arguments
+                .iter()
+                .map(|(name, dt)| format!("{name}: {dt}"))
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
+    };
+
+    // A handler returns the command's success value: for a `Result`, that is the `Ok`
+    // side, since a mock fails a command by throwing rather than by returning `Err`.
+    let result = match command
+        .result()
+        .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
+        .or(command.result())
+    {
+        Some(dt) => {
+            let result_semantic_type = has_semantic_type_for_phase(
+                dt,
+                Phase::Deserialize,
+                "v",
+                exporter,
+                cfg,
+                semantic_types_runtime_types,
+            );
+            render_reference_dt_for_phase(
+                dt,
+                if result_semantic_type {
+                    Phase::Deserialize
+                } else {
+                    Phase::Serialize
+                },
+                Phase::Deserialize,
+                exporter,
+                cfg,
+                semantic_types_runtime_types,
+            )?
+        }
+        None => "void".to_string(),
+    };
+
+    Ok((arguments, result))
+}
+
+/// Rejects a command whose mock handler could not be typed honestly.
+///
+/// A [`semantic`](specta_typescript::semantic) rule can give a value one type in the
+/// generated bindings and another on the wire, applying a transform in between (a struct
+/// field of a rule-backed type is enough — a bare argument does not get one). A mock
+/// handler sits on the wire side of that transform, so the type it declares would be a
+/// lie, and the transform's output type can't be recovered from the rule. Fail the export
+/// rather than emit a binding that lies, like the other export-time validations do.
+fn validate_mock_transforms(
+    command: &Function,
+    exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
+    semantic_types_runtime_types: &Types,
+) -> Result<(), Error> {
+    let reject = |dt: &DataType, phase: Phase, subject: &str| {
+        if render_result_transform_for_phase(
+            dt,
+            phase,
+            "v",
+            exporter,
+            cfg,
+            semantic_types_runtime_types,
+        )
+        .is_some()
+        {
+            return Err(Error::framework(
+                format!(
+                    "`Builder::mocks` can't type a mock for command '{}': {subject} is reshaped by a semantic type transform, so the handler wouldn't receive or return the type it declares. Export the mocks without `Builder::semantic_types`, or drop `Builder::mocks`.",
+                    command.name()
+                ),
+                "",
+            ));
+        }
+
+        Ok(())
+    };
+
+    for (name, dt) in command.args() {
+        // A channel's payload is transformed as messages arrive, so either way the handler
+        // sees the `Channel<T>` it declares.
+        if channel_generic_type(dt, exporter.types).is_some() {
+            continue;
+        }
+
+        reject(dt, Phase::Serialize, &format!("argument '{name}'"))?;
+    }
+
+    if let Some(result) = command.result() {
+        let (ok, err) = extract_std_result(result, exporter.types)
+            .map_or((result, None), |(ok, err)| (ok, Some(err)));
+
+        reject(ok, Phase::Deserialize, "the result")?;
+
+        // A `Throw` mode failure is passed through as-is, so only a mode that wraps the
+        // error goes through a transform.
+        if let Some(err) = err
+            && cfg.error_handling != ErrorHandlingMode::Throw
+        {
+            reject(err, Phase::Deserialize, "the error")?;
+        }
+    }
+
+    Ok(())
+}
+
+/// The `mockCommands` installer, which routes each registered Tauri command name to its
+/// handler.
+fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> String {
+    let mut out = String::new();
+    out.push_str(MOCK_COMMANDS_DOC);
+    if jsdoc {
+        out.push_str("\n *\n * @param {Partial<MockCommandHandlers>} [handlers]");
+    }
+    out.push_str("\n */\n");
+
+    if jsdoc {
+        out.push_str("export function mockCommands(handlers = {}) {\n");
+    } else {
+        out.push_str(
+            "export function mockCommands(handlers: Partial<MockCommandHandlers> = {}): void {\n",
+        );
+    }
+    out.push_str(if jsdoc {
+        MOCK_HANDLER_REGISTRY_IMPL_JS
+    } else {
+        MOCK_HANDLER_REGISTRY_IMPL_TS
+    });
+
+    // An events-only builder never reads `args`, which `noUnusedParameters` (set by every
+    // tsconfig in this repo's examples) would reject.
+    let callback_args = if cfg.commands.is_empty() {
+        "_args"
+    } else {
+        "args"
+    };
+    out.push_str(&format!(
+        "    return __TAURI_MOCK_IPC((cmd, {callback_args}) => {{\n"
+    ));
+    out.push_str("        switch (cmd) {\n");
+
+    for command in cfg.commands.iter() {
+        let accessor = cfg
+            .function_casing
+            .apply(cfg.command_accessor_name(command))
+            .into_owned();
+        let access = js_member_access("mockHandlers", &accessor);
+        let command_name =
+            serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
+                .expect("failed to serialize string");
+        out.push_str(&format!(
+            "            case {command_name}: return mockCommandHandler({access}, {command_name}, args);\n"
+        ));
+    }
+
+    out.push_str(
+        "            default: throw new Error(`No mock handler registered for command '${cmd}'`);\n",
+    );
+    out.push_str("        }\n");
+    out.push_str("    }, { shouldMockEvents: true });\n");
+    out.push_str("}\n");
+
+    out
 }
 
 fn runtime_scope_name(
@@ -1402,13 +1717,24 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "mapChannel",
 ];
 
+/// Names only the mocks runtime declares, and so only reserved on an export that
+/// [`Builder::mocks`](crate::Builder::mocks) actually emits them for.
+const RESERVED_NDT_NAMES_MOCKS_ONLY: &[&str] = &[
+    "__TAURI_MOCK_IPC",
+    "MockCommandHandlers",
+    "mockCommandHandler",
+    "mockCommands",
+];
+
 /// Names only the TypeScript runtime declares. The JSDoc runtime has no
 /// corresponding typedefs, so user types may use them there (and a JSDoc export
 /// must not fail over a name it never emits).
 const RESERVED_NDT_NAMES_TS_ONLY: &[&str] = &["EventEmit", "EventEmitTo"];
 
-fn is_reserved_ndt_name(name: &str, jsdoc: bool) -> bool {
-    RESERVED_NDT_NAMES.contains(&name) || (!jsdoc && RESERVED_NDT_NAMES_TS_ONLY.contains(&name))
+fn is_reserved_ndt_name(name: &str, jsdoc: bool, mocks: bool) -> bool {
+    RESERVED_NDT_NAMES.contains(&name)
+        || (!jsdoc && RESERVED_NDT_NAMES_TS_ONLY.contains(&name))
+        || (mocks && RESERVED_NDT_NAMES_MOCKS_ONLY.contains(&name))
 }
 
 const FRAMEWORK_HEADER: &str =
@@ -1500,6 +1826,53 @@ async function typedError(result) {
 
 const TYPED_ERROR_ASSERTION_TS: &str = "const _assertTypedErrorFollowsContract: <T, E>(result: Promise<T>) => Promise<any> = typedError;";
 
+const MOCK_COMMANDS_DOC: &str = r#"/**
+ * Install typed mock handlers for the generated commands.
+ *
+ * Handlers are installed through `@tauri-apps/api/mocks`'s `mockIPC`, so the application
+ * under test keeps importing the real `commands` object and still runs the argument and
+ * result transforms around each call.
+ *
+ * A handler receives the command's arguments and returns its success value; throw (or
+ * return a rejected promise) to make the command fail. A command with no handler rejects
+ * with an error rather than resolving `undefined`, so a test can't pass by accident.
+ *
+ * Tauri's event mocking is enabled as part of the install (`shouldMockEvents`), so
+ * `events` keeps working under test without a second installer fighting this one. Note
+ * that Tauri's own mock does not implement `emitTo`, which resolves without reaching any
+ * listener. Call `clearMocks` from `@tauri-apps/api/mocks` between tests."#;
+
+const MOCK_HANDLER_REGISTRY_IMPL_TS: &str = r#"    // A copy with no prototype, so a command named after an `Object.prototype` member
+    // (`toString`, `constructor`, …) reports that it is unregistered instead of calling
+    // whatever the prototype happens to provide.
+    const mockHandlers: Partial<MockCommandHandlers> = Object.create(null);
+    Object.assign(mockHandlers, handlers);
+"#;
+
+const MOCK_HANDLER_REGISTRY_IMPL_JS: &str = r#"    // A copy with no prototype, so a command named after an `Object.prototype` member
+    // (`toString`, `constructor`, …) reports that it is unregistered instead of calling
+    // whatever the prototype happens to provide.
+    /** @type {Partial<MockCommandHandlers>} */
+    const mockHandlers = Object.create(null);
+    Object.assign(mockHandlers, handlers);
+"#;
+
+const MOCK_COMMAND_HANDLER_IMPL_TS: &str = r#"function mockCommandHandler(handler: ((args: any) => unknown) | undefined, name: string, args: unknown): unknown {
+    if (handler === undefined) throw new Error(`No mock handler registered for command '${name}'`);
+    return handler(args);
+}"#;
+
+const MOCK_COMMAND_HANDLER_IMPL_JS: &str = r#"/**
+ * @param {((args: any) => unknown) | undefined} handler
+ * @param {string} name
+ * @param {unknown} args
+ * @returns {unknown}
+ */
+function mockCommandHandler(handler, name, args) {
+    if (handler === undefined) throw new Error(`No mock handler registered for command '${name}'`);
+    return handler(args);
+}"#;
+
 const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
 type EventEmitTo<T> = [T] extends [null] ? (target: __TAURI_EVENT.EventTarget | string) => Promise<void> : (target: __TAURI_EVENT.EventTarget | string, payload: T) => Promise<void>;
@@ -1577,7 +1950,7 @@ mod tests {
         datatype::{DataType, Primitive},
         specta,
     };
-    use specta_typescript::{JSDoc, Layout, Typescript};
+    use specta_typescript::{JSDoc, Layout, Typescript, define, semantic};
 
     use crate::{Builder, ErrorHandlingMode, collect_commands};
 
@@ -1617,6 +1990,41 @@ mod tests {
         pub enum Channel {
             Production,
         }
+    }
+
+    /// A user type named after something the mocks runtime declares.
+    mod mock_names {
+        use super::*;
+
+        #[derive(Serialize, Deserialize, Type)]
+        #[allow(dead_code)]
+        pub struct MockCommandHandlers {
+            value: String,
+        }
+    }
+
+    /// Mirrors the built-in `bytes::Bytes` semantic rule, which transforms in both
+    /// directions.
+    #[derive(Serialize, Deserialize, Type)]
+    struct SemanticBytes(Vec<u8>);
+
+    #[derive(Serialize, Deserialize, Type)]
+    struct NestedSemanticBytes {
+        value: SemanticBytes,
+    }
+
+    #[tauri::command]
+    #[specta]
+    fn nested_semantic_bytes(input: NestedSemanticBytes) -> NestedSemanticBytes {
+        input
+    }
+
+    fn semantic_bytes() -> semantic::Configuration {
+        semantic::Configuration::empty().define::<SemanticBytes>(
+            |_| define("Uint8Array").into(),
+            Some(semantic::Transform::new(|i| format!("[...{i}]"))),
+            Some(semantic::Transform::new(|i| format!("new Uint8Array({i})"))),
+        )
     }
 
     mod inline {
@@ -1923,6 +2331,113 @@ mod tests {
         assert!(err.to_string().contains(
             "DataError mode requires a non-nullable command error type because null marks a successful result"
         ));
+    }
+
+    #[test]
+    fn mock_runtime_names_are_only_reserved_for_a_mocks_export() {
+        let output_dir = std::path::Path::new("target/tests/mocks-reserved-names");
+        let _ = fs::remove_dir_all(output_dir);
+        fs::create_dir_all(output_dir).expect("failed to create test output directory");
+
+        // The mocks runtime is opt-in, so its names must not stop a user type from
+        // exporting on a build that never emits it.
+        let builder = Builder::<tauri::Wry>::new().typ::<mock_names::MockCommandHandlers>();
+
+        builder
+            .export(Typescript::default(), output_dir.join("bindings.ts"))
+            .expect("mocks runtime names should not be reserved without `Builder::mocks`");
+        assert!(
+            fs::read_to_string(output_dir.join("bindings.ts"))
+                .expect("failed to read TypeScript bindings")
+                .contains("export type MockCommandHandlers = {")
+        );
+
+        builder
+            .export(JSDoc::default(), output_dir.join("bindings.js"))
+            .expect("mocks runtime names should not be reserved without `Builder::mocks`");
+        assert!(
+            fs::read_to_string(output_dir.join("bindings.js"))
+                .expect("failed to read JSDoc bindings")
+                .contains("MockCommandHandlers")
+        );
+
+        let err = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .mocks()
+            .typ::<mock_names::MockCommandHandlers>()
+            .export(Typescript::default(), output_dir.join("conflict.ts"))
+            .expect_err("mocks runtime names should be reserved by `Builder::mocks`");
+        assert!(
+            err.to_string()
+                .contains("User defined type 'MockCommandHandlers'"),
+            "{err}"
+        );
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn mocks_reject_semantic_type_transforms() {
+        let output_dir = std::path::Path::new("target/tests/mocks-semantic-types");
+        let _ = fs::remove_dir_all(output_dir);
+        fs::create_dir_all(output_dir).expect("failed to create test output directory");
+
+        // Without a semantic type there is no transform, so the handler is typed against
+        // the value that really crosses the IPC boundary.
+        Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nested_semantic_bytes])
+            .mocks()
+            .export(Typescript::default(), output_dir.join("bindings.ts"))
+            .expect("mocks without semantic types should export");
+        assert!(
+            fs::read_to_string(output_dir.join("bindings.ts"))
+                .expect("failed to read TypeScript bindings")
+                .contains("nestedSemanticBytes: (args: { input: NestedSemanticBytes })"),
+        );
+
+        // A rule nested in a struct does get a transform, and the handler would be handed
+        // the transformed value. That can't be typed without re-deriving the transform's
+        // output type, so it is refused rather than mistyped.
+        let err = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nested_semantic_bytes])
+            .semantic_types(semantic_bytes())
+            .mocks()
+            .export(Typescript::default(), output_dir.join("semantic.ts"))
+            .expect_err("a semantic type transform should be refused by `Builder::mocks`");
+        assert!(
+            err.to_string()
+                .contains("argument 'input' is reshaped by a semantic type transform"),
+            "{err}"
+        );
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn mocks_dispatch_on_the_plugin_prefixed_command_name() {
+        // The mock switch has to match the name Tauri's invoke handler receives, which
+        // for a plugin is prefixed the same way the generated `commands` call is.
+        let output_dir = std::path::Path::new("target/tests/mocks-plugin");
+        let _ = fs::remove_dir_all(output_dir);
+        fs::create_dir_all(output_dir).expect("failed to create test output directory");
+
+        Builder::<tauri::Wry>::new()
+            .plugin_name("my-plugin")
+            .commands(collect_commands![nullable_result])
+            .mocks()
+            .export(Typescript::default(), output_dir.join("bindings.ts"))
+            .expect("failed to export TypeScript bindings");
+
+        let ts = fs::read_to_string(output_dir.join("bindings.ts"))
+            .expect("failed to read TypeScript bindings");
+        assert!(
+            ts.contains(
+                r#"case "plugin:my-plugin|nullable_result": return mockCommandHandler(mockHandlers.nullableResult, "plugin:my-plugin|nullable_result", args);"#
+            ),
+            "{ts}"
+        );
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
     }
 
     #[test]

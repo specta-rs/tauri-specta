@@ -27,7 +27,7 @@ use specta::Type;
 use specta_typescript::{JSDoc, Layout, Typescript};
 use tauri::test::MockRuntime;
 use tauri_specta::{
-    Builder, ErrorHandlingMode, Event, LanguageExt, collect_commands, collect_events,
+    Builder, Casing, ErrorHandlingMode, Event, LanguageExt, collect_commands, collect_events,
 };
 
 // ----- types -----
@@ -255,6 +255,41 @@ fn empty() -> Builder<MockRuntime> {
     Builder::<MockRuntime>::new()
 }
 
+/// Libraries that a generated `mockCommands` handler map collides with: `toString` and
+/// `valueOf` are `Object.prototype` members, so a lookup that doesn't check own
+/// properties finds an inherited function instead of reporting the command as unmocked.
+#[tauri::command]
+#[specta::specta]
+fn to_string() -> String {
+    "to string".to_string()
+}
+
+#[tauri::command]
+#[specta::specta]
+fn value_of() -> String {
+    "value of".to_string()
+}
+
+fn prototype_keys() -> Builder<MockRuntime> {
+    Builder::<MockRuntime>::new().commands(collect_commands![to_string, value_of])
+}
+
+/// A mocks scenario in a wrapping error handling mode, so the generated handlers are also
+/// exercised against `typedError`.
+fn mocks_result() -> Builder<MockRuntime> {
+    Builder::<MockRuntime>::new()
+        .commands(collect_commands![greet, plain_error, nullable_result])
+        .error_handling(ErrorHandlingMode::Result)
+}
+
+/// `Casing::KebabCase` produces accessors like `unit-command`, which are not valid
+/// identifiers and have to be quoted wherever the mocks name them.
+fn kebab() -> Builder<MockRuntime> {
+    Builder::<MockRuntime>::new()
+        .commands(collect_commands![greet, unit_command])
+        .function_casing(Casing::KebabCase)
+}
+
 // `u64`/`i64` fail the default BigInt export behavior, so these commands only
 // appear in the `dangerously_cast_bigints_to_number` scenarios.
 fn bigints() -> Builder<MockRuntime> {
@@ -315,12 +350,20 @@ const SCENARIOS: &[&str] = &[
     "error_throw_jsdoc",
     "error_throw_ts",
     "events_only_jsdoc",
+    "events_only_mocks_jsdoc",
+    "events_only_mocks_ts",
     "events_only_ts",
     "kitchen_sink_files_jsdoc",
     "kitchen_sink_files_ts",
     "kitchen_sink_jsdoc",
+    "kitchen_sink_mocks_jsdoc",
+    "kitchen_sink_mocks_ts",
     "kitchen_sink_namespaces_ts",
     "kitchen_sink_ts",
+    "mocks_kebab_jsdoc",
+    "mocks_kebab_ts",
+    "mocks_prototype_keys_ts",
+    "mocks_result_ts",
     "no_serde_phases_jsdoc",
     "no_serde_phases_ts",
     "plugin_jsdoc",
@@ -750,4 +793,148 @@ fn plugin_ts() {
 fn plugin_jsdoc() {
     let builder = kitchen_sink().plugin_name("kitchen-sink");
     assert_export("plugin_jsdoc", "bindings.js", &builder, JSDoc::default());
+}
+
+// ----- mocks -----
+
+#[test]
+fn kitchen_sink_mocks_ts() {
+    assert_export(
+        "kitchen_sink_mocks_ts",
+        "bindings.ts",
+        &kitchen_sink().mocks(),
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn kitchen_sink_mocks_jsdoc() {
+    assert_export(
+        "kitchen_sink_mocks_jsdoc",
+        "bindings.js",
+        &kitchen_sink().mocks(),
+        JSDoc::default(),
+    );
+}
+
+#[test]
+fn events_only_mocks_ts() {
+    assert_export(
+        "events_only_mocks_ts",
+        "bindings.ts",
+        &events_only().mocks(),
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn events_only_mocks_jsdoc() {
+    assert_export(
+        "events_only_mocks_jsdoc",
+        "bindings.js",
+        &events_only().mocks(),
+        JSDoc::default(),
+    );
+}
+
+#[test]
+fn mocks_kebab_ts() {
+    assert_export(
+        "mocks_kebab_ts",
+        "bindings.ts",
+        &kebab().mocks(),
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn mocks_kebab_jsdoc() {
+    assert_export(
+        "mocks_kebab_jsdoc",
+        "bindings.js",
+        &kebab().mocks(),
+        JSDoc::default(),
+    );
+}
+
+#[test]
+fn mocks_prototype_keys_ts() {
+    assert_export(
+        "mocks_prototype_keys_ts",
+        "bindings.ts",
+        &prototype_keys().mocks(),
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn mocks_result_ts() {
+    assert_export(
+        "mocks_result_ts",
+        "bindings.ts",
+        &mocks_result().mocks(),
+        Typescript::default(),
+    );
+}
+
+/// Mocks type each handler against the command's success value, which is the same for
+/// every error handling mode: a mock fails a command by throwing, not by returning `Err`.
+#[test]
+fn mocks_ignore_error_handling_mode() {
+    let mocks = |builder: Builder<MockRuntime>| {
+        let path = std::env::temp_dir().join(format!(
+            "tauri-specta-mocks-mode-{}-{:?}.ts",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        builder
+            .mocks()
+            .export(Typescript::default(), &path)
+            .unwrap();
+        let bindings = fs::read_to_string(&path).unwrap();
+        let _ = fs::remove_file(&path);
+        bindings
+            .split_once("/* Tauri Specta mocks */")
+            .expect("the bindings should contain a mocks section")
+            .1
+            .to_owned()
+    };
+
+    let result = mocks(kitchen_sink());
+    for mode in [
+        ErrorHandlingMode::Throw,
+        ErrorHandlingMode::ResultUnknown,
+        ErrorHandlingMode::DataError,
+    ] {
+        assert_eq!(
+            result,
+            mocks(kitchen_sink().error_handling(mode)),
+            "the mocks section should not depend on the error handling mode"
+        );
+    }
+}
+
+/// The mocks are emitted into the framework runtime file, which means they have to
+/// qualify user types exactly the way `commands` does when the layout splits them out.
+#[test]
+fn mocks_follow_the_layout() {
+    let dir = scratch_dir("mocks_follow_the_layout");
+    kitchen_sink()
+        .mocks()
+        .export(
+            Typescript::default().layout(Layout::Files),
+            dir.join("bindings"),
+        )
+        .expect("failed to export bindings");
+
+    let index = fs::read_to_string(dir.join("bindings/index.ts")).unwrap();
+    assert!(
+        index.contains(r#"import type * as kitchen_sink from "./kitchen_sink";"#),
+        "{index}"
+    );
+    assert!(
+        index.contains("(args: { profile: kitchen_sink.Profile_Deserialize })"),
+        "mock handler types should be qualified like the commands they stand in for:\n{index}"
+    );
+    assert!(index.contains("kitchen_sink.Profile_Serialize"), "{index}");
 }

@@ -214,3 +214,31 @@ fn command_without_rename_still_exports_rust_name() {
     let response = invoke(&builder, "unrenamed").expect("the Rust name must be accepted");
     assert_eq!(response.deserialize::<String>().unwrap(), "plain");
 }
+
+#[test]
+fn mock_handler_is_keyed_by_accessor_and_dispatched_by_renamed_name() {
+    // The handler map is frontend-facing, so it is keyed by the accessor the Rust
+    // identifier produces. The switch has to match the name the invoke handler receives
+    // instead, or a mocked renamed command would never be found.
+    let builder = Builder::<MockRuntime>::new()
+        .commands(collect_commands![greet, unrenamed])
+        .mocks();
+
+    let bindings = export(&builder);
+    assert!(
+        bindings.contains("greet: () => string | Promise<string>,"),
+        "the handler should be keyed by the frontend accessor:\n{bindings}"
+    );
+    assert!(
+        bindings.contains(
+            r#"case "renamed_greet": return mockCommandHandler(mockHandlers.greet, "renamed_greet", args);"#
+        ),
+        "the switch should match the renamed IPC name:\n{bindings}"
+    );
+    assert!(
+        bindings.contains(
+            r#"case "unrenamed": return mockCommandHandler(mockHandlers.unrenamed, "unrenamed", args);"#
+        ),
+        "{bindings}"
+    );
+}
