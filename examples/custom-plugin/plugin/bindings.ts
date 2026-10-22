@@ -15,6 +15,7 @@ export const events = {
 };
 
 /* Types */
+/**  Emitted by the plugin every second. Exported to the frontend as `events.randomNumber`. */
 export type RandomNumber = number;
 
 /* Tauri Specta runtime */
