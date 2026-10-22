@@ -43,12 +43,12 @@ export const commands = {
 	 * @returns {Promise<TaggedEnum>}
 	 */
 	enums: (tagged, untagged) => __TAURI_INVOKE("enums", { tagged, untagged }),
-	/** @returns {Promise<{ status: "ok"; data: string } | { status: "error"; error: PlainError }>} */
-	plainError: () => typedError(__TAURI_INVOKE("plain_error")),
-	/** @returns {Promise<{ status: "ok"; data: Profile } | { status: "error"; error: TaggedError }>} */
-	taggedError: () => typedError(__TAURI_INVOKE("tagged_error")),
-	/** @returns {Promise<{ status: "ok"; data: string | null } | { status: "error"; error: PlainError }>} */
-	nullableResult: () => typedError(__TAURI_INVOKE("nullable_result")),
+	/** @returns {Promise<string>} */
+	plainError: () => __TAURI_INVOKE("plain_error"),
+	/** @returns {Promise<Profile>} */
+	taggedError: () => __TAURI_INVOKE("tagged_error"),
+	/** @returns {Promise<string | null>} */
+	nullableResult: () => __TAURI_INVOKE("nullable_result"),
 	/** @returns {Promise<string | null>} */
 	maybe: () => __TAURI_INVOKE("maybe"),
 	/**
@@ -157,21 +157,6 @@ export const MAX_RETRIES = 3;
 	*/
 
 /* Tauri Specta runtime */
-/**
-  * @template T
-  * @template E
-  * @param {Promise<T>} result
-  * @returns {Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>}
-  */
-async function typedError(result) {
-    try {
-        return { status: "ok", data: await result };
-    } catch (e) {
-        if (e instanceof Error) throw e;
-        return { status: "error", error: e };
-    }
-}
-
 /**
  * @template T
  * @param {string} name

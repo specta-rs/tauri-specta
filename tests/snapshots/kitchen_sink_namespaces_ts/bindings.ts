@@ -14,9 +14,9 @@ export const commands = {
 	tupleTypes: (point: $s$.kitchen_sink.Point) => __TAURI_INVOKE<$s$.kitchen_sink.Wrapper>("tuple_types", { point }),
 	enums: (tagged: $s$.kitchen_sink.TaggedEnum, untagged: $s$.kitchen_sink.UntaggedEnum) => __TAURI_INVOKE<$s$.kitchen_sink.TaggedEnum>("enums", { tagged, untagged }),
 	phaseSpecificRename: (input: $s$.kitchen_sink.PhaseSpecificRename_Deserialize) => __TAURI_INVOKE<$s$.kitchen_sink.PhaseSpecificRename_Serialize>("phase_specific_rename", { input }),
-	plainError: () => typedError<string, $s$.kitchen_sink.PlainError>(__TAURI_INVOKE("plain_error")),
-	taggedError: () => typedError<$s$.kitchen_sink.Profile_Serialize, $s$.kitchen_sink.TaggedError>(__TAURI_INVOKE("tagged_error")),
-	nullableResult: () => typedError<string | null, $s$.kitchen_sink.PlainError>(__TAURI_INVOKE("nullable_result")),
+	plainError: () => __TAURI_INVOKE<string>("plain_error"),
+	taggedError: () => __TAURI_INVOKE<$s$.kitchen_sink.Profile_Serialize>("tagged_error"),
+	nullableResult: () => __TAURI_INVOKE<string | null>("nullable_result"),
 	maybe: () => __TAURI_INVOKE<string | null>("maybe"),
 	withChannel: (channel: Channel<number>) => __TAURI_INVOKE<void>("with_channel", { channel }),
 	skippedArgs: (visible: string) => __TAURI_INVOKE<string>("skipped_args", { visible }),
@@ -110,15 +110,6 @@ namespace $s$ {
 export import kitchen_sink = $s$.kitchen_sink;
 
 /* Tauri Specta runtime */
-async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
-    try {
-        return { status: "ok", data: await result };
-    } catch (e) {
-        if (e instanceof Error) throw e;
-        return { status: "error", error: e as any };
-    }
-}
-
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
 type EventEmitTo<T> = [T] extends [null] ? (target: __TAURI_EVENT.EventTarget | string) => Promise<void> : (target: __TAURI_EVENT.EventTarget | string, payload: T) => Promise<void>;

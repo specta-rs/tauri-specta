@@ -13,10 +13,17 @@ use tauri::{Manager, Runtime, ipc::Invoke};
 /// The mode which the error handling is done in the bindings.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub enum ErrorHandlingMode {
-    /// Errors will be thrown
+    /// Errors will be thrown.
+    ///
+    /// This is the default and matches what a plain [`tauri::command`] does: a failed
+    /// command rejects the returned promise. Command results are typed as `T`, and the
+    /// error type is not represented in the bindings.
+    #[default]
     Throw,
     /// Errors will be returned as a status-tagged result object.
-    #[default]
+    ///
+    /// Successful commands return `{ status: "ok"; data: T }`, failed commands return
+    /// `{ status: "error"; error: E }`.
     Result,
     /// Errors will be returned as a status-tagged result object, with the error
     /// typed as `unknown`.
