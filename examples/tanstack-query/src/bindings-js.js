@@ -237,4 +237,3 @@ export const mutations = {
 export const mutationKeys = {
 	goodbyeWorld: () => ["goodbyeWorld"],
 };
-

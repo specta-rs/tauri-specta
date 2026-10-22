@@ -136,4 +136,3 @@ function makeEvent<TListen, TEmit = TListen>(name: string, serialize?: (payload:
 
     return Object.assign(fn, base);
 }
-

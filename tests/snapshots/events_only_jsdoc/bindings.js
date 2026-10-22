@@ -64,4 +64,3 @@ function makeEvent(name, serialize, deserialize) {
 
     return Object.assign(fn, base);
 }
-

@@ -22,4 +22,3 @@ export const commands = {
 	* @property {"NotFound"} NotFound
 	* @property {{ PermissionDenied: string }} PermissionDenied
 	*/
-

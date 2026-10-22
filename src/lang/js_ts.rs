@@ -218,7 +218,9 @@ fn runtime(
         for command in &cfg.commands {
             let command_name_escaped =
                 serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
-                    .expect("failed to serialize string");
+                    .map_err(|err| {
+                        Error::framework("failed to serialize a command name for bindings", err)
+                    })?;
 
             let arguments = command
                 .args()
@@ -594,8 +596,9 @@ fn runtime(
         let mut s = Struct::named();
         for (name, (_, r)) in &cfg.events {
             let event_name_escaped =
-                serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name))
-                    .expect("failed to serialize string");
+                serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name)).map_err(
+                    |err| Error::framework("failed to serialize an event name for bindings", err),
+                )?;
 
             let event_dt = DataType::Reference(r.clone());
             let mut field_ts = "makeEvent".to_string();
@@ -706,7 +709,7 @@ fn runtime(
             out.push_str(" = ");
             out.push_str(
                 &serde_json::to_string(&value)
-                    .expect("failed to serialize from `serde_json::Value`"),
+                    .map_err(|err| Error::framework("failed to serialize a constant", err))?,
             );
             out.push_str(as_constt.unwrap_or(""));
             out.push_str(";\n");
@@ -751,6 +754,16 @@ fn runtime(
         if enabled_events {
             out.push_str(make_event_impl);
             out.push('\n');
+        }
+    }
+
+    // Single-file layouts get one newline appended after the framework runtime by the
+    // exporter, so ending our body with a newline too would leave a blank line at the end
+    // of the file. The `Files` layout writes this runtime into its own file without that
+    // appended newline, so it keeps ours.
+    if exporter.layout != Layout::Files {
+        while out.ends_with('\n') {
+            out.pop();
         }
     }
 

@@ -107,9 +107,8 @@
 //! and mounted.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
-    // TODO: Tauri Specta logo
-    html_logo_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png",
-    html_favicon_url = "https://github.com/specta-rs/specta/raw/main/.github/logo-128.png"
+    html_logo_url = "https://github.com/specta-rs/tauri-specta/raw/main/.github/logo.png",
+    html_favicon_url = "https://github.com/specta-rs/tauri-specta/raw/main/.github/logo.png"
 )]
 
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
@@ -419,6 +418,12 @@ impl<R: Runtime> CommandSet<R> {
                 output.push('\n');
             }
 
+            // The fragment is concatenated after the Tauri Specta runtime, which already
+            // ends the file, so a trailing newline here would leave a blank line at EOF.
+            while output.ends_with('\n') {
+                output.pop();
+            }
+
             output
         };
 
@@ -590,5 +595,16 @@ mod tests {
         assert!(output.contains(r#"queryFn: () => commands["get-user"](...args)"#));
         assert!(output.contains(r#""rename-user": () => mutationOptions"#));
         assert!(output.contains(r#"commands["rename-user"](input.userId, input.displayName)"#));
+    }
+
+    #[test]
+    fn exported_bindings_end_with_a_single_newline() {
+        let output = export(Casing::CamelCase);
+
+        assert!(output.ends_with('\n'), "bindings should end with a newline");
+        assert!(
+            !output.ends_with("\n\n"),
+            "the raw query fragment should not leave a blank line at the end of the file"
+        );
     }
 }
