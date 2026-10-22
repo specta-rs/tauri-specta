@@ -12,4 +12,3 @@ export type BigNumbers = {
 	unsigned: number,
 	signed: number,
 };
-

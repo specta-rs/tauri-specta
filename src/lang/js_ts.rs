@@ -757,6 +757,16 @@ fn runtime(
         }
     }
 
+    // Single-file layouts get one newline appended after the framework runtime by the
+    // exporter, so ending our body with a newline too would leave a blank line at the end
+    // of the file. The `Files` layout writes this runtime into its own file without that
+    // appended newline, so it keeps ours.
+    if exporter.layout != Layout::Files {
+        while out.ends_with('\n') {
+            out.pop();
+        }
+    }
+
     Ok(Cow::Owned(out))
 }
 

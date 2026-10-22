@@ -12,4 +12,3 @@ export const commands = {
 
 /* Types */
 export type PlainError = "NotFound" | { PermissionDenied: string };
-
