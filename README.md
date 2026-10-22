@@ -28,11 +28,11 @@ Follow the documentation links above for help getting started.
 
 ## Development
 
-Run the example:
+Run an example:
 
 ```bash
-pnpm i
-cd examples/app/
+pnpm install
+cd examples/app # or examples/tanstack-query, or examples/custom-plugin/app
 pnpm tauri dev
 ```
 

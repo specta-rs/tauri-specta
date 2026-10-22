@@ -35,6 +35,17 @@ jobs:
       # (STATUS_ENTRYPOINT_NOT_FOUND), so only the published libraries are tested there.
       if: matrix.os == 'windows-latest'
       run: cargo test -p tauri-specta -p tauri-specta-query -p tauri-specta-macros --all-features
+    - name: Check the example bindings are committed
+      # The tests above regenerate each example's bindings, so anything left in
+      # `examples/` here is a binding that no longer matches the Rust source that
+      # produces it. Windows skips the example tests, so this only runs elsewhere.
+      if: matrix.os != 'windows-latest'
+      run: |
+        if [ -n "$(git status --porcelain -- examples)" ]; then
+          git status --short -- examples
+          echo "::error::the example bindings are out of date; run \`cargo test --workspace --all-features\` and commit the result"
+          exit 1
+        fi
 
   clippy:
     runs-on: ubuntu-latest

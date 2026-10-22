@@ -1,6 +1,6 @@
 [package]
 name = "tauri-specta-example-custom-plugin-app"
-version = "0.0.0"
+version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -8,16 +8,18 @@ repository = ""
 edition = "2024"
 publish = false
 
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "tauri_specta_example_custom_plugin_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { workspace = true, features = [] }
 
 [dependencies]
 tauri = { workspace = true, features = ["default"] }
+tauri-plugin-specta-example = { path = "../../plugin" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tauri-plugin-specta-example = { path = "../../plugin" }
-
-[features]
-# this feature is used for production builds or when `devPath` points to the filesystem
-# DO NOT REMOVE!!
-custom-protocol = ["tauri/custom-protocol"]
