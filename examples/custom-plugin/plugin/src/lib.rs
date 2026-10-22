@@ -19,6 +19,10 @@ const PLUGIN_NAME: &str = "specta-example";
 fn builder<R: Runtime>() -> tauri_specta::Builder<R> {
     tauri_specta::Builder::new()
         .plugin_name(PLUGIN_NAME)
+        // We recommend returning errors as a value rather than throwing, so a failed
+        // command resolves to `{ status: "error"; error: E }` and the frontend can
+        // handle every case exhaustively. The default just rejects the promise.
+        .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .commands(collect_commands![add_numbers])
         .events(collect_events![RandomNumber])
 }

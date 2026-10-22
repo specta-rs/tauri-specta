@@ -193,7 +193,12 @@ fn main() {
     let (tsq_bindings, builder) = builder.build(TanstackQueryFramework::React);
 
     // This enables `Date`, `Uint8Array`, and `URL` for supported types.
-    let builder = builder.semantic_types(semantic::Configuration::default());
+    let builder = builder
+        .semantic_types(semantic::Configuration::default())
+        // We recommend returning errors as a value rather than throwing, so a failed
+        // command resolves to `{ status: "error"; error: E }` and the frontend can
+        // handle every case exhaustively. The default just rejects the promise.
+        .error_handling(tauri_specta::ErrorHandlingMode::Result);
 
     #[cfg(debug_assertions)]
     {

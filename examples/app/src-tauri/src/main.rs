@@ -169,6 +169,10 @@ fn main() {
         .semantic_types(semantic::Configuration::default())
         // This can be used if you don't want per-phase (Serialize/Deserialize) types.
         // .disable_serde_phases()
+        // We recommend returning errors as a value rather than throwing, so a failed
+        // command resolves to `{ status: "error"; error: E }` and the frontend can
+        // handle every case exhaustively. The default just rejects the promise.
+        .error_handling(tauri_specta::ErrorHandlingMode::Result)
         .commands(tauri_specta::collect_commands![
             hello_world,
             goodbye_world,

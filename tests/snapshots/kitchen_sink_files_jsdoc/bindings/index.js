@@ -52,12 +52,12 @@ export const commands = {
 	 * @returns {Promise<kitchen_sink.PhaseSpecificRename_Serialize>}
 	 */
 	phaseSpecificRename: (input) => __TAURI_INVOKE("phase_specific_rename", { input }),
-	/** @returns {Promise<{ status: "ok"; data: string } | { status: "error"; error: kitchen_sink.PlainError }>} */
-	plainError: () => typedError(__TAURI_INVOKE("plain_error")),
-	/** @returns {Promise<{ status: "ok"; data: kitchen_sink.Profile_Serialize } | { status: "error"; error: kitchen_sink.TaggedError }>} */
-	taggedError: () => typedError(__TAURI_INVOKE("tagged_error")),
-	/** @returns {Promise<{ status: "ok"; data: string | null } | { status: "error"; error: kitchen_sink.PlainError }>} */
-	nullableResult: () => typedError(__TAURI_INVOKE("nullable_result")),
+	/** @returns {Promise<string>} */
+	plainError: () => __TAURI_INVOKE("plain_error"),
+	/** @returns {Promise<kitchen_sink.Profile_Serialize>} */
+	taggedError: () => __TAURI_INVOKE("tagged_error"),
+	/** @returns {Promise<string | null>} */
+	nullableResult: () => __TAURI_INVOKE("nullable_result"),
 	/** @returns {Promise<string | null>} */
 	maybe: () => __TAURI_INVOKE("maybe"),
 	/**
@@ -97,21 +97,6 @@ export const DEBUG_DEFAULT = false;
 export const MAX_RETRIES = 3;
 
 /* Tauri Specta runtime */
-/**
-  * @template T
-  * @template E
-  * @param {Promise<T>} result
-  * @returns {Promise<{ status: "ok"; data: T } | { status: "error"; error: E }>}
-  */
-async function typedError(result) {
-    try {
-        return { status: "ok", data: await result };
-    } catch (e) {
-        if (e instanceof Error) throw e;
-        return { status: "error", error: e };
-    }
-}
-
 /**
  * @template T
  * @param {string} name

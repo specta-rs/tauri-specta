@@ -1957,6 +1957,7 @@ mod tests {
         Builder::<tauri::Wry>::new()
             .commands(collect_commands![bigint_error])
             .semantic_types(semantic_types)
+            .error_handling(ErrorHandlingMode::Result)
             .export(Typescript::default(), &result_path)
             .expect("failed to export TypeScript bindings");
         let ts = fs::read_to_string(&result_path).expect("failed to read TypeScript bindings");

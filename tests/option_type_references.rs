@@ -2,7 +2,7 @@
 #![cfg(feature = "typescript")]
 
 use specta::Type;
-use tauri_specta::{Builder, collect_commands};
+use tauri_specta::{Builder, ErrorHandlingMode, collect_commands};
 
 #[derive(serde::Serialize, serde::Deserialize, Type)]
 struct Thing {
@@ -63,6 +63,7 @@ fn named_types_inside_options_are_referenced() {
             listed,
             resulted
         ])
+        .error_handling(ErrorHandlingMode::Result)
         .export(specta_typescript::Typescript::default(), &path)
         .expect("bindings export should succeed");
 
