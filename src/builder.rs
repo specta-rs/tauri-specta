@@ -150,6 +150,8 @@ pub struct BuilderConfiguration {
     pub disable_serde_phases: bool,
     /// Casing applied to generated command and event accessor names.
     pub function_casing: Casing,
+    /// Whether typed mock helpers are exported alongside the bindings.
+    pub mocks: bool,
 }
 
 impl BuilderConfiguration {
@@ -418,6 +420,33 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn function_casing(mut self, casing: Casing) -> Self {
         self.cfg.function_casing = casing;
+        self
+    }
+
+    /// Export typed mock helpers alongside the bindings.
+    ///
+    /// This adds a `mockCommands` function and a `MockCommandHandlers` type to the
+    /// generated bindings, so a frontend test can stub commands without hand-writing
+    /// a module that satisfies the bindings' types. Refer to the crate docs for what
+    /// the generated helpers do.
+    ///
+    /// Requires `@tauri-apps/api` v2.7 or newer, which is where `mockIPC` gained
+    /// the `shouldMockEvents` option the generated helper relies on.
+    ///
+    /// The mock helper is only useful to tests, so you usually only want this in a debug
+    /// build — the same `#[cfg(debug_assertions)]` that usually guards the export itself.
+    ///
+    /// This is not supported together with [`Builder::semantic_types`]: where a semantic
+    /// rule applies a transform, a handler would not receive or return the type the
+    /// bindings declare, so the export fails rather than emit a binding that lies.
+    ///
+    /// ```rust
+    /// use tauri_specta::Builder;
+    ///
+    /// let builder = Builder::<tauri::Wry>::new().mocks();
+    /// ```
+    pub fn mocks(mut self) -> Self {
+        self.cfg.mocks = true;
         self
     }
 
