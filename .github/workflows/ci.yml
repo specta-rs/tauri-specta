@@ -26,9 +26,15 @@ jobs:
     - name: Rust cache
       uses: Swatinem/rust-cache@v2
     - name: Build
-      run: cargo build --all-features
+      run: cargo build --workspace --all-features
     - name: Run tests
-      run: cargo test --all-features
+      if: matrix.os != 'windows-latest'
+      run: cargo test --workspace --all-features
+    - name: Run tests (libraries only)
+      # The examples' test binaries fail to load on the Windows runner
+      # (STATUS_ENTRYPOINT_NOT_FOUND), so only the published libraries are tested there.
+      if: matrix.os == 'windows-latest'
+      run: cargo test -p tauri-specta -p tauri-specta-query -p tauri-specta-macros --all-features
 
   clippy:
     runs-on: ubuntu-latest
@@ -41,7 +47,7 @@ jobs:
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
       - name: Run Clippy
-        run: cargo clippy --all-features
+        run: cargo clippy --workspace --all-features
 
   typescript:
     runs-on: ubuntu-latest
