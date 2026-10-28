@@ -17,9 +17,9 @@
     "tauri-specta-custom-plugin": "workspace:*"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.12.3",
+    "@tauri-apps/cli": "^2.12.4",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4",
+    "vite": "^8.3.5",
     "vite-plugin-solid": "^2.11.14"
   }
 }
