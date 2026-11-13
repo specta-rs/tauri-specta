@@ -3463,7 +3463,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta"
-version = "2.0.0-rc.28"
+version = "2.0.0-rc.29"
 dependencies = [
  "heck 0.5.0",
  "paste",
@@ -3520,7 +3520,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta-macros"
-version = "2.0.0-rc.28"
+version = "2.0.0-rc.29"
 dependencies = [
  "darling",
  "heck 0.5.0",
@@ -3531,7 +3531,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-specta-query"
-version = "2.0.0-rc.28"
+version = "2.0.0-rc.29"
 dependencies = [
  "heck 0.5.0",
  "serde",
