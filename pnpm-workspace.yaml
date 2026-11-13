@@ -2,3 +2,6 @@ packages:
   - "examples/app"
   - "examples/tanstack-query"
   - "examples/custom-plugin/*"
+
+overrides:
+  esbuild: ^0.28.1
