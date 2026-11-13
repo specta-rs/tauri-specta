@@ -24,7 +24,7 @@ impl LanguageExt for specta_typescript::Typescript {
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
-        let types = hide_unused_std_result_type(&cfg, cfg.types.clone());
+        let types = hide_ipc_standins(hide_unused_std_result_type(&cfg, cfg.types.clone()));
         let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
@@ -59,7 +59,7 @@ impl LanguageExt for specta_typescript::JSDoc {
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
         let cfg = cfg.clone();
-        let types = hide_unused_std_result_type(&cfg, cfg.types.clone());
+        let types = hide_ipc_standins(hide_unused_std_result_type(&cfg, cfg.types.clone()));
         let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
@@ -100,6 +100,12 @@ fn runtime(
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let enabled_events = !cfg.events.is_empty();
+    let is_raw_request_used = cfg.commands.iter().any(|command| {
+        command
+            .args()
+            .iter()
+            .any(|(_, dt)| is_ipc_type(dt, exporter.types, "TAURI_REQUEST"))
+    });
     // A builder with nothing registered has no commands to stub and no events to mock, so
     // installing the IPC handler would only buy an import and an always-rejecting switch.
     let enabled_mocks = cfg.mocks && (enabled_commands || enabled_events);
@@ -116,7 +122,11 @@ fn runtime(
         .filter(|ndt| ndt.ty.is_some())
         .find_map(|ndt| {
             runtime_scope_name(jsdoc, exporter.layout, ndt)
-                .filter(|name| is_reserved_ndt_name(name, jsdoc, enabled_mocks))
+                .filter(|name| {
+                    is_reserved_ndt_name(name, jsdoc, enabled_mocks)
+                        || (is_raw_request_used && name == "InvokeArgs")
+                        || (enabled_commands && name == "InvokeOptions")
+                })
                 .map(|name| (ndt, name))
         })
     {
@@ -212,6 +222,26 @@ fn runtime(
 
         out.push_str(" } from \"@tauri-apps/api/core\";\n");
     }
+    if enabled_commands {
+        if jsdoc {
+            if is_raw_request_used {
+                out.push_str(
+                    "/** @typedef {import(\"@tauri-apps/api/core\").InvokeArgs} InvokeArgs */\n",
+                );
+            }
+            out.push_str(
+                "/** @typedef {import(\"@tauri-apps/api/core\").InvokeOptions} InvokeOptions */\n",
+            );
+        } else {
+            if is_raw_request_used {
+                out.push_str(
+                    "import type { InvokeArgs, InvokeOptions } from \"@tauri-apps/api/core\";\n",
+                );
+            } else {
+                out.push_str("import type { InvokeOptions } from \"@tauri-apps/api/core\";\n");
+            }
+        }
+    }
     if enabled_events {
         out.push_str("import * as __TAURI_EVENT from \"@tauri-apps/api/event\";\n");
     }
@@ -223,19 +253,56 @@ fn runtime(
     if enabled_commands {
         let mut s = Struct::named();
         for command in &cfg.commands {
+            let raw_request = command
+                .args()
+                .iter()
+                .any(|(_, dt)| is_ipc_type(dt, exporter.types, "TAURI_REQUEST"));
+            if raw_request && cfg.mocks {
+                return Err(Error::framework(
+                    command.name().to_string(),
+                    "raw IPC request commands are not supported by generated mocks",
+                ));
+            }
             let command_name_escaped =
                 serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
                     .map_err(|err| {
                         Error::framework("failed to serialize a command name for bindings", err)
                     })?;
 
-            let arguments =
+            let mut arguments =
                 command_argument_types(command, &exporter, cfg, semantic_types_runtime_types)?;
+            let named_args = command
+                .args()
+                .iter()
+                .filter(|(_, dt)| !is_ipc_type(dt, exporter.types, "TAURI_REQUEST"))
+                .collect::<Vec<_>>();
+            let mixed_request = raw_request && !named_args.is_empty();
+            if mixed_request {
+                let fields = arguments
+                    .iter()
+                    .zip(command.args())
+                    .filter(|(_, (_, dt))| !is_ipc_type(dt, exporter.types, "TAURI_REQUEST"))
+                    .map(|((name, ty), _)| format!("{name}: {ty}"))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                arguments = vec![("value".into(), format!("{{ {fields} }}"))];
+            } else if raw_request {
+                arguments.truncate(1);
+            }
+            let mut options_name = "options".to_string();
+            while arguments.iter().any(|(name, _)| name == &options_name) {
+                options_name = format!("_{options_name}");
+            }
+            arguments.push((format!("{options_name}?"), "InvokeOptions".into()));
 
             let fn_arguments = arguments
                 .iter()
                 .map(|(name, dt)| {
-                    let mut arg = name.to_string();
+                    let mut arg = if jsdoc {
+                        name.trim_end_matches('?').to_string()
+                    } else {
+                        name.to_string()
+                    };
                     if !jsdoc {
                         arg.push_str(": ");
                         arg.push_str(dt);
@@ -245,11 +312,52 @@ fn runtime(
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let arguments_invoke_obj = if command.args().is_empty() {
-                Default::default()
+            let arguments_invoke_obj = if mixed_request {
+                let fields = named_args
+                    .iter()
+                    .filter_map(|(name, dt)| {
+                        let name = name.to_lower_camel_case();
+                        let input = format!("value.{name}");
+                        let transform =
+                            if let Some(generic) = channel_generic_type(dt, exporter.types) {
+                                render_result_transform_for_phase(
+                                    generic,
+                                    Phase::Deserialize,
+                                    "v",
+                                    &exporter,
+                                    cfg,
+                                    semantic_types_runtime_types,
+                                )
+                                .map(|transform| jsdoc_transform(transform, "v", jsdoc))
+                                .map(|transform| format!("mapChannel({input}, (v) => {transform})"))
+                            } else {
+                                render_result_transform_for_phase(
+                                    dt,
+                                    Phase::Serialize,
+                                    &input,
+                                    &exporter,
+                                    cfg,
+                                    semantic_types_runtime_types,
+                                )
+                                .map(|transform| jsdoc_transform(transform, &input, jsdoc))
+                            };
+                        transform.map(|transform| format!("{name}: {transform}"))
+                    })
+                    .collect::<Vec<_>>();
+                let value = if fields.is_empty() {
+                    "value".to_string()
+                } else {
+                    format!("{{ ...value, {} }}", fields.join(", "))
+                };
+                format!(", {value}, {options_name}")
+            } else if raw_request {
+                let name = &arguments[0].0;
+                format!(", Array.isArray({name}) ? new Uint8Array({name}) : {name}, {options_name}")
+            } else if command.args().is_empty() {
+                format!(", undefined, {options_name}")
             } else {
                 format!(
-                    ", {{ {} }}",
+                    ", {{ {} }}, {options_name}",
                     command
                         .args()
                         .iter()
@@ -476,7 +584,13 @@ fn runtime(
                     docs.push_str(
                         &arguments
                             .iter()
-                            .map(|(name, dt)| format!("@param {{{dt}}} {name}"))
+                            .map(|(name, dt)| {
+                                if let Some(name) = name.strip_suffix('?') {
+                                    format!("@param {{{dt}}} [{name}]")
+                                } else {
+                                    format!("@param {{{dt}}} {name}")
+                                }
+                            })
                             .collect::<Vec<_>>()
                             .join("\n"),
                     );
@@ -1374,6 +1488,26 @@ fn is_channel_ndt(ndt: &NamedDataType) -> bool {
     ndt.name == "TAURI_CHANNEL" && ndt.module_path.starts_with("tauri::")
 }
 
+fn is_ipc_type(dt: &DataType, types: &Types, name: &str) -> bool {
+    let DataType::Reference(Reference::Named(reference)) = dt else {
+        return false;
+    };
+    types
+        .get(reference)
+        .is_some_and(|ndt| ndt.name == name && ndt.module_path.starts_with("tauri::"))
+}
+
+fn hide_ipc_standins(mut types: Types) -> Types {
+    types.iter_mut(|ndt| {
+        if matches!(ndt.name.as_ref(), "TAURI_REQUEST" | "TAURI_RESPONSE")
+            && ndt.module_path.starts_with("tauri::")
+        {
+            ndt.ty = None;
+        }
+    });
+    types
+}
+
 fn is_channel_type(dt: &DataType, types: &Types) -> bool {
     channel_generic_type(dt, types).is_some()
 }
@@ -1706,6 +1840,12 @@ fn semantic_types_runtime_types(cfg: &BuilderConfiguration) -> Result<Option<Typ
 // Render a `DataType` as a reference (or fallback to inline).
 // Also handles Tauri channel references.
 fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
+    if is_ipc_type(dt, exporter.types, "TAURI_REQUEST") {
+        return Ok("InvokeArgs".into());
+    }
+    if is_ipc_type(dt, exporter.types, "TAURI_RESPONSE") {
+        return Ok("unknown".into());
+    }
     if let DataType::Reference(Reference::Named(r)) = dt
         && let Some(ndt) = exporter.types.get(r)
         && is_channel_ndt(ndt)

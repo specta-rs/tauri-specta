@@ -78,3 +78,6 @@ specta-typescript = { version = "0.0.15" }
 specta-serde = { version = "0.0.15" }
 specta-util = { version = "0.0.15" }
 
+[patch.crates-io]
+# Waiting on: https://github.com/tauri-apps/tauri/pull/16374
+tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "a4f7b3a62a06ec9267d9461c4f6738d432d26634" }

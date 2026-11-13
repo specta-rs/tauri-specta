@@ -118,7 +118,7 @@ fn renamed_command_exports_renamed_ipc_name() {
     let bindings = export(&Builder::<MockRuntime>::new().commands(collect_commands![greet]));
 
     assert!(
-        bindings.contains(r#"greet: () => __TAURI_INVOKE<string>("renamed_greet")"#),
+        bindings.contains(r#"greet: (options?: InvokeOptions) => __TAURI_INVOKE<string>("renamed_greet", undefined, options)"#),
         "{bindings}"
     );
 }
@@ -143,7 +143,7 @@ fn accessor_follows_rust_identifier_and_function_casing() {
         .function_casing(Casing::CamelCase);
     let bindings = export(&camel);
     assert!(
-        bindings.contains(r#"greetWorld: () => __TAURI_INVOKE<string>("renamed_greet_world")"#),
+        bindings.contains(r#"greetWorld: (options?: InvokeOptions) => __TAURI_INVOKE<string>("renamed_greet_world", undefined, options)"#),
         "{bindings}"
     );
 
@@ -152,7 +152,7 @@ fn accessor_follows_rust_identifier_and_function_casing() {
         .function_casing(Casing::SnakeCase);
     let bindings = export(&snake);
     assert!(
-        bindings.contains(r#"greet_world: () => __TAURI_INVOKE<string>("renamed_greet_world")"#),
+        bindings.contains(r#"greet_world: (options?: InvokeOptions) => __TAURI_INVOKE<string>("renamed_greet_world", undefined, options)"#),
         "{bindings}"
     );
 }
@@ -164,7 +164,7 @@ fn generic_command_with_rename() {
 
     let bindings = export(&builder);
     assert!(
-        bindings.contains(r#"genericCommand: () => __TAURI_INVOKE<string>("renamed_generic")"#),
+        bindings.contains(r#"genericCommand: (options?: InvokeOptions) => __TAURI_INVOKE<string>("renamed_generic", undefined, options)"#),
         "{bindings}"
     );
 
@@ -178,7 +178,7 @@ fn command_in_submodule_with_rename() {
 
     let bindings = export(&builder);
     assert!(
-        bindings.contains(r#"nestedCommand: () => __TAURI_INVOKE<string>("nested_renamed")"#),
+        bindings.contains(r#"nestedCommand: (options?: InvokeOptions) => __TAURI_INVOKE<string>("nested_renamed", undefined, options)"#),
         "{bindings}"
     );
 
@@ -193,7 +193,7 @@ fn deeply_nested_command_with_rename() {
 
     let bindings = export(&builder);
     assert!(
-        bindings.contains(r#"deepCommand: () => __TAURI_INVOKE<string>("deep_renamed")"#),
+        bindings.contains(r#"deepCommand: (options?: InvokeOptions) => __TAURI_INVOKE<string>("deep_renamed", undefined, options)"#),
         "{bindings}"
     );
 
@@ -207,7 +207,7 @@ fn command_without_rename_still_exports_rust_name() {
 
     let bindings = export(&builder);
     assert!(
-        bindings.contains(r#"unrenamed: () => __TAURI_INVOKE<string>("unrenamed")"#),
+        bindings.contains(r#"unrenamed: (options?: InvokeOptions) => __TAURI_INVOKE<string>("unrenamed", undefined, options)"#),
         "{bindings}"
     );
 

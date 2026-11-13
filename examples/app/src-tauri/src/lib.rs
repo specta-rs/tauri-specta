@@ -57,9 +57,44 @@ fn greet_strictly(name: String) -> Result<String, GreetError> {
 /// A command can stream values back to the frontend with a `Channel`.
 #[tauri::command]
 #[specta::specta]
-fn count_to(number: u32, channel: tauri::ipc::Channel<u32>) {
+async fn count_to(number: u32, channel: tauri::ipc::Channel<u32>) {
     for current in 1..=number {
-        channel.send(current).ok();
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        if channel.send(current).is_err() {
+            break;
+        }
+    }
+}
+
+/// Exercise the raw IPC request and response Specta types from Tauri PR #16374.
+#[tauri::command]
+#[specta::specta]
+fn raw_ipc_echo(request: tauri::ipc::Request<'_>) -> tauri::ipc::Response {
+    match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => tauri::ipc::Response::new(bytes.clone()),
+        tauri::ipc::InvokeBody::Json(value) => tauri::ipc::Response::new(value.to_string()),
+    }
+}
+
+/// A named argument and an IPC request share the same JSON payload.
+#[tauri::command]
+#[specta::specta]
+fn raw_ipc_named(todo: String, request: tauri::ipc::Request<'_>) -> Result<String, String> {
+    if request
+        .headers()
+        .get("x-ipc-test")
+        .and_then(|value| value.to_str().ok())
+        != Some("specta")
+    {
+        return Err("missing IPC test header".into());
+    }
+    match request.body() {
+        tauri::ipc::InvokeBody::Json(value)
+            if value.get("todo").and_then(|v| v.as_str()) == Some(&todo) =>
+        {
+            Ok(todo)
+        }
+        _ => Err("named argument did not match the request body".into()),
     }
 }
 
@@ -74,6 +109,8 @@ pub fn builder() -> Builder<tauri::Wry> {
             greet,
             greet_strictly,
             count_to,
+            raw_ipc_echo,
+            raw_ipc_named,
         ])
         .events(tauri_specta::collect_events![Greeted])
 }

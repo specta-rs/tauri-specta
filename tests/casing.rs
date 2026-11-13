@@ -39,7 +39,7 @@ fn default_casing_is_camel_case() {
 
     assert!(
         out.contains(
-            r#"helloWorld: (myName: string) => __TAURI_INVOKE<string>("hello_world", { myName })"#
+            r#"helloWorld: (myName: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("hello_world", { myName }, options)"#
         ),
         "expected camelCase accessor by default, got:\n{out}"
     );
@@ -54,7 +54,7 @@ fn snake_case_function_casing() {
 
     assert!(
         out.contains(
-            r#"hello_world: (myName: string) => __TAURI_INVOKE<string>("hello_world", { myName })"#
+            r#"hello_world: (myName: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("hello_world", { myName }, options)"#
         ),
         "expected snake_case accessor and unchanged arguments, got:\n{out}"
     );
@@ -69,7 +69,7 @@ fn kebab_case_function_casing_uses_a_quoted_property() {
 
     assert!(
         out.contains(
-            r#""hello-world": (myName: string) => __TAURI_INVOKE<string>("hello_world", { myName })"#
+            r#""hello-world": (myName: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("hello_world", { myName }, options)"#
         ),
         "expected a quoted kebab-case accessor, got:\n{out}"
     );
