@@ -74,7 +74,7 @@
 //! If your interested in using JSDoc instead of Typescript you can replace the [`specta_typescript::Typescript`](https://docs.rs/specta-typescript/latest/specta_typescript/struct.Typescript.html) struct
 //! with [`specta_jsdoc::JSDoc`](https://docs.rs/specta-jsdoc/latest/specta_jsdoc/struct.JSDoc.html) like the following:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use specta_typescript::JSDoc;
 //!
 //! let mut builder = tauri_specta::Builder::<tauri::Wry>::new();

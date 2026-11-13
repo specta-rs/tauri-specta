@@ -493,7 +493,7 @@ impl<R: Runtime> Builder<R> {
     /// Export the bindings to the filesystem using the provided exporter.
     ///
     /// # Example
-    /// ```rust
+    /// ```rust,no_run
     /// use tauri_specta::{Builder, collect_commands, collect_events};
     /// use specta_typescript::Typescript;
     ///

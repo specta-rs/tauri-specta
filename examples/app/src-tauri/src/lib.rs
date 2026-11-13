@@ -128,7 +128,10 @@ pub fn run() {
     let builder = builder();
 
     #[cfg(debug_assertions)] // Only export the bindings on development builds.
-    export_bindings(&builder, std::path::Path::new("../src"));
+    export_bindings(
+        &builder,
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src"),
+    );
 
     tauri::Builder::default()
         .invoke_handler(builder.invoke_handler())
@@ -151,6 +154,9 @@ mod test {
 
     #[test]
     fn export_bindings_to_disk() {
-        export_bindings(&builder(), std::path::Path::new("../src"));
+        export_bindings(
+            &builder(),
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src"),
+        );
     }
 }
