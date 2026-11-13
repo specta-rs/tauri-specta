@@ -70,7 +70,10 @@ fn named_types_inside_options_are_referenced() {
     let bindings = std::fs::read_to_string(&path).expect("bindings should be readable");
     std::fs::remove_file(path).expect("temporary bindings should be removable");
 
-    assert!(bindings.contains("bare: (thing: Thing, options?: InvokeOptions)"), "{bindings}");
+    assert!(
+        bindings.contains("bare: (thing: Thing, options?: InvokeOptions)"),
+        "{bindings}"
+    );
     assert!(
         bindings.contains("optional: (thing: Thing | null, options?: InvokeOptions)"),
         "{bindings}"
@@ -80,10 +83,15 @@ fn named_types_inside_options_are_referenced() {
         "{bindings}"
     );
     assert!(
-        bindings.contains("optionalInline: (thing: {\n\tid: number,\n} | null, options?: InvokeOptions)"),
+        bindings.contains(
+            "optionalInline: (thing: {\n\tid: number,\n} | null, options?: InvokeOptions)"
+        ),
         "{bindings}"
     );
-    assert!(bindings.contains("listed: (thing: Thing[], options?: InvokeOptions)"), "{bindings}");
+    assert!(
+        bindings.contains("listed: (thing: Thing[], options?: InvokeOptions)"),
+        "{bindings}"
+    );
     assert!(
         bindings.contains("typedError<Thing | null, string>("),
         "{bindings}"

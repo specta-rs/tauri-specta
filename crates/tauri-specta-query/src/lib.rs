@@ -581,8 +581,10 @@ mod tests {
         assert!(output.contains("queryFn: () => commands.get_user(...args)"));
         assert!(output.contains("rename_user: () => mutationOptions"));
         assert!(output.contains("commands.rename_user(input.userId, input.displayName)"));
-        assert!(output.contains("get_user: (userId: number)"));
-        assert!(output.contains("rename_user: (userId: number, displayName: string)"));
+        assert!(output.contains("get_user: (userId: number, options?: InvokeOptions)"));
+        assert!(output.contains(
+            "rename_user: (userId: number, displayName: string, options?: InvokeOptions)"
+        ));
     }
 
     #[test]
