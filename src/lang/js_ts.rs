@@ -99,7 +99,10 @@ fn runtime(
     map_channel_impl: &str,
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
-    let enabled_events = !cfg.events.is_empty();
+    let has_user_events = !cfg.events.is_empty();
+    // Built-in events reuse `makeEvent`, so asking for them is enough to need the event
+    // import and runtime even when no event of the user's own was registered.
+    let enabled_events = has_user_events || cfg.builtin_events;
     let is_raw_request_used = cfg.commands.iter().any(|command| {
         command
             .args()
@@ -698,7 +701,7 @@ fn runtime(
     }
 
     // Events
-    if enabled_events {
+    if has_user_events {
         let mut s = Struct::named();
         for (name, (_, r)) in &cfg.events {
             let event_name_escaped =
@@ -788,6 +791,13 @@ fn runtime(
         out.push_str("\nexport const events = ");
         out.push_str(&exporter.reference(&s.build())?);
         out.push_str(";\n");
+    }
+
+    // Built-in events
+    if cfg.builtin_events {
+        out.push_str("\n/** Built-in Tauri events */");
+        out.push('\n');
+        out.push_str(&builtin_events_object(jsdoc));
     }
 
     // Constants
@@ -896,6 +906,168 @@ fn runtime(
     }
 
     Ok(Cow::Owned(out))
+}
+
+/// One of Tauri's own events, as it is serialized by the Tauri runtime.
+struct BuiltinEvent {
+    /// The accessor name under `tauriEvents`, matching the event's `TauriEvent` variant.
+    accessor: &'static str,
+    /// The Tauri event name.
+    name: &'static str,
+    /// The TypeScript payload type. `None` for a unit payload, which Tauri sends as `null`.
+    payload: Option<&'static str>,
+    /// One-line description of the event for the generated docs.
+    docs: &'static str,
+}
+
+/// Tauri's built-in events, with the payload each emitter serializes.
+///
+/// Verified against tauri 2.12.5: window and drag-and-drop events in
+/// `src/manager/window.rs` (`on_window_event`), `tauri://window-created` in
+/// `src/window/mod.rs` (`WindowBuilder::build_internal`), `tauri://webview-created` in
+/// `src/manager/webview.rs` (`prepare_webview`), and `Theme`'s bare-string
+/// serialization in `tauri-utils`' `src/lib.rs`.
+///
+/// Keep this in step with `TauriEvent` in `@tauri-apps/api/event`; the accessor names here
+/// are that enum's variants in camel case.
+const BUILTIN_EVENTS: &[BuiltinEvent] = &[
+    BuiltinEvent {
+        accessor: "windowResized",
+        name: "tauri://resize",
+        payload: Some("{ width: number; height: number }"),
+        docs: "A window was resized. Payload: the new inner size, in physical pixels.",
+    },
+    BuiltinEvent {
+        accessor: "windowMoved",
+        name: "tauri://move",
+        payload: Some("{ x: number; y: number }"),
+        docs: "A window moved. Payload: the new outer position, in physical pixels.",
+    },
+    BuiltinEvent {
+        accessor: "windowCloseRequested",
+        name: "tauri://close-requested",
+        payload: None,
+        docs: "The user requested that a window close.",
+    },
+    BuiltinEvent {
+        accessor: "windowDestroyed",
+        name: "tauri://destroyed",
+        payload: None,
+        docs: "A window was destroyed.",
+    },
+    BuiltinEvent {
+        accessor: "windowFocus",
+        name: "tauri://focus",
+        payload: None,
+        docs: "A window gained focus.",
+    },
+    BuiltinEvent {
+        accessor: "windowBlur",
+        name: "tauri://blur",
+        payload: None,
+        docs: "A window lost focus.",
+    },
+    BuiltinEvent {
+        accessor: "windowScaleFactorChanged",
+        name: "tauri://scale-change",
+        payload: Some("{ scaleFactor: number; size: { width: number; height: number } }"),
+        docs: "The scale factor of the monitor a window is on changed. Payload: the new scale factor and inner size, in physical pixels.",
+    },
+    BuiltinEvent {
+        accessor: "windowThemeChanged",
+        name: "tauri://theme-changed",
+        // `Theme` serializes through `Display` to a bare string, not an object.
+        payload: Some("\"light\" | \"dark\""),
+        docs: "The system or window theme changed.",
+    },
+    BuiltinEvent {
+        accessor: "windowCreated",
+        name: "tauri://window-created",
+        payload: Some("{ label: string }"),
+        docs: "A window was created.",
+    },
+    BuiltinEvent {
+        accessor: "windowSuspended",
+        name: "tauri://suspended",
+        payload: None,
+        docs: "A window's event loop was suspended. Mobile only.",
+    },
+    BuiltinEvent {
+        accessor: "windowResumed",
+        name: "tauri://resumed",
+        payload: None,
+        docs: "A window's event loop was resumed. Mobile only.",
+    },
+    BuiltinEvent {
+        accessor: "webviewCreated",
+        name: "tauri://webview-created",
+        payload: Some("{ label: string }"),
+        docs: "A webview was created.",
+    },
+    BuiltinEvent {
+        accessor: "dragEnter",
+        name: "tauri://drag-enter",
+        payload: Some("{ paths: string[]; position: { x: number; y: number } }"),
+        docs: "The user dragged files onto a window. Payload: the dragged paths and the pointer position.",
+    },
+    BuiltinEvent {
+        accessor: "dragOver",
+        name: "tauri://drag-over",
+        // Tauri skips serializing `paths` when the payload comes from an `Over` event.
+        payload: Some("{ position: { x: number; y: number } }"),
+        docs: "The user is moving dragged files over a window. Payload: the pointer position.",
+    },
+    BuiltinEvent {
+        accessor: "dragDrop",
+        name: "tauri://drag-drop",
+        payload: Some("{ paths: string[]; position: { x: number; y: number } }"),
+        docs: "The user dropped files onto a window. Payload: the dropped paths and the pointer position.",
+    },
+    BuiltinEvent {
+        accessor: "dragLeave",
+        name: "tauri://drag-leave",
+        payload: None,
+        docs: "The drag operation left a window or was cancelled.",
+    },
+];
+
+/// The `tauriEvents` object, with one typed accessor per built-in Tauri event.
+///
+/// A unit payload is emitted as `makeEvent<null>`, which is the same shape a user's
+/// `null` event payload gets, so `EventEmit` types `emit` as taking no argument.
+fn builtin_events_object(jsdoc: bool) -> String {
+    let mut out = String::from("export const tauriEvents = {\n");
+
+    for event in BUILTIN_EVENTS {
+        let payload = event.payload.unwrap_or("null");
+
+        if jsdoc {
+            out.push_str("\t/**\n\t * ");
+            out.push_str(event.docs);
+            out.push_str("\n\t * @type {ReturnType<typeof makeEvent<");
+            out.push_str(payload);
+            out.push_str(">>}\n\t */\n");
+        } else {
+            out.push_str("\t/** ");
+            out.push_str(event.docs);
+            out.push_str(" */\n");
+        }
+
+        out.push('\t');
+        out.push_str(event.accessor);
+        out.push_str(": makeEvent");
+        if !jsdoc {
+            out.push('<');
+            out.push_str(payload);
+            out.push('>');
+        }
+        out.push_str("(\"");
+        out.push_str(event.name);
+        out.push_str("\"),\n");
+    }
+
+    out.push_str("};\n");
+    out
 }
 
 /// A command accessor as it should appear as an object key.
@@ -1888,6 +2060,7 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "typedError",
     "makeEvent",
     "mapChannel",
+    "tauriEvents",
 ];
 
 /// Names only the mocks runtime declares, and so only reserved on an export that

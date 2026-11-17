@@ -245,6 +245,20 @@ fn events_only() -> Builder<MockRuntime> {
     Builder::<MockRuntime>::new().events(collect_events![EmptyEvent, StructEvent])
 }
 
+/// Built-in events next to a command, so the `__TAURI_EVENT` import and the `makeEvent`
+/// runtime are shared rather than emitted twice.
+fn builtin_events() -> Builder<MockRuntime> {
+    Builder::<MockRuntime>::new()
+        .commands(collect_commands![greet])
+        .builtin_events()
+}
+
+/// No commands and no user events: `builtin_events()` alone has to pull in the event
+/// import and the `makeEvent` runtime.
+fn builtin_events_only() -> Builder<MockRuntime> {
+    Builder::<MockRuntime>::new().builtin_events()
+}
+
 fn constants_only() -> Builder<MockRuntime> {
     Builder::<MockRuntime>::new()
         .constant("APP_NAME", "Kitchen Sink")
@@ -335,6 +349,10 @@ fn unified() -> Builder<MockRuntime> {
 const SCENARIOS: &[&str] = &[
     "bigints_as_number_jsdoc",
     "bigints_as_number_ts",
+    "builtin_events_jsdoc",
+    "builtin_events_only_jsdoc",
+    "builtin_events_only_ts",
+    "builtin_events_ts",
     "commands_only_jsdoc",
     "commands_only_ts",
     "constants_only_jsdoc",
@@ -603,6 +621,48 @@ fn events_only_jsdoc() {
         "events_only_jsdoc",
         "bindings.js",
         &events_only(),
+        JSDoc::default(),
+    );
+}
+
+#[test]
+fn builtin_events_ts() {
+    assert_export(
+        "builtin_events_ts",
+        "bindings.ts",
+        &builtin_events(),
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn builtin_events_jsdoc() {
+    assert_export(
+        "builtin_events_jsdoc",
+        "bindings.js",
+        &builtin_events(),
+        JSDoc::default(),
+    );
+}
+
+/// With nothing else registered, `builtin_events()` is the only thing that needs the
+/// event import and `makeEvent` runtime.
+#[test]
+fn builtin_events_only_ts() {
+    assert_export(
+        "builtin_events_only_ts",
+        "bindings.ts",
+        &builtin_events_only(),
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn builtin_events_only_jsdoc() {
+    assert_export(
+        "builtin_events_only_jsdoc",
+        "bindings.js",
+        &builtin_events_only(),
         JSDoc::default(),
     );
 }

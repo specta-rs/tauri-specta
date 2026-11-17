@@ -1,0 +1,71 @@
+// Compile-time checks for `tauriEvents`, run by `pnpm run check:bindings`.
+//
+// The fixtures themselves only prove the generated file parses. These assertions prove
+// the accessors actually carry the payload Tauri sends: a shape instead of a bare theme
+// string, a `drag-over` that claims to include `paths`, or a null-payload event whose
+// `emit` accepts a payload all fail here.
+
+import { tauriEvents } from "../snapshots/builtin_events_ts/bindings";
+
+const aNumber = (value: number): number => value;
+
+export function payloads(): void {
+	tauriEvents.windowResized.listen((event) => {
+		aNumber(event.payload.width);
+		aNumber(event.payload.height);
+	});
+
+	tauriEvents.windowMoved.listen((event) => {
+		aNumber(event.payload.x);
+		aNumber(event.payload.y);
+	});
+
+	tauriEvents.windowScaleFactorChanged.listen((event) => {
+		aNumber(event.payload.scaleFactor);
+		aNumber(event.payload.size.width);
+		aNumber(event.payload.size.height);
+	});
+
+	// `Theme` serializes through `Display`, so the payload is the bare string.
+	tauriEvents.windowThemeChanged.listen((event) => {
+		const theme: "light" | "dark" = event.payload;
+		void theme;
+	});
+
+	for (const event of [tauriEvents.windowCreated, tauriEvents.webviewCreated]) {
+		event.listen((e) => void e.payload.label.toLowerCase());
+	}
+
+	tauriEvents.dragEnter.listen((event) => {
+		void event.payload.paths.map((path) => path.toUpperCase());
+		aNumber(event.payload.position.x);
+		aNumber(event.payload.position.y);
+	});
+
+	// `drag-over` skips `paths` when serializing.
+	tauriEvents.dragOver.listen((event) => aNumber(event.payload.position.y));
+
+	tauriEvents.dragDrop.listen((event) => {
+		void event.payload.paths;
+		aNumber(event.payload.position.x);
+	});
+
+	// A unit payload is typed as `null` and its `emit` takes no argument.
+	tauriEvents.windowDestroyed.listen((event) => {
+		const payload: null = event.payload;
+		void payload;
+	});
+	void tauriEvents.windowDestroyed.emit();
+	void tauriEvents.dragLeave.emit();
+}
+
+export function rejections(): void {
+	// @ts-expect-error `drag-over` carries no `paths`.
+	void tauriEvents.dragOver.listen((event) => event.payload.paths);
+
+	// @ts-expect-error the theme payload is a string, not `{ theme: ... }`.
+	void tauriEvents.windowThemeChanged.listen((event) => event.payload.theme);
+
+	// @ts-expect-error a null-payload event takes no emit payload.
+	void tauriEvents.windowDestroyed.emit({});
+}

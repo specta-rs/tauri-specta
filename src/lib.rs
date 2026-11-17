@@ -240,6 +240,30 @@
 //!
 //! Refer to [`Event`] for all the possible methods for listening and emitting events.
 //!
+//! ### Tauri's built-in events
+//!
+//! Tauri emits its own events for window and webview lifecycle changes and for file
+//! drag-and-drop. [`Builder::builtin_events`] types them, adding a `tauriEvents` object
+//! to the bindings alongside your own `events`:
+//!
+//! ```rust
+//! # use tauri_specta::Builder;
+//! let builder = Builder::<tauri::Wry>::new().builtin_events();
+//! ```
+//!
+//! ```ts
+//! import { tauriEvents } from "./bindings";
+//!
+//! tauriEvents.windowResized.listen((e) => {
+//!     console.log(e.payload.width, e.payload.height);
+//! });
+//!
+//! tauriEvents.windowDestroyed.listen(() => console.log("window closed"));
+//! ```
+//!
+//! Event names and payloads mirror Tauri 2.12, and an event Tauri adds later won't
+//! appear until Tauri Specta is updated.
+//!
 //! ## Testing
 //!
 //! [`Builder::mocks`] exports a typed mock helper alongside your bindings, so a frontend
