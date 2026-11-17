@@ -126,7 +126,7 @@ fn runtime(
         .find_map(|ndt| {
             runtime_scope_name(jsdoc, exporter.layout, ndt)
                 .filter(|name| {
-                    is_reserved_ndt_name(name, jsdoc, enabled_mocks)
+                    is_reserved_ndt_name(name, jsdoc, enabled_mocks, cfg.builtin_events)
                         || (is_raw_request_used && name == "InvokeArgs")
                         || (enabled_commands && name == "InvokeOptions")
                 })
@@ -795,9 +795,35 @@ fn runtime(
 
     // Built-in events
     if cfg.builtin_events {
+        let mut s = Struct::named();
+        for event in BUILTIN_EVENTS {
+            // A unit payload is `null` in both emitters, which is the same shape a user's
+            // `null` event payload gets. In TypeScript, `EventEmit` then types `emit` as
+            // taking no argument.
+            let payload = event.payload.unwrap_or("null");
+            let accessor = if jsdoc {
+                format!("makeEvent(\"{}\")", event.name)
+            } else {
+                format!("makeEvent<{payload}>(\"{}\")", event.name)
+            };
+
+            let mut field = Field::new(define(accessor).into());
+            field.docs = if jsdoc {
+                format!(
+                    "{}\n@type {{ReturnType<typeof makeEvent<{payload}>>}}",
+                    event.docs
+                )
+                .into()
+            } else {
+                event.docs.into()
+            };
+            s = s.field(event.accessor, field);
+        }
+
         out.push_str("\n/** Built-in Tauri events */");
-        out.push('\n');
-        out.push_str(&builtin_events_object(jsdoc));
+        out.push_str("\nexport const tauriEvents = ");
+        out.push_str(&exporter.reference(&s.build())?);
+        out.push_str(";\n");
     }
 
     // Constants
@@ -1030,45 +1056,6 @@ const BUILTIN_EVENTS: &[BuiltinEvent] = &[
         docs: "The drag operation left a window or was cancelled.",
     },
 ];
-
-/// The `tauriEvents` object, with one typed accessor per built-in Tauri event.
-///
-/// A unit payload is emitted as `makeEvent<null>`, which is the same shape a user's
-/// `null` event payload gets, so `EventEmit` types `emit` as taking no argument.
-fn builtin_events_object(jsdoc: bool) -> String {
-    let mut out = String::from("export const tauriEvents = {\n");
-
-    for event in BUILTIN_EVENTS {
-        let payload = event.payload.unwrap_or("null");
-
-        if jsdoc {
-            out.push_str("\t/**\n\t * ");
-            out.push_str(event.docs);
-            out.push_str("\n\t * @type {ReturnType<typeof makeEvent<");
-            out.push_str(payload);
-            out.push_str(">>}\n\t */\n");
-        } else {
-            out.push_str("\t/** ");
-            out.push_str(event.docs);
-            out.push_str(" */\n");
-        }
-
-        out.push('\t');
-        out.push_str(event.accessor);
-        out.push_str(": makeEvent");
-        if !jsdoc {
-            out.push('<');
-            out.push_str(payload);
-            out.push('>');
-        }
-        out.push_str("(\"");
-        out.push_str(event.name);
-        out.push_str("\"),\n");
-    }
-
-    out.push_str("};\n");
-    out
-}
 
 /// A command accessor as it should appear as an object key.
 ///
@@ -2060,8 +2047,12 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "typedError",
     "makeEvent",
     "mapChannel",
-    "tauriEvents",
 ];
+
+/// Names only the built-in events runtime declares, and so only reserved on an export
+/// that [`Builder::builtin_events`](crate::Builder::builtin_events) actually emits them
+/// for.
+const RESERVED_NDT_NAMES_BUILTIN_EVENTS_ONLY: &[&str] = &["tauriEvents"];
 
 /// Names only the mocks runtime declares, and so only reserved on an export that
 /// [`Builder::mocks`](crate::Builder::mocks) actually emits them for.
@@ -2079,10 +2070,11 @@ const RESERVED_NDT_NAMES_MOCKS_ONLY: &[&str] = &[
 /// must not fail over a name it never emits).
 const RESERVED_NDT_NAMES_TS_ONLY: &[&str] = &["EventEmit", "EventEmitTo"];
 
-fn is_reserved_ndt_name(name: &str, jsdoc: bool, mocks: bool) -> bool {
+fn is_reserved_ndt_name(name: &str, jsdoc: bool, mocks: bool, builtin_events: bool) -> bool {
     RESERVED_NDT_NAMES.contains(&name)
         || (!jsdoc && RESERVED_NDT_NAMES_TS_ONLY.contains(&name))
         || (mocks && RESERVED_NDT_NAMES_MOCKS_ONLY.contains(&name))
+        || (builtin_events && RESERVED_NDT_NAMES_BUILTIN_EVENTS_ONLY.contains(&name))
 }
 
 const FRAMEWORK_HEADER: &str =
@@ -2446,6 +2438,18 @@ mod tests {
         }
     }
 
+    /// A user type named after something the built-in events runtime declares.
+    mod builtin_event_names {
+        use super::*;
+
+        #[derive(Serialize, Deserialize, Type)]
+        #[serde(rename = "tauriEvents")]
+        #[allow(dead_code)]
+        pub struct TauriEvents {
+            value: String,
+        }
+    }
+
     /// Mirrors the built-in `bytes::Bytes` semantic rule, which transforms in both
     /// directions.
     #[derive(Serialize, Deserialize, Type)]
@@ -2774,6 +2778,75 @@ mod tests {
         assert!(err.to_string().contains(
             "DataError mode requires a non-nullable command error type because null marks a successful result"
         ));
+    }
+
+    #[test]
+    fn builtin_event_runtime_names_are_only_reserved_for_a_builtin_events_export() {
+        let output_dir = std::path::Path::new("target/tests/builtin-events-reserved-names");
+        let _ = fs::remove_dir_all(output_dir);
+        fs::create_dir_all(output_dir).expect("failed to create test output directory");
+
+        // The built-in events object is opt-in, so its name must not stop a user type
+        // from exporting on a build that never emits it.
+        let builder = Builder::<tauri::Wry>::new().typ::<builtin_event_names::TauriEvents>();
+
+        builder
+            .export(Typescript::default(), output_dir.join("bindings.ts"))
+            .expect("`tauriEvents` should not be reserved without `Builder::builtin_events`");
+        assert!(
+            fs::read_to_string(output_dir.join("bindings.ts"))
+                .expect("failed to read TypeScript bindings")
+                .contains("export type tauriEvents = {")
+        );
+
+        builder
+            .export(JSDoc::default(), output_dir.join("bindings.js"))
+            .expect("`tauriEvents` should not be reserved without `Builder::builtin_events`");
+        assert!(
+            fs::read_to_string(output_dir.join("bindings.js"))
+                .expect("failed to read JSDoc bindings")
+                .contains("tauriEvents")
+        );
+
+        let err = Builder::<tauri::Wry>::new()
+            .builtin_events()
+            .typ::<builtin_event_names::TauriEvents>()
+            .export(Typescript::default(), output_dir.join("conflict.ts"))
+            .expect_err("`tauriEvents` should be reserved by `Builder::builtin_events`");
+        assert!(
+            err.to_string().contains("User defined type 'tauriEvents'"),
+            "{err}"
+        );
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn builtin_event_names_are_not_plugin_prefixed() {
+        // Built-in events are emitted by Tauri itself, so they must not pick up the
+        // plugin name the user's own commands and events are prefixed with.
+        let output_dir = std::path::Path::new("target/tests/builtin-events-plugin-name");
+        let _ = fs::remove_dir_all(output_dir);
+        fs::create_dir_all(output_dir).expect("failed to create test output directory");
+
+        Builder::<tauri::Wry>::new()
+            .plugin_name("my-plugin")
+            .builtin_events()
+            .export(Typescript::default(), output_dir.join("bindings.ts"))
+            .expect("failed to export TypeScript bindings");
+
+        let ts = fs::read_to_string(output_dir.join("bindings.ts"))
+            .expect("failed to read TypeScript bindings");
+        assert!(
+            ts.contains(r#"makeEvent<{ label: string }>("tauri://window-created")"#),
+            "built-in event names should stay unprefixed:\n{ts}"
+        );
+        assert!(
+            !ts.contains(r#""plugin:my-plugin|tauri://"#),
+            "built-in event names must not be plugin-prefixed:\n{ts}"
+        );
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
     }
 
     #[test]
