@@ -1095,8 +1095,10 @@ fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String,
     );
     out.push_str("        }\n");
     out.push_str("    }, { shouldMockEvents: true });\n");
+    // Frozen so `handle.calls = []` can't silently orphan the array the installed
+    // callback keeps appending to. The array itself stays mutable: it is the history.
     out.push_str(
-        "    return {\n        calls,\n        clear: () => {\n            calls.length = 0;\n        },\n    };\n",
+        "    return Object.freeze({\n        calls,\n        clear: () => {\n            calls.length = 0;\n        },\n    });\n",
     );
     out.push_str("}\n");
 
@@ -1864,23 +1866,22 @@ const MOCK_CALL_TYPES_TS: &str = r#"/**
  *
  * `command` is the `commands` accessor that was called, e.g. `greet`. A command the
  * bindings do not generate has no accessor to record, so it keeps the raw Tauri command
- * name the frontend passed to `invoke`.
- *
- * `args` is the value the command was invoked with, before any transform. The generated
- * `commands` accessor passes `{}` for a command with no arguments, and a raw `invoke` can
- * also pass Tauri's array and buffer payload shapes, so it is not narrowed to an object.
+ * name the frontend passed to `invoke` — which is not cased like an accessor. That is why
+ * it is `string` rather than a union of accessor names: such a union would be a lie for
+ * those calls.
  */
 export type MockCall = {
     /**
      * The generated command accessor, e.g. `greet`, or, for a command the bindings don't
      * generate, its raw Tauri command name.
      */
-    command: string;
+    readonly command: string;
     /**
-     * The arguments object the command was invoked with, before any transform; `{}` when it
-     * was invoked without arguments.
+     * The arguments `invoke` received, not a copy, so it is `unknown`: the generated
+     * `commands` accessor passes `{}` for a command with no arguments, and a raw `invoke`
+     * can also pass Tauri's array and buffer payload shapes.
      */
-    args: unknown;
+    readonly args: unknown;
 };
 
 /** The handle `mockCommands` returns for the handlers it installed. */
@@ -1900,26 +1901,22 @@ const MOCK_CALL_TYPES_JS: &str = r#"/**
  *
  * `command` is the `commands` accessor that was called, e.g. `greet`. A command the
  * bindings do not generate has no accessor to record, so it keeps the raw Tauri command
- * name the frontend passed to `invoke`.
- *
- * `args` is the value the command was invoked with, before any transform. The generated
- * `commands` accessor passes `{}` for a command with no arguments, and a raw `invoke` can
- * also pass Tauri's array and buffer payload shapes, so it is not narrowed to an object.
+ * name the frontend passed to `invoke` — which is not cased like an accessor.
  *
  * @typedef {object} MockCall
  * @property {string} command The generated command accessor, e.g. `greet`, or, for a
  * command the bindings don't generate, its raw Tauri command name.
- * @property {unknown} args The arguments object the command was invoked with, before any
- * transform; `{}` when it was invoked without arguments.
+ * @property {unknown} args The arguments `invoke` received, not a copy; `{}` when the
+ * generated `commands` accessor was called without arguments.
  */
 
 /**
  * The handle `mockCommands` returns for the handlers it installed.
  *
  * @typedef {object} MockCommandsHandle
- * @property {MockCall[]} calls Every call observed since this handle's handlers were
- * installed, oldest first. The array is live, so it keeps growing for as long as those
- * handlers stay installed.
+ * @property {readonly MockCall[]} calls Every call observed since this handle's handlers
+ * were installed, oldest first. The array is live, so it keeps growing for as long as
+ * those handlers stay installed.
  * @property {() => void} clear Drop the recorded calls. The handlers stay installed.
  */
 "#;
@@ -1945,18 +1942,23 @@ const MOCK_COMMANDS_DOC: &str = r#"/**
  * ```
  *
  * `calls` is the live history, oldest first, and grows for as long as these handlers stay
- * installed. `clear()` empties it without uninstalling anything. Every call is recorded
- * before it is dispatched, including one that fails because it has no handler or because
- * its handler throws. A command the bindings do not generate is recorded under its raw
- * Tauri command name, since it has no `commands` accessor.
+ * installed. Each entry holds the `commands` accessor that was called and the arguments
+ * `invoke` received — not a copy, and not narrowed to an object, since a raw `invoke` may
+ * pass Tauri's array or buffer payload shapes. `clear()` empties it without uninstalling
+ * anything. Every call is recorded before it is dispatched, including one that fails
+ * because it has no handler or because its handler throws. A command the bindings do not
+ * generate is recorded under its raw Tauri command name, since it has no `commands`
+ * accessor.
  *
  * Calling `mockCommands` again installs a fresh set of handlers and returns a fresh handle
  * with an empty history; the previous handle keeps its calls but stops growing.
  *
  * Tauri's event mocking is enabled as part of the install (`shouldMockEvents`), so
- * `events` keeps working under test without a second installer fighting this one. Note
- * that Tauri's own mock does not implement `emitTo`, which resolves without reaching any
- * listener. Call `clearMocks` from `@tauri-apps/api/mocks` between tests."#;
+ * `events` keeps working under test without a second installer fighting this one, and the
+ * event plugin's internal invokes never reach the record. Note that Tauri's own mock does
+ * not implement `emitTo`, which resolves without reaching any listener. Call `clearMocks`
+ * from `@tauri-apps/api/mocks` between tests; it uninstalls the handlers but leaves a
+ * handle's history alone."#;
 
 const MOCK_HANDLER_REGISTRY_IMPL_TS: &str = r#"    // A copy with no prototype, so a command named after an `Object.prototype` member
     // (`toString`, `constructor`, …) reports that it is unregistered instead of calling

@@ -268,26 +268,22 @@ function makeEvent(name, serialize, deserialize) {
  *
  * `command` is the `commands` accessor that was called, e.g. `greet`. A command the
  * bindings do not generate has no accessor to record, so it keeps the raw Tauri command
- * name the frontend passed to `invoke`.
- *
- * `args` is the value the command was invoked with, before any transform. The generated
- * `commands` accessor passes `{}` for a command with no arguments, and a raw `invoke` can
- * also pass Tauri's array and buffer payload shapes, so it is not narrowed to an object.
+ * name the frontend passed to `invoke` — which is not cased like an accessor.
  *
  * @typedef {object} MockCall
  * @property {string} command The generated command accessor, e.g. `greet`, or, for a
  * command the bindings don't generate, its raw Tauri command name.
- * @property {unknown} args The arguments object the command was invoked with, before any
- * transform; `{}` when it was invoked without arguments.
+ * @property {unknown} args The arguments `invoke` received, not a copy; `{}` when the
+ * generated `commands` accessor was called without arguments.
  */
 
 /**
  * The handle `mockCommands` returns for the handlers it installed.
  *
  * @typedef {object} MockCommandsHandle
- * @property {MockCall[]} calls Every call observed since this handle's handlers were
- * installed, oldest first. The array is live, so it keeps growing for as long as those
- * handlers stay installed.
+ * @property {readonly MockCall[]} calls Every call observed since this handle's handlers
+ * were installed, oldest first. The array is live, so it keeps growing for as long as
+ * those handlers stay installed.
  * @property {() => void} clear Drop the recorded calls. The handlers stay installed.
  */
 
@@ -312,18 +308,23 @@ function makeEvent(name, serialize, deserialize) {
  * ```
  *
  * `calls` is the live history, oldest first, and grows for as long as these handlers stay
- * installed. `clear()` empties it without uninstalling anything. Every call is recorded
- * before it is dispatched, including one that fails because it has no handler or because
- * its handler throws. A command the bindings do not generate is recorded under its raw
- * Tauri command name, since it has no `commands` accessor.
+ * installed. Each entry holds the `commands` accessor that was called and the arguments
+ * `invoke` received — not a copy, and not narrowed to an object, since a raw `invoke` may
+ * pass Tauri's array or buffer payload shapes. `clear()` empties it without uninstalling
+ * anything. Every call is recorded before it is dispatched, including one that fails
+ * because it has no handler or because its handler throws. A command the bindings do not
+ * generate is recorded under its raw Tauri command name, since it has no `commands`
+ * accessor.
  *
  * Calling `mockCommands` again installs a fresh set of handlers and returns a fresh handle
  * with an empty history; the previous handle keeps its calls but stops growing.
  *
  * Tauri's event mocking is enabled as part of the install (`shouldMockEvents`), so
- * `events` keeps working under test without a second installer fighting this one. Note
- * that Tauri's own mock does not implement `emitTo`, which resolves without reaching any
- * listener. Call `clearMocks` from `@tauri-apps/api/mocks` between tests.
+ * `events` keeps working under test without a second installer fighting this one, and the
+ * event plugin's internal invokes never reach the record. Note that Tauri's own mock does
+ * not implement `emitTo`, which resolves without reaching any listener. Call `clearMocks`
+ * from `@tauri-apps/api/mocks` between tests; it uninstalls the handlers but leaves a
+ * handle's history alone.
  *
  * @param {Partial<MockCommandHandlers>} [handlers]
  * @returns {MockCommandsHandle}
@@ -360,12 +361,12 @@ export function mockCommands(handlers = {}) {
                 throw new Error(`No mock handler registered for command '${cmd}'`);
         }
     }, { shouldMockEvents: true });
-    return {
+    return Object.freeze({
         calls,
         clear: () => {
             calls.length = 0;
         },
-    };
+    });
 }
 
 /**
