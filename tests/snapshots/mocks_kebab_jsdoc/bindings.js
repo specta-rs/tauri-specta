@@ -107,25 +107,62 @@ export const tauriEvents = {
 
 /* Tauri Specta runtime */
 /**
+ * @param {__TAURI_EVENT.UnlistenFn} unlisten
+ * @param {AbortSignal} [signal]
+ * @returns {__TAURI_EVENT.UnlistenFn}
+ */
+function bindAbort(unlisten, signal) {
+    if (!signal) return unlisten;
+    if (signal.aborted) {
+        unlisten();
+        return () => {};
+    }
+    let removed = false;
+    const onAbort = () => {
+        if (removed) return;
+        removed = true;
+        unlisten();
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    return () => {
+        if (removed) return;
+        removed = true;
+        signal.removeEventListener("abort", onAbort);
+        unlisten();
+    };
+}
+
+/**
  * @template T
  * @param {string} name
  * @param {(payload: T) => unknown} [serialize]
  * @param {(payload: any) => T} [deserialize]
  */
 function makeEvent(name, serialize, deserialize) {
+    // A signal can abort before `bindAbort` has an unlisten to call, so check it here too.
     /**
      * @param {__TAURI_EVENT.EventCallback<T>} cb
+     * @param {AbortSignal} [signal]
      * @returns {(event: __TAURI_EVENT.Event<any>) => void}
      */
-    const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapEvent = (cb, signal) => (event) => {
+        if (signal?.aborted) return;
+        cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    };
     /** @param {T} payload */
     const mapPayload = (payload) => serialize ? serialize(payload) : payload;
 
     const base = {
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        listen: (cb) => __TAURI_EVENT.listen(name, mapEvent(cb)),
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        once: (cb) => __TAURI_EVENT.once(name, mapEvent(cb)),
+        /**
+         * @param {__TAURI_EVENT.EventCallback<T>} cb
+         * @param {{ signal?: AbortSignal }} [options]
+         */
+        listen: (cb, options) => __TAURI_EVENT.listen(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
+        /**
+         * @param {__TAURI_EVENT.EventCallback<T>} cb
+         * @param {{ signal?: AbortSignal }} [options]
+         */
+        once: (cb, options) => __TAURI_EVENT.once(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
         /** @param {T} payload */
         emit: (payload) => __TAURI_EVENT.emit(name, mapPayload(payload)),
         /**
@@ -137,10 +174,16 @@ function makeEvent(name, serialize, deserialize) {
 
     /** @param {import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window} target */
     const fn = (target) => ({
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        listen: (cb) => target.listen(name, mapEvent(cb)),
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
-        once: (cb) => target.once(name, mapEvent(cb)),
+        /**
+         * @param {__TAURI_EVENT.EventCallback<T>} cb
+         * @param {{ signal?: AbortSignal }} [options]
+         */
+        listen: (cb, options) => target.listen(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
+        /**
+         * @param {__TAURI_EVENT.EventCallback<T>} cb
+         * @param {{ signal?: AbortSignal }} [options]
+         */
+        once: (cb, options) => target.once(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
         /** @param {T} payload */
         emit: (payload) => target.emit(name, mapPayload(payload)),
         /**
