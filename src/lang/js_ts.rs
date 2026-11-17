@@ -187,6 +187,15 @@ fn runtime(
             // Check if result contains a Channel
             || command.result().is_some_and(|dt| is_channel_type(dt, exporter.types))
     });
+    // `channelStream` is only useful for a channel the frontend creates and passes to a
+    // command; a returned channel is already on the frontend and is read through
+    // `onmessage`, so emitting the helper there would only be dead code.
+    let is_channel_arg_used = cfg.commands.iter().any(|command| {
+        command
+            .args()
+            .iter()
+            .any(|(_, dt)| is_channel_type(dt, exporter.types))
+    });
     let is_channel_transform_used = cfg.commands.iter().any(|command| {
         command.args().iter().any(|(_, dt)| {
             channel_generic_type(dt, exporter.types).is_some_and(|dt| {
@@ -878,9 +887,11 @@ fn runtime(
 
     if is_channel_transform_used {
         out.push_str(map_channel_impl);
+        // Always followed by something: a transform implies a channel argument, which
+        // emits `channelStream` next.
         out.push_str("\n\n");
     }
-    if is_channel_used {
+    if is_channel_arg_used {
         out.push_str(channel_stream_impl);
         out.push_str("\n\n");
     }
@@ -2127,11 +2138,11 @@ const CHANNEL_STREAM_IMPL_TS: &str = r#"/**
  * call throws.
  */
 export type ChannelStream<T> = AsyncIterable<T> & {
-    /** Pass this to the command that takes a `Channel<T>`. */
+    /** Pass this to the command that takes a `Channel<T>`; the stream owns its `onmessage`. */
     channel: Channel<T>;
-    /** End the stream: buffered messages are read, then the pending or next `next()` resolves `{ done: true }`. */
+    /** End the stream: buffered messages are still read, then `next()` resolves `{ done: true }`. */
     close(): void;
-    /** Fail the stream: the pending or next `next()` rejects with `error`, dropping any buffered messages. */
+    /** Fail the stream: buffered messages are dropped and `next()` rejects with `error`. */
     fail(error: unknown): void;
 };
 
@@ -2139,66 +2150,65 @@ export type ChannelStream<T> = AsyncIterable<T> & {
  * Create a `ChannelStream` for a command that takes a `Channel<T>`.
  *
  * The first of `close()` and `fail()` wins and later calls are no-ops. Messages
- * that arrive after either are ignored.
+ * that arrive after either are ignored. Ending the iteration early (`break` or a
+ * throw inside the loop) closes the stream, because a stream has one consumer and
+ * it is gone.
+ *
+ * Tauri delivers messages independently of the command's result, so `close()` only
+ * sees what has already arrived; end a finite stream with a sentinel and `break`.
  */
 export function channelStream<T>(): ChannelStream<T> {
     const queue: T[] = [];
-    let pending: {
+    const waiters: {
         resolve: (result: IteratorResult<T>) => void;
         reject: (error: unknown) => void;
-    } | null = null;
-    let terminal: { error: unknown } | { done: true } | null = null;
+    }[] = [];
+    let terminal: { error: unknown } | "done" | null = null;
     let consumed = false;
 
-    const channel = new Channel<T>();
-    channel.onmessage = (message) => {
-        // A terminal ends the stream, so late messages must not leak past it.
+    const end = (next: { error: unknown } | "done") => {
         if (terminal !== null) return;
-        if (pending !== null) {
-            const waiter = pending;
-            pending = null;
-            waiter.resolve({ done: false, value: message });
-        } else {
-            queue.push(message);
+        terminal = next;
+        // A failure discards what is buffered; a clean close lets it drain.
+        if (next !== "done") queue.length = 0;
+        for (const waiter of waiters.splice(0)) {
+            if (next === "done") waiter.resolve({ done: true, value: undefined });
+            else waiter.reject(next.error);
         }
     };
 
-    const settlePending = () => {
-        if (pending === null || terminal === null) return;
-        const waiter = pending;
-        pending = null;
-        if ("error" in terminal) waiter.reject(terminal.error);
-        else waiter.resolve({ done: true, value: undefined });
-    };
-
-    const fail = (error: unknown) => {
+    const channel = new Channel<T>((message) => {
+        // A terminal ends the stream, so late messages must not leak past it.
         if (terminal !== null) return;
-        terminal = { error };
-        settlePending();
-    };
+        const waiter = waiters.shift();
+        if (waiter) waiter.resolve({ done: false, value: message });
+        else queue.push(message);
+    });
 
     return {
         channel,
-        close: () => {
-            if (terminal !== null) return;
-            terminal = { done: true };
-            settlePending();
-        },
-        fail,
+        close: () => end("done"),
+        fail: (error) => end({ error }),
         [Symbol.asyncIterator]: () => {
-            if (consumed) {
-                throw new Error("A ChannelStream can only be consumed once.");
-            }
+            if (consumed) throw new Error("A ChannelStream can only be consumed once.");
             consumed = true;
             return {
-                next: async (): Promise<IteratorResult<T>> => {
-                    // `fail()` aborts immediately; `close()` lets already-buffered messages drain.
-                    if (terminal !== null && "error" in terminal) throw terminal.error;
-                    if (queue.length > 0) return { done: false, value: queue.shift() as T };
-                    if (terminal !== null) return { done: true, value: undefined };
-                    return new Promise<IteratorResult<T>>((resolve, reject) => {
-                        pending = { resolve, reject };
-                    });
+                next: (): Promise<IteratorResult<T>> => {
+                    // `fail()` is sticky: a `next()` after the rejection throws again.
+                    if (terminal !== null && terminal !== "done") {
+                        return Promise.reject(terminal.error);
+                    }
+                    if (queue.length > 0) {
+                        return Promise.resolve({ done: false, value: queue.shift() as T });
+                    }
+                    if (terminal === "done") return Promise.resolve({ done: true, value: undefined });
+                    return new Promise((resolve, reject) => waiters.push({ resolve, reject }));
+                },
+                // `for await ... break` disposes the only consumer, who can never read the rest.
+                return: (): Promise<IteratorResult<T>> => {
+                    end("done");
+                    queue.length = 0;
+                    return Promise.resolve({ done: true, value: undefined });
                 },
             };
         },
@@ -2215,6 +2225,12 @@ const CHANNEL_STREAM_IMPL_JS: &str = r#"/**
  * Only one consumer may iterate a stream; a second `[Symbol.asyncIterator]()`
  * call throws.
  *
+ * Tauri delivers messages independently of the command's result, so `close()` only
+ * sees what has already arrived; end a finite stream with a sentinel and `break`.
+ *
+ * Pass the returned `channel` to the command. The stream owns its `onmessage`;
+ * reassigning it stops the iterator from ever settling.
+ *
  * @template T
  * @returns {AsyncIterable<T> & {
  *   channel: Channel<T>,
@@ -2224,59 +2240,53 @@ const CHANNEL_STREAM_IMPL_JS: &str = r#"/**
  */
 export function channelStream() {
     const queue = [];
-    let pending = null;
+    const waiters = [];
     let terminal = null;
     let consumed = false;
 
-    const channel = new Channel();
-    channel.onmessage = (message) => {
-        // A terminal ends the stream, so late messages must not leak past it.
+    const end = (next) => {
         if (terminal !== null) return;
-        if (pending !== null) {
-            const waiter = pending;
-            pending = null;
-            waiter.resolve({ done: false, value: message });
-        } else {
-            queue.push(message);
+        terminal = next;
+        // A failure discards what is buffered; a clean close lets it drain.
+        if (next !== "done") queue.length = 0;
+        for (const waiter of waiters.splice(0)) {
+            if (next === "done") waiter.resolve({ done: true, value: undefined });
+            else waiter.reject(next.error);
         }
     };
 
-    const settlePending = () => {
-        if (pending === null || terminal === null) return;
-        const waiter = pending;
-        pending = null;
-        if ("error" in terminal) waiter.reject(terminal.error);
-        else waiter.resolve({ done: true, value: undefined });
-    };
-
-    const fail = (error) => {
+    const channel = new Channel((message) => {
+        // A terminal ends the stream, so late messages must not leak past it.
         if (terminal !== null) return;
-        terminal = { error };
-        settlePending();
-    };
+        const waiter = waiters.shift();
+        if (waiter) waiter.resolve({ done: false, value: message });
+        else queue.push(message);
+    });
 
     return {
         channel,
-        close: () => {
-            if (terminal !== null) return;
-            terminal = { done: true };
-            settlePending();
-        },
-        fail,
+        close: () => end("done"),
+        fail: (error) => end({ error }),
         [Symbol.asyncIterator]: () => {
-            if (consumed) {
-                throw new Error("A ChannelStream can only be consumed once.");
-            }
+            if (consumed) throw new Error("A ChannelStream can only be consumed once.");
             consumed = true;
             return {
-                next: async () => {
-                    // `fail()` aborts immediately; `close()` lets already-buffered messages drain.
-                    if (terminal !== null && "error" in terminal) throw terminal.error;
-                    if (queue.length > 0) return { done: false, value: queue.shift() };
-                    if (terminal !== null) return { done: true, value: undefined };
-                    return new Promise((resolve, reject) => {
-                        pending = { resolve, reject };
-                    });
+                next: () => {
+                    // `fail()` is sticky: a `next()` after the rejection throws again.
+                    if (terminal !== null && terminal !== "done") {
+                        return Promise.reject(terminal.error);
+                    }
+                    if (queue.length > 0) {
+                        return Promise.resolve({ done: false, value: queue.shift() });
+                    }
+                    if (terminal === "done") return Promise.resolve({ done: true, value: undefined });
+                    return new Promise((resolve, reject) => waiters.push({ resolve, reject }));
+                },
+                // `for await ... break` disposes the only consumer, who can never read the rest.
+                return: () => {
+                    end("done");
+                    queue.length = 0;
+                    return Promise.resolve({ done: true, value: undefined });
                 },
             };
         },

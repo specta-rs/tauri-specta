@@ -89,6 +89,12 @@ fn payload_channel_arg(channel: tauri::ipc::Channel<ChannelPayload>) {
     let _ = channel;
 }
 
+#[tauri::command]
+#[specta::specta]
+fn returns_channel() -> tauri::ipc::Channel<u32> {
+    unimplemented!()
+}
+
 // ----- harness -----
 
 fn export(builder: &Builder<MockRuntime>, scenario: &str) -> Result<String, String> {
@@ -215,6 +221,10 @@ fn top_level_channel_argument_exports() {
     .expect("a channel as the whole argument is the supported form");
 
     assert!(bindings.contains("Channel<number>"), "{bindings}");
+    assert!(
+        bindings.contains("function channelStream"),
+        "a channel argument is created by the frontend, so the stream helper is useful: {bindings}"
+    );
 }
 
 #[test]
@@ -226,4 +236,24 @@ fn top_level_channel_argument_with_struct_payload_exports() {
     .expect("a channel whose payload is a plain type is still a top-level argument");
 
     assert!(bindings.contains("Channel<ChannelPayload>"), "{bindings}");
+}
+
+#[test]
+fn channel_in_result_position_skips_the_stream_helper() {
+    let bindings = export(
+        &Builder::<MockRuntime>::new().commands(collect_commands![returns_channel]),
+        "result_channel",
+    )
+    .expect("a channel as the whole result is the supported form");
+
+    // The returned channel is created by Rust and already on the frontend, so the
+    // helper (which creates its own channel) has nothing to do with it.
+    assert!(bindings.contains("Channel<number>"), "{bindings}");
+    assert!(!bindings.contains("channelStream"), "{bindings}");
+    // The runtime block itself is always emitted because `tauriEvents` needs `makeEvent`,
+    // but nothing in it may reference the stream helper.
+    assert!(
+        bindings.contains("/* Tauri Specta runtime */"),
+        "{bindings}"
+    );
 }

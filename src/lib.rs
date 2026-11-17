@@ -145,7 +145,7 @@
 //!
 //! ### Reading a channel with `for await`
 //!
-//! A bindings export that uses a channel also emits `channelStream`, which pairs a
+//! A bindings export that takes a channel also emits `channelStream`, which pairs a
 //! `Channel<T>` with an async iterator:
 //!
 //! ```rust,no_run
@@ -153,36 +153,42 @@
 //!
 //! #[tauri::command]
 //! #[specta::specta]
-//! fn watch_logs(on_log: Channel<String>) {
+//! fn watch_logs(on_log: Channel<Option<String>>) {
 //!     for line in ["ready", "done"] {
-//!         let _ = on_log.send(line.to_string());
+//!         let _ = on_log.send(Some(line.to_string()));
 //!     }
+//!     let _ = on_log.send(None); // tells the frontend the stream has ended
 //! }
 //! ```
 //!
 //! ```ts
 //! import { channelStream, commands } from "./bindings";
 //!
-//! const logs = channelStream<string>();
-//! const call = commands.watchLogs(logs.channel);
+//! const logs = channelStream<string | null>();
+//! commands.watchLogs(logs.channel);
 //!
 //! for await (const line of logs) {
+//!     if (line === null) break; // `break` closes the stream
 //!     console.log(line);
 //! }
-//! await call;
 //! ```
 //!
 //! Messages are buffered in arrival order until a consumer reads them. Tauri's
 //! channel has no acknowledgement, so this is buffering, not backpressure: a fast
 //! producer is never slowed down by a slow consumer.
 //!
+//! Tauri delivers channel messages independently of the command's result, so a
+//! `close()` right after `await command()` can race the webview and drop the last
+//! messages. End a finite stream with a sentinel message that the loop `break`s on
+//! instead. `close()` only finishes what has already arrived: buffered messages are
+//! read, then a pending or later `next()` resolves as done. `fail(error)` aborts
+//! instead, dropping any buffered messages and rejecting the pending or later
+//! `next()`. The first of the two wins, later calls are no-ops, and messages arriving
+//! after either are ignored. `break` (or a throw in the loop body) closes the stream,
+//! because the only consumer is gone and nothing could read the rest.
+//!
 //! Only one consumer may iterate a stream; a second `[Symbol.asyncIterator]()` call
-//! throws. `close()` ends the stream after the buffered messages are read and lets a
-//! pending `next()` resolve as done. `fail(error)` aborts it, dropping any buffered
-//! messages and rejecting the pending or next `next()`. The first of the two wins,
-//! later calls are no-ops, and messages arriving after either are ignored. `break`
-//! stops the iteration without closing the channel; call `close()` yourself if the
-//! backend no longer needs to send.
+//! throws.
 //!
 //! A channel cannot be nested inside a struct, enum, or event payload. Only a
 //! top-level command argument or return value is turned into a channel, so a
