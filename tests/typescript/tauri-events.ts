@@ -5,9 +5,31 @@
 // string, a `drag-over` that claims to include `paths`, or a null-payload event whose
 // `emit` accepts a payload all fail here.
 
+import { TauriEvent } from "@tauri-apps/api/event";
+
 import { tauriEvents } from "../snapshots/builtin_events_ts/bindings";
 
 const aNumber = (value: number): number => value;
+
+/** `WINDOW_SCALE_FACTOR_CHANGED` → `windowScaleFactorChanged`. */
+type CamelCase<S extends string> = S extends `${infer Head}_${infer Tail}`
+	? `${Lowercase<Head>}${Capitalize<CamelCase<Tail>>}`
+	: Lowercase<S>;
+
+/** The accessors `TauriEvent` implies, whatever the generated object happens to hold. */
+type AccessorsFromTauriEvent = {
+	[K in keyof typeof TauriEvent as CamelCase<K & string>]: true;
+};
+
+type UnmatchedAccessor =
+	| Exclude<keyof AccessorsFromTauriEvent, keyof typeof tauriEvents>
+	| Exclude<keyof typeof tauriEvents, keyof AccessorsFromTauriEvent>;
+
+// `never` only when `tauriEvents` has exactly the accessors `TauriEvent` names. A Tauri
+// release that adds or renames one fails here, and so does a dropped row in the table.
+export const everyTauriEventIsTyped: [UnmatchedAccessor] extends [never]
+	? true
+	: UnmatchedAccessor = true;
 
 export function payloads(): void {
 	tauriEvents.windowResized.listen((event) => {
