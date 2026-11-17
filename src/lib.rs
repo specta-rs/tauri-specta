@@ -257,9 +257,9 @@
 //! This needs `@tauri-apps/api` v2.7 or newer.
 //!
 //! Because the mock sits at the IPC boundary, the application under test keeps importing
-//! the real `commands` and `events` objects, and everything around the call — argument
-//! transforms, the configured [`ErrorHandlingMode`], event plumbing — behaves as it does
-//! in the app:
+//! the real `commands` and `events` objects, and everything around the call — the
+//! configured [`ErrorHandlingMode`], channel payload mapping, event plumbing — behaves as
+//! it does in the app:
 //!
 //! ```ts
 //! import { afterEach, expect, test } from "vitest";

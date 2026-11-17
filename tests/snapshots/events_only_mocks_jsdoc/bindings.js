@@ -101,8 +101,8 @@ function makeEvent(name, serialize, deserialize) {
  * Install typed mock handlers for the generated commands.
  *
  * Handlers are installed through `@tauri-apps/api/mocks`'s `mockIPC`, so the application
- * under test keeps importing the real `commands` object and still runs the argument and
- * result transforms around each call.
+ * under test keeps importing the real `commands` object and still runs the result transform
+ * and channel mapping the bindings wrap around each call.
  *
  * A handler receives the command's arguments and returns its success value; throw (or
  * return a rejected promise) to make the command fail. A command with no handler rejects
