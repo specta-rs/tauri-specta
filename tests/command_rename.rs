@@ -231,13 +231,13 @@ fn mock_handler_is_keyed_by_accessor_and_dispatched_by_renamed_name() {
     );
     assert!(
         bindings.contains(
-            r#"case "renamed_greet": return mockCommandHandler(mockHandlers.greet, "renamed_greet", args);"#
+            r#"case "renamed_greet": calls.push({ command: "greet", args }); return mockCommandHandler(mockHandlers.greet, "renamed_greet", args);"#
         ),
         "the switch should match the renamed IPC name:\n{bindings}"
     );
     assert!(
         bindings.contains(
-            r#"case "unrenamed": return mockCommandHandler(mockHandlers.unrenamed, "unrenamed", args);"#
+            r#"case "unrenamed": calls.push({ command: "unrenamed", args }); return mockCommandHandler(mockHandlers.unrenamed, "unrenamed", args);"#
         ),
         "{bindings}"
     );

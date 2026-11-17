@@ -257,9 +257,9 @@
 //! This needs `@tauri-apps/api` v2.7 or newer.
 //!
 //! Because the mock sits at the IPC boundary, the application under test keeps importing
-//! the real `commands` and `events` objects, and everything around the call — argument
-//! transforms, the configured [`ErrorHandlingMode`], event plumbing — behaves as it does
-//! in the app:
+//! the real `commands` and `events` objects, and everything around the call — the
+//! configured [`ErrorHandlingMode`], channel payload mapping, event plumbing — behaves as
+//! it does in the app:
 //!
 //! ```ts
 //! import { afterEach, expect, test } from "vitest";
@@ -269,9 +269,14 @@
 //! afterEach(() => clearMocks());
 //!
 //! test("greet", async () => {
-//!     mockCommands({ greet: ({ myName }) => `Hello, ${myName}!` });
+//!     const calls = mockCommands({ greet: ({ myName }) => `Hello, ${myName}!` });
 //!
 //!     await expect(commands.greet("Brendan")).resolves.toBe("Hello, Brendan!");
+//!     expect(calls.calls).toEqual([
+//!         { command: "greet", args: { myName: "Brendan" } },
+//!     ]);
+//!
+//!     calls.clear(); // the handlers stay installed
 //! });
 //! ```
 //!
@@ -280,9 +285,23 @@
 //! A command with no handler rejects rather than resolving `undefined`, so a test can't
 //! pass by accident.
 //!
+//! `mockCommands` returns a `MockCommandsHandle`: `calls` is the live history of every
+//! invocation its handlers observed, oldest first, so it keeps growing for as long as
+//! those handlers stay installed. Each entry carries the `commands` accessor that was
+//! called and the arguments `invoke` received — not a copy, and not narrowed to an object,
+//! since a raw `invoke` may pass Tauri's array or buffer payload shapes. A call is
+//! recorded before it is dispatched, so one that fails — an unregistered handler, a
+//! handler that throws or rejects — is still in the history. `clear()` empties it without
+//! uninstalling anything. A command the bindings don't generate has no accessor, so it is
+//! recorded under its raw Tauri command name. Calling `mockCommands` again installs fresh
+//! handlers and returns a fresh handle with an empty history, and the previous handle
+//! stops growing.
+//!
 //! Events need no extra setup. Tauri's own event mocking is enabled as part of the
-//! install, so `events.demoEvent.listen` and friends keep working under test. Tauri's
-//! mock does not implement `emitTo`, which resolves without reaching any listener.
+//! install, so `events.demoEvent.listen` and friends keep working under test, and the
+//! event plugin's internal invokes never reach the recorded history. Tauri's mock does not
+//! implement `emitTo`, which resolves without reaching any listener. `clearMocks` from
+//! `@tauri-apps/api/mocks` uninstalls the handlers but leaves a handle's history alone.
 //!
 //! Mocks and [`Builder::semantic_types`] don't mix: where a semantic rule applies a
 //! transform, the value a handler sees is not the type the bindings declare, and the

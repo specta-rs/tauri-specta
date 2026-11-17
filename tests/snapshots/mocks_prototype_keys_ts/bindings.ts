@@ -24,34 +24,100 @@ export type MockCommandHandlers = {
 };
 
 /**
+ * One command invocation observed by a set of mock handlers.
+ *
+ * `command` is the `commands` accessor that was called, e.g. `greet`. A command the
+ * bindings do not generate has no accessor to record, so it keeps the raw Tauri command
+ * name the frontend passed to `invoke` — which is not cased like an accessor. That is why
+ * it is `string` rather than a union of accessor names: such a union would be a lie for
+ * those calls.
+ */
+export type MockCall = {
+    /**
+     * The generated command accessor, e.g. `greet`, or, for a command the bindings don't
+     * generate, its raw Tauri command name.
+     */
+    readonly command: string;
+    /**
+     * The arguments `invoke` received, not a copy, so it is `unknown`: the generated
+     * `commands` accessor passes `{}` for a command with no arguments, and a raw `invoke`
+     * can also pass Tauri's array and buffer payload shapes.
+     */
+    readonly args: unknown;
+};
+
+/** The handle `mockCommands` returns for the handlers it installed. */
+export type MockCommandsHandle = {
+    /**
+     * Every call observed since this handle's handlers were installed, oldest first. The
+     * array is live, so it keeps growing for as long as those handlers stay installed.
+     */
+    readonly calls: readonly MockCall[];
+    /** Drop the recorded calls. The handlers stay installed. */
+    clear(): void;
+};
+
+/**
  * Install typed mock handlers for the generated commands.
  *
  * Handlers are installed through `@tauri-apps/api/mocks`'s `mockIPC`, so the application
- * under test keeps importing the real `commands` object and still runs the argument and
- * result transforms around each call.
+ * under test keeps importing the real `commands` object and still runs the result transform
+ * and channel mapping the bindings wrap around each call.
  *
  * A handler receives the command's arguments and returns its success value; throw (or
  * return a rejected promise) to make the command fail. A command with no handler rejects
  * with an error rather than resolving `undefined`, so a test can't pass by accident.
  *
+ * The returned handle records every call these handlers observe, so a test can assert
+ * what was invoked:
+ *
+ * ```ts
+ * const calls = mockCommands({ greet: ({ myName }) => `Hello, ${myName}!` });
+ * await commands.greet("Brendan");
+ * expect(calls.calls).toEqual([{ command: "greet", args: { myName: "Brendan" } }]);
+ * ```
+ *
+ * `calls` is the live history, oldest first, and grows for as long as these handlers stay
+ * installed. Each entry holds the `commands` accessor that was called and the arguments
+ * `invoke` received — not a copy, and not narrowed to an object, since a raw `invoke` may
+ * pass Tauri's array or buffer payload shapes. `clear()` empties it without uninstalling
+ * anything. Every call is recorded before it is dispatched, including one that fails
+ * because it has no handler or because its handler throws. A command the bindings do not
+ * generate is recorded under its raw Tauri command name, since it has no `commands`
+ * accessor.
+ *
+ * Calling `mockCommands` again installs a fresh set of handlers and returns a fresh handle
+ * with an empty history; the previous handle keeps its calls but stops growing.
+ *
  * Tauri's event mocking is enabled as part of the install (`shouldMockEvents`), so
- * `events` keeps working under test without a second installer fighting this one. Note
- * that Tauri's own mock does not implement `emitTo`, which resolves without reaching any
- * listener. Call `clearMocks` from `@tauri-apps/api/mocks` between tests.
+ * `events` keeps working under test without a second installer fighting this one, and the
+ * event plugin's internal invokes never reach the record. Note that Tauri's own mock does
+ * not implement `emitTo`, which resolves without reaching any listener. Call `clearMocks`
+ * from `@tauri-apps/api/mocks` between tests; it uninstalls the handlers but leaves a
+ * handle's history alone.
  */
-export function mockCommands(handlers: Partial<MockCommandHandlers> = {}): void {
+export function mockCommands(handlers: Partial<MockCommandHandlers> = {}): MockCommandsHandle {
     // A copy with no prototype, so a command named after an `Object.prototype` member
     // (`toString`, `constructor`, …) reports that it is unregistered instead of calling
     // whatever the prototype happens to provide.
     const mockHandlers: Partial<MockCommandHandlers> = Object.create(null);
     Object.assign(mockHandlers, handlers);
-    return __TAURI_MOCK_IPC((cmd, args) => {
+    const calls: MockCall[] = [];
+    __TAURI_MOCK_IPC((cmd, args) => {
         switch (cmd) {
-            case "to_string": return mockCommandHandler(mockHandlers.toString, "to_string", args);
-            case "value_of": return mockCommandHandler(mockHandlers.valueOf, "value_of", args);
-            default: throw new Error(`No mock handler registered for command '${cmd}'`);
+            case "to_string": calls.push({ command: "toString", args }); return mockCommandHandler(mockHandlers.toString, "to_string", args);
+            case "value_of": calls.push({ command: "valueOf", args }); return mockCommandHandler(mockHandlers.valueOf, "value_of", args);
+            default:
+                calls.push({ command: cmd, args });
+                throw new Error(`No mock handler registered for command '${cmd}'`);
         }
     }, { shouldMockEvents: true });
+    return Object.freeze({
+        calls,
+        clear: () => {
+            calls.length = 0;
+        },
+    });
 }
 
 function mockCommandHandler(handler: ((args: any) => unknown) | undefined, name: string, args: unknown): unknown {
