@@ -21,6 +21,17 @@ struct EventEmit {
     value: String,
 }
 
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+struct channelStream {
+    value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+struct ChannelStream {
+    value: String,
+}
+
 fn export<L: LanguageExt>(
     builder: &Builder<MockRuntime>,
     language: L,
@@ -49,5 +60,33 @@ fn typescript_rejects_types_named_after_its_runtime_helpers() {
     let builder = Builder::<MockRuntime>::new().typ::<EventEmit>();
     let err = export(&builder, Typescript::default(), "bindings.ts")
         .expect_err("the TypeScript runtime declares `EventEmit`");
+    assert!(err.contains("must be renamed"), "unexpected error: {err}");
+}
+
+#[test]
+fn channel_stream_is_reserved_in_both_languages() {
+    let builder = Builder::<MockRuntime>::new().typ::<channelStream>();
+
+    let err = export(&builder, Typescript::default(), "bindings.ts")
+        .expect_err("the TypeScript runtime declares `channelStream`");
+    assert!(err.contains("must be renamed"), "unexpected error: {err}");
+
+    let err = export(&builder, JSDoc::default(), "bindings.js")
+        .expect_err("the JSDoc runtime declares `channelStream` too");
+    assert!(err.contains("must be renamed"), "unexpected error: {err}");
+}
+
+#[test]
+fn jsdoc_allows_types_named_channel_stream() {
+    let builder = Builder::<MockRuntime>::new().typ::<ChannelStream>();
+    export(&builder, JSDoc::default(), "bindings.js")
+        .expect("the JSDoc runtime inlines the stream type instead of declaring a typedef");
+}
+
+#[test]
+fn typescript_rejects_types_named_channel_stream() {
+    let builder = Builder::<MockRuntime>::new().typ::<ChannelStream>();
+    let err = export(&builder, Typescript::default(), "bindings.ts")
+        .expect_err("the TypeScript runtime declares the `ChannelStream` type");
     assert!(err.contains("must be renamed"), "unexpected error: {err}");
 }

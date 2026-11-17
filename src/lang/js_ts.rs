@@ -48,6 +48,7 @@ impl LanguageExt for specta_typescript::Typescript {
                     TYPED_ERROR_ASSERTION_TS,
                     MAKE_EVENT_IMPL_TS,
                     MAP_CHANNEL_IMPL_TS,
+                    CHANNEL_STREAM_IMPL_TS,
                 )
             })
             .export_to(path, &types, format)
@@ -83,12 +84,16 @@ impl LanguageExt for specta_typescript::JSDoc {
                     "",
                     MAKE_EVENT_IMPL_JS,
                     MAP_CHANNEL_IMPL_JS,
+                    CHANNEL_STREAM_IMPL_JS,
                 )
             })
             .export_to(path, &types, format)
     }
 }
 
+// The runtime fragments are the per-language constants from the two `LanguageExt`
+// impls above; grouping them in a struct would just mirror the same list.
+#[allow(clippy::too_many_arguments)]
 fn runtime(
     mut exporter: FrameworkExporter,
     cfg: &BuilderConfiguration,
@@ -97,6 +102,7 @@ fn runtime(
     typed_error_assertion: &str,
     make_event_impl: &str,
     map_channel_impl: &str,
+    channel_stream_impl: &str,
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let has_user_events = !cfg.events.is_empty();
@@ -872,6 +878,10 @@ fn runtime(
 
     if is_channel_transform_used {
         out.push_str(map_channel_impl);
+        out.push_str("\n\n");
+    }
+    if is_channel_used {
+        out.push_str(channel_stream_impl);
         out.push_str("\n\n");
     }
     if has_typed_error {
@@ -2038,6 +2048,7 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "typedError",
     "makeEvent",
     "mapChannel",
+    "channelStream",
 ];
 
 /// Names only the mocks runtime declares, and so only reserved on an export that
@@ -2054,7 +2065,7 @@ const RESERVED_NDT_NAMES_MOCKS_ONLY: &[&str] = &[
 /// Names only the TypeScript runtime declares. The JSDoc runtime has no
 /// corresponding typedefs, so user types may use them there (and a JSDoc export
 /// must not fail over a name it never emits).
-const RESERVED_NDT_NAMES_TS_ONLY: &[&str] = &["EventEmit", "EventEmitTo"];
+const RESERVED_NDT_NAMES_TS_ONLY: &[&str] = &["EventEmit", "EventEmitTo", "ChannelStream"];
 
 fn is_reserved_ndt_name(name: &str, jsdoc: bool, mocks: bool) -> bool {
     RESERVED_NDT_NAMES.contains(&name)
@@ -2103,6 +2114,173 @@ const MAP_CHANNEL_IMPL_JS: &str = r#"/**
  */
 function mapChannel(channel, deserialize) {
     return new Channel((payload) => channel.onmessage(deserialize(payload)));
+}"#;
+
+const CHANNEL_STREAM_IMPL_TS: &str = r#"/**
+ * A `Channel<T>` alongside the async iterator that reads it.
+ *
+ * Messages are buffered in arrival order until a consumer reads them. Tauri's
+ * channel has no acknowledgement, so this is buffering, not backpressure: a fast
+ * producer is never slowed down by a slow consumer.
+ *
+ * Only one consumer may iterate a stream; a second `[Symbol.asyncIterator]()`
+ * call throws.
+ */
+export type ChannelStream<T> = AsyncIterable<T> & {
+    /** Pass this to the command that takes a `Channel<T>`. */
+    channel: Channel<T>;
+    /** End the stream: buffered messages are read, then the pending or next `next()` resolves `{ done: true }`. */
+    close(): void;
+    /** Fail the stream: the pending or next `next()` rejects with `error`, dropping any buffered messages. */
+    fail(error: unknown): void;
+};
+
+/**
+ * Create a `ChannelStream` for a command that takes a `Channel<T>`.
+ *
+ * The first of `close()` and `fail()` wins and later calls are no-ops. Messages
+ * that arrive after either are ignored.
+ */
+export function channelStream<T>(): ChannelStream<T> {
+    const queue: T[] = [];
+    let pending: {
+        resolve: (result: IteratorResult<T>) => void;
+        reject: (error: unknown) => void;
+    } | null = null;
+    let terminal: { error: unknown } | { done: true } | null = null;
+    let consumed = false;
+
+    const channel = new Channel<T>();
+    channel.onmessage = (message) => {
+        // A terminal ends the stream, so late messages must not leak past it.
+        if (terminal !== null) return;
+        if (pending !== null) {
+            const waiter = pending;
+            pending = null;
+            waiter.resolve({ done: false, value: message });
+        } else {
+            queue.push(message);
+        }
+    };
+
+    const settlePending = () => {
+        if (pending === null || terminal === null) return;
+        const waiter = pending;
+        pending = null;
+        if ("error" in terminal) waiter.reject(terminal.error);
+        else waiter.resolve({ done: true, value: undefined });
+    };
+
+    const fail = (error: unknown) => {
+        if (terminal !== null) return;
+        terminal = { error };
+        settlePending();
+    };
+
+    return {
+        channel,
+        close: () => {
+            if (terminal !== null) return;
+            terminal = { done: true };
+            settlePending();
+        },
+        fail,
+        [Symbol.asyncIterator]: () => {
+            if (consumed) {
+                throw new Error("A ChannelStream can only be consumed once.");
+            }
+            consumed = true;
+            return {
+                next: async (): Promise<IteratorResult<T>> => {
+                    // `fail()` aborts immediately; `close()` lets already-buffered messages drain.
+                    if (terminal !== null && "error" in terminal) throw terminal.error;
+                    if (queue.length > 0) return { done: false, value: queue.shift() as T };
+                    if (terminal !== null) return { done: true, value: undefined };
+                    return new Promise<IteratorResult<T>>((resolve, reject) => {
+                        pending = { resolve, reject };
+                    });
+                },
+            };
+        },
+    };
+}"#;
+
+const CHANNEL_STREAM_IMPL_JS: &str = r#"/**
+ * A `Channel<T>` alongside the async iterator that reads it.
+ *
+ * Messages are buffered in arrival order until a consumer reads them. Tauri's
+ * channel has no acknowledgement, so this is buffering, not backpressure: a fast
+ * producer is never slowed down by a slow consumer.
+ *
+ * Only one consumer may iterate a stream; a second `[Symbol.asyncIterator]()`
+ * call throws.
+ *
+ * @template T
+ * @returns {AsyncIterable<T> & {
+ *   channel: Channel<T>,
+ *   close: () => void,
+ *   fail: (error: unknown) => void,
+ * }}
+ */
+export function channelStream() {
+    const queue = [];
+    let pending = null;
+    let terminal = null;
+    let consumed = false;
+
+    const channel = new Channel();
+    channel.onmessage = (message) => {
+        // A terminal ends the stream, so late messages must not leak past it.
+        if (terminal !== null) return;
+        if (pending !== null) {
+            const waiter = pending;
+            pending = null;
+            waiter.resolve({ done: false, value: message });
+        } else {
+            queue.push(message);
+        }
+    };
+
+    const settlePending = () => {
+        if (pending === null || terminal === null) return;
+        const waiter = pending;
+        pending = null;
+        if ("error" in terminal) waiter.reject(terminal.error);
+        else waiter.resolve({ done: true, value: undefined });
+    };
+
+    const fail = (error) => {
+        if (terminal !== null) return;
+        terminal = { error };
+        settlePending();
+    };
+
+    return {
+        channel,
+        close: () => {
+            if (terminal !== null) return;
+            terminal = { done: true };
+            settlePending();
+        },
+        fail,
+        [Symbol.asyncIterator]: () => {
+            if (consumed) {
+                throw new Error("A ChannelStream can only be consumed once.");
+            }
+            consumed = true;
+            return {
+                next: async () => {
+                    // `fail()` aborts immediately; `close()` lets already-buffered messages drain.
+                    if (terminal !== null && "error" in terminal) throw terminal.error;
+                    if (queue.length > 0) return { done: false, value: queue.shift() };
+                    if (terminal !== null) return { done: true, value: undefined };
+                    return new Promise((resolve, reject) => {
+                        pending = { resolve, reject };
+                    });
+                },
+            };
+        },
+    };
 }"#;
 
 const TYPED_ERROR_IMPL_JS: &str = r#"/**

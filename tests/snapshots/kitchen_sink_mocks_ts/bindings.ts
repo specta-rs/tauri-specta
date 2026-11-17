@@ -142,6 +142,95 @@ export type UntaggedEnum = number | string;
 export type Wrapper = string;
 
 /* Tauri Specta runtime */
+/**
+ * A `Channel<T>` alongside the async iterator that reads it.
+ *
+ * Messages are buffered in arrival order until a consumer reads them. Tauri's
+ * channel has no acknowledgement, so this is buffering, not backpressure: a fast
+ * producer is never slowed down by a slow consumer.
+ *
+ * Only one consumer may iterate a stream; a second `[Symbol.asyncIterator]()`
+ * call throws.
+ */
+export type ChannelStream<T> = AsyncIterable<T> & {
+    /** Pass this to the command that takes a `Channel<T>`. */
+    channel: Channel<T>;
+    /** End the stream: buffered messages are read, then the pending or next `next()` resolves `{ done: true }`. */
+    close(): void;
+    /** Fail the stream: the pending or next `next()` rejects with `error`, dropping any buffered messages. */
+    fail(error: unknown): void;
+};
+
+/**
+ * Create a `ChannelStream` for a command that takes a `Channel<T>`.
+ *
+ * The first of `close()` and `fail()` wins and later calls are no-ops. Messages
+ * that arrive after either are ignored.
+ */
+export function channelStream<T>(): ChannelStream<T> {
+    const queue: T[] = [];
+    let pending: {
+        resolve: (result: IteratorResult<T>) => void;
+        reject: (error: unknown) => void;
+    } | null = null;
+    let terminal: { error: unknown } | { done: true } | null = null;
+    let consumed = false;
+
+    const channel = new Channel<T>();
+    channel.onmessage = (message) => {
+        // A terminal ends the stream, so late messages must not leak past it.
+        if (terminal !== null) return;
+        if (pending !== null) {
+            const waiter = pending;
+            pending = null;
+            waiter.resolve({ done: false, value: message });
+        } else {
+            queue.push(message);
+        }
+    };
+
+    const settlePending = () => {
+        if (pending === null || terminal === null) return;
+        const waiter = pending;
+        pending = null;
+        if ("error" in terminal) waiter.reject(terminal.error);
+        else waiter.resolve({ done: true, value: undefined });
+    };
+
+    const fail = (error: unknown) => {
+        if (terminal !== null) return;
+        terminal = { error };
+        settlePending();
+    };
+
+    return {
+        channel,
+        close: () => {
+            if (terminal !== null) return;
+            terminal = { done: true };
+            settlePending();
+        },
+        fail,
+        [Symbol.asyncIterator]: () => {
+            if (consumed) {
+                throw new Error("A ChannelStream can only be consumed once.");
+            }
+            consumed = true;
+            return {
+                next: async (): Promise<IteratorResult<T>> => {
+                    // `fail()` aborts immediately; `close()` lets already-buffered messages drain.
+                    if (terminal !== null && "error" in terminal) throw terminal.error;
+                    if (queue.length > 0) return { done: false, value: queue.shift() as T };
+                    if (terminal !== null) return { done: true, value: undefined };
+                    return new Promise<IteratorResult<T>>((resolve, reject) => {
+                        pending = { resolve, reject };
+                    });
+                },
+            };
+        },
+    };
+}
+
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
 type EventEmitTo<T> = [T] extends [null] ? (target: __TAURI_EVENT.EventTarget | string) => Promise<void> : (target: __TAURI_EVENT.EventTarget | string, payload: T) => Promise<void>;

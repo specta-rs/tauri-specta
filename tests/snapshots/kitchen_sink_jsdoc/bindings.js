@@ -311,6 +311,84 @@ export const MAX_RETRIES = 3;
 
 /* Tauri Specta runtime */
 /**
+ * A `Channel<T>` alongside the async iterator that reads it.
+ *
+ * Messages are buffered in arrival order until a consumer reads them. Tauri's
+ * channel has no acknowledgement, so this is buffering, not backpressure: a fast
+ * producer is never slowed down by a slow consumer.
+ *
+ * Only one consumer may iterate a stream; a second `[Symbol.asyncIterator]()`
+ * call throws.
+ *
+ * @template T
+ * @returns {AsyncIterable<T> & {
+ *   channel: Channel<T>,
+ *   close: () => void,
+ *   fail: (error: unknown) => void,
+ * }}
+ */
+export function channelStream() {
+    const queue = [];
+    let pending = null;
+    let terminal = null;
+    let consumed = false;
+
+    const channel = new Channel();
+    channel.onmessage = (message) => {
+        // A terminal ends the stream, so late messages must not leak past it.
+        if (terminal !== null) return;
+        if (pending !== null) {
+            const waiter = pending;
+            pending = null;
+            waiter.resolve({ done: false, value: message });
+        } else {
+            queue.push(message);
+        }
+    };
+
+    const settlePending = () => {
+        if (pending === null || terminal === null) return;
+        const waiter = pending;
+        pending = null;
+        if ("error" in terminal) waiter.reject(terminal.error);
+        else waiter.resolve({ done: true, value: undefined });
+    };
+
+    const fail = (error) => {
+        if (terminal !== null) return;
+        terminal = { error };
+        settlePending();
+    };
+
+    return {
+        channel,
+        close: () => {
+            if (terminal !== null) return;
+            terminal = { done: true };
+            settlePending();
+        },
+        fail,
+        [Symbol.asyncIterator]: () => {
+            if (consumed) {
+                throw new Error("A ChannelStream can only be consumed once.");
+            }
+            consumed = true;
+            return {
+                next: async () => {
+                    // `fail()` aborts immediately; `close()` lets already-buffered messages drain.
+                    if (terminal !== null && "error" in terminal) throw terminal.error;
+                    if (queue.length > 0) return { done: false, value: queue.shift() };
+                    if (terminal !== null) return { done: true, value: undefined };
+                    return new Promise((resolve, reject) => {
+                        pending = { resolve, reject };
+                    });
+                },
+            };
+        },
+    };
+}
+
+/**
  * @template T
  * @param {string} name
  * @param {(payload: T) => unknown} [serialize]
