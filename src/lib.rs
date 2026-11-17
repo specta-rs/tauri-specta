@@ -244,8 +244,10 @@
 //!
 //! Tauri emits its own events for window and webview lifecycle changes and for file
 //! drag-and-drop (`tauri://resize`, `tauri://drag-drop`, …). They aren't registered
-//! through [`Builder::events`], so the bindings always include a `tauriEvents` object
-//! with one typed accessor per built-in event, alongside your own `events`:
+//! through [`Builder::events`], but unlike [`Builder::mocks`] or
+//! [`Builder::semantic_types`] there is nothing to opt into: Tauri sends them either way,
+//! so the bindings always include a `tauriEvents` object with one typed accessor per
+//! built-in event, alongside your own `events`:
 //!
 //! ```ts
 //! import { tauriEvents } from "./bindings";
@@ -317,10 +319,11 @@
 //! handlers and returns a fresh handle with an empty history, and the previous handle
 //! stops growing.
 //!
-//! Events need no extra setup. Tauri's own event mocking is enabled as part of the
-//! install, so `events.demoEvent.listen` and friends keep working under test, and the
-//! event plugin's internal invokes never reach the recorded history. Tauri's mock does not
-//! implement `emitTo`, which resolves without reaching any listener. `clearMocks` from
+//! Once mocks are enabled, events need no extra setup. Tauri's own event mocking is
+//! enabled as part of the install, so `events.demoEvent.listen` and
+//! `tauriEvents.windowResized.listen` keep working under test, and the event plugin's
+//! internal invokes never reach the recorded history. Tauri's mock does not implement
+//! `emitTo`, which resolves without reaching any listener. `clearMocks` from
 //! `@tauri-apps/api/mocks` uninstalls the handlers but leaves a handle's history alone.
 //!
 //! Mocks and [`Builder::semantic_types`] don't mix: where a semantic rule applies a

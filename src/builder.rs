@@ -430,6 +430,9 @@ impl<R: Runtime> Builder<R> {
     /// a module that satisfies the bindings' types. Refer to the crate docs for what
     /// the generated helpers do.
     ///
+    /// The helper also installs Tauri's event mock, so `events` and `tauriEvents` deliver
+    /// under test. That is what `.mocks()` is for on an export with no commands to stub.
+    ///
     /// Requires `@tauri-apps/api` v2.7 or newer, which is where `mockIPC` gained
     /// the `shouldMockEvents` option the generated helper relies on.
     ///

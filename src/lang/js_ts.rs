@@ -106,8 +106,10 @@ fn runtime(
             .iter()
             .any(|(_, dt)| is_ipc_type(dt, exporter.types, "TAURI_REQUEST"))
     });
-    // The built-in event accessors always need `mockIPC`, so a mocks export always has
-    // something to install even with no commands and no events of the user's own.
+    // `mockCommands` is not only a command stub: the `mockIPC` it installs is also what
+    // enables Tauri's event mock, so it has something to do even when there are no
+    // commands and no user events. The accessors for Tauri's own events are always
+    // emitted and need that mock under test.
     let enabled_mocks = cfg.mocks;
     let semantic_types_runtime_types = semantic_types_runtime_types(cfg)?;
     let semantic_types_runtime_types = semantic_types_runtime_types
@@ -2242,11 +2244,11 @@ const MOCK_COMMANDS_DOC: &str = r#"/**
  * with an empty history; the previous handle keeps its calls but stops growing.
  *
  * Tauri's event mocking is enabled as part of the install (`shouldMockEvents`), so
- * `events` keeps working under test without a second installer fighting this one, and the
- * event plugin's internal invokes never reach the record. Note that Tauri's own mock does
- * not implement `emitTo`, which resolves without reaching any listener. Call `clearMocks`
- * from `@tauri-apps/api/mocks` between tests; it uninstalls the handlers but leaves a
- * handle's history alone."#;
+ * `events` and `tauriEvents` keep working under test without a second installer fighting
+ * this one, and the event plugin's internal invokes never reach the record. Note that
+ * Tauri's own mock does not implement `emitTo`, which resolves without reaching any
+ * listener. Call `clearMocks` from `@tauri-apps/api/mocks` between tests; it uninstalls
+ * the handlers but leaves a handle's history alone."#;
 
 const MOCK_HANDLER_REGISTRY_IMPL_TS: &str = r#"    // A copy with no prototype, so a command named after an `Object.prototype` member
     // (`toString`, `constructor`, …) reports that it is unregistered instead of calling

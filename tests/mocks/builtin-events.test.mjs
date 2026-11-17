@@ -1,8 +1,8 @@
 // Drives the generated `tauriEvents` accessors against Tauri's own event mock.
 //
 // `pnpm run check:bindings` proves the payload types compile; this proves the accessors
-// reach the Tauri event API and keep their payloads. Both fixtures are built-in-events
-// exports, so this also shows `tauriEvents` works without a single user event registered.
+// reach the Tauri event API and keep their payloads. Neither fixture registers a command,
+// so this also shows `tauriEvents` works with nothing to stub.
 //
 // Run with `pnpm run test:mocks`.
 
@@ -15,6 +15,8 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 // `@tauri-apps/api` expects browser globals. The mock layer only reaches for `crypto`.
 globalThis.window = { crypto: webcrypto };
 
+// Every export carries `tauriEvents`, mocks or not, so the plain export is as good a
+// source as the mocks one.
 const { tauriEvents } = await import(
 	"../snapshots/events_only_ts/bindings.ts"
 );

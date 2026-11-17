@@ -6,6 +6,10 @@
 // of a type argument, which is exactly the kind of thing that can silently degrade to
 // `any`. The rejected cases carry the proof: if the payload were `any`, the
 // `@ts-expect-error` directives below would be unused.
+//
+// The fixture is command-free because the JSDoc fixtures that have commands carry
+// unrelated pre-existing `checkJs` diagnostics (see `tsconfig.jsdoc.json`). Every JSDoc
+// export carries the same `tauriEvents`, with or without user events.
 
 import { tauriEvents } from "../snapshots/events_only_jsdoc/bindings.js";
 

@@ -438,11 +438,11 @@ function makeEvent(name, serialize, deserialize) {
  * with an empty history; the previous handle keeps its calls but stops growing.
  *
  * Tauri's event mocking is enabled as part of the install (`shouldMockEvents`), so
- * `events` keeps working under test without a second installer fighting this one, and the
- * event plugin's internal invokes never reach the record. Note that Tauri's own mock does
- * not implement `emitTo`, which resolves without reaching any listener. Call `clearMocks`
- * from `@tauri-apps/api/mocks` between tests; it uninstalls the handlers but leaves a
- * handle's history alone.
+ * `events` and `tauriEvents` keep working under test without a second installer fighting
+ * this one, and the event plugin's internal invokes never reach the record. Note that
+ * Tauri's own mock does not implement `emitTo`, which resolves without reaching any
+ * listener. Call `clearMocks` from `@tauri-apps/api/mocks` between tests; it uninstalls
+ * the handlers but leaves a handle's history alone.
  *
  * @param {Partial<MockCommandHandlers>} [handlers]
  * @returns {MockCommandsHandle}
