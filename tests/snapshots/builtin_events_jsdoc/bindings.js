@@ -15,6 +15,14 @@ export const commands = {
 	greet: (myName, options) => __TAURI_INVOKE("greet", { myName }, options),
 };
 
+/** Events */
+export const events = {
+	/** @type {ReturnType<typeof makeEvent<EmptyEvent>>} */
+	emptyEvent: makeEvent("empty-event"),
+	/** @type {ReturnType<typeof makeEvent<StructEvent>>} */
+	structEvent: makeEvent("struct-event"),
+};
+
 /** Built-in Tauri events */
 export const tauriEvents = {
 	/**
@@ -99,6 +107,18 @@ export const tauriEvents = {
 	dragLeave: makeEvent("tauri://drag-leave"),
 };
 
+/* Types */
+/**
+	* @typedef {null} EmptyEvent
+	*
+	* @typedef {{
+	*		eventId: number,
+	*		payload: string,
+	*	}} StructEvent
+	* @property {number} eventId
+	* @property {string} payload
+	*/
+
 /* Tauri Specta runtime */
 /**
  * @template T
@@ -107,7 +127,12 @@ export const tauriEvents = {
  * @param {(payload: any) => T} [deserialize]
  */
 function makeEvent(name, serialize, deserialize) {
+    /**
+     * @param {__TAURI_EVENT.EventCallback<T>} cb
+     * @returns {(event: __TAURI_EVENT.Event<any>) => void}
+     */
     const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    /** @param {T} payload */
     const mapPayload = (payload) => serialize ? serialize(payload) : payload;
 
     const base = {

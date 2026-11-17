@@ -31,7 +31,12 @@ export const events = {
  * @param {(payload: any) => T} [deserialize]
  */
 function makeEvent(name, serialize, deserialize) {
+    /**
+     * @param {__TAURI_EVENT.EventCallback<T>} cb
+     * @returns {(event: __TAURI_EVENT.Event<any>) => void}
+     */
     const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    /** @param {T} payload */
     const mapPayload = (payload) => serialize ? serialize(payload) : payload;
 
     const base = {

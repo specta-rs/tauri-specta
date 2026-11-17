@@ -10,6 +10,12 @@ export const commands = {
 	greet: (myName: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("greet", { myName }, options),
 };
 
+/** Events */
+export const events = {
+	emptyEvent: makeEvent<EmptyEvent, EmptyEvent>("empty-event"),
+	structEvent: makeEvent<StructEvent, StructEvent>("struct-event"),
+};
+
 /** Built-in Tauri events */
 export const tauriEvents = {
 	/** A window was resized. Payload: the new inner size, in physical pixels. */
@@ -44,6 +50,14 @@ export const tauriEvents = {
 	dragDrop: makeEvent<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-drop"),
 	/** The drag operation left a window or was cancelled. */
 	dragLeave: makeEvent<null>("tauri://drag-leave"),
+};
+
+/* Types */
+export type EmptyEvent = null;
+
+export type StructEvent = {
+	eventId: number,
+	payload: string,
 };
 
 /* Tauri Specta runtime */

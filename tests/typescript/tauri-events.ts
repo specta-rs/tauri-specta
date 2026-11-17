@@ -56,7 +56,15 @@ export function payloads(): void {
 		void payload;
 	});
 	void tauriEvents.windowDestroyed.emit();
+	void tauriEvents.windowDestroyed.emitTo("main");
 	void tauriEvents.dragLeave.emit();
+
+	// The same null special case applies to `emitTo`, and a payload event keeps its
+	// payload there too.
+	void tauriEvents.dragDrop.emitTo("main", {
+		paths: ["/tmp/a.txt"],
+		position: { x: 0, y: 0 },
+	});
 }
 
 export function rejections(): void {
@@ -68,4 +76,10 @@ export function rejections(): void {
 
 	// @ts-expect-error a null-payload event takes no emit payload.
 	void tauriEvents.windowDestroyed.emit({});
+
+	// @ts-expect-error nor an `emitTo` payload.
+	void tauriEvents.windowDestroyed.emitTo("main", {});
+
+	// @ts-expect-error a payload event still checks the shape it emits.
+	void tauriEvents.windowResized.emit({ width: 800 });
 }

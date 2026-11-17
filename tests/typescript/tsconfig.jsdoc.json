@@ -1,14 +1,13 @@
 {
-  // Type-checks the JSDoc fixture's mock surface under `checkJs`, via the probe next to
-  // this file. The other JSDoc fixtures carry pre-existing diagnostics unrelated to the
-  // generated runtime, so only the probe is checked; it imports the one fixture whose
-  // `@typedef`s the mocks runtime declares.
+  // Type-checks the JSDoc fixtures this repo added and can vouch for, under `checkJs`:
+  // the built-in event fixtures and the probes next to this file (`jsdoc-mocks.js` for
+  // the mocks runtime, `tauri-events.js` for the event accessors). `allowJs`/`checkJs`
+  // are what makes the emitter's `@type` comments matter at all.
   //
-  // `noImplicitAny` is off because the JSDoc emitter leaves `makeEvent`'s parameters
-  // untyped, which is unrelated to what this checks.
+  // The remaining JSDoc fixtures carry pre-existing diagnostics unrelated to these
+  // additions (e.g. in the `typedError` runtime and the `Files` layout), so they stay out.
   "compilerOptions": {
     "strict": true,
-    "noImplicitAny": false,
     "allowJs": true,
     "checkJs": true,
     "noEmit": true,
@@ -19,5 +18,9 @@
     "skipLibCheck": true,
     "types": []
   },
-  "include": ["jsdoc-mocks.js"]
+  "include": [
+    "../snapshots/builtin_events*_jsdoc/**/*.js",
+    "jsdoc-mocks.js",
+    "tauri-events.js"
+  ]
 }

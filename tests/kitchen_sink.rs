@@ -245,11 +245,12 @@ fn events_only() -> Builder<MockRuntime> {
     Builder::<MockRuntime>::new().events(collect_events![EmptyEvent, StructEvent])
 }
 
-/// Built-in events next to a command, so the `__TAURI_EVENT` import and the `makeEvent`
-/// runtime are shared rather than emitted twice.
+/// Built-in events next to commands and user events, so one `__TAURI_EVENT` import and
+/// one `makeEvent` runtime are shared by both event objects rather than emitted twice.
 fn builtin_events() -> Builder<MockRuntime> {
     Builder::<MockRuntime>::new()
         .commands(collect_commands![greet])
+        .events(collect_events![EmptyEvent, StructEvent])
         .builtin_events()
 }
 
@@ -257,6 +258,13 @@ fn builtin_events() -> Builder<MockRuntime> {
 /// import and the `makeEvent` runtime.
 fn builtin_events_only() -> Builder<MockRuntime> {
     Builder::<MockRuntime>::new().builtin_events()
+}
+
+/// Built-in events with mocks and no commands. The generated `mockCommands` installs
+/// Tauri's mock IPC with `shouldMockEvents`, which is what makes `tauriEvents` deliver
+/// under test.
+fn builtin_events_mocks() -> Builder<MockRuntime> {
+    Builder::<MockRuntime>::new().builtin_events().mocks()
 }
 
 fn constants_only() -> Builder<MockRuntime> {
@@ -350,6 +358,7 @@ const SCENARIOS: &[&str] = &[
     "bigints_as_number_jsdoc",
     "bigints_as_number_ts",
     "builtin_events_jsdoc",
+    "builtin_events_mocks_ts",
     "builtin_events_only_jsdoc",
     "builtin_events_only_ts",
     "builtin_events_ts",
@@ -664,6 +673,18 @@ fn builtin_events_only_jsdoc() {
         "bindings.js",
         &builtin_events_only(),
         JSDoc::default(),
+    );
+}
+
+/// Built-in events alone are still worth a `mockCommands`, because its `mockIPC`
+/// install is what enables event delivery in a test.
+#[test]
+fn builtin_events_mocks_ts() {
+    assert_export(
+        "builtin_events_mocks_ts",
+        "bindings.ts",
+        &builtin_events_mocks(),
+        Typescript::default(),
     );
 }
 

@@ -1,9 +1,8 @@
 // Drives the generated `tauriEvents` accessors against Tauri's own event mock.
 //
 // `pnpm run check:bindings` proves the payload types compile; this proves the accessors
-// reach the Tauri event API and keep their payloads. The fixture is the
-// builtin-events-only export, so it also shows `tauriEvents` works without a single user
-// event registered.
+// reach the Tauri event API and keep their payloads. Both fixtures are built-in-events
+// exports, so this also shows `tauriEvents` works without a single user event registered.
 //
 // Run with `pnpm run test:mocks`.
 
@@ -19,11 +18,17 @@ globalThis.window = { crypto: webcrypto };
 const { tauriEvents } = await import(
 	"../snapshots/builtin_events_only_ts/bindings.ts"
 );
+// The same builder with `.mocks()`: no commands to stub, but `mockCommands` is still
+// what installs the mock IPC that delivers events.
+const { mockCommands } = await import(
+	"../snapshots/builtin_events_mocks_ts/bindings.ts"
+);
 
 afterEach(() => clearMocks());
 
 test("a null-payload built-in event listens and emits with no argument", async () => {
-	mockIPC(() => {}, { shouldMockEvents: true });
+	// No handlers: this only exists to install the mock IPC.
+	mockCommands();
 
 	const received = [];
 	const unlisten = await tauriEvents.windowDestroyed.listen((event) =>
@@ -35,7 +40,7 @@ test("a null-payload built-in event listens and emits with no argument", async (
 	assert.equal(received.length, 1);
 	assert.equal(received[0].event, "tauri://destroyed");
 	// Tauri's Rust side emits `null` here; the JS `emit` path has no payload to send and
-	// the runtime passes it through rather than inventing one.
+	// the mock runtime passes it through rather than inventing one.
 	assert.equal(received[0].payload, undefined);
 });
 
