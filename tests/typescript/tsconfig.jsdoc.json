@@ -1,0 +1,23 @@
+{
+  // Type-checks the JSDoc fixture's mock surface under `checkJs`, via the probe next to
+  // this file. The other JSDoc fixtures carry pre-existing diagnostics unrelated to the
+  // generated runtime, so only the probe is checked; it imports the one fixture whose
+  // `@typedef`s the mocks runtime declares.
+  //
+  // `noImplicitAny` is off because the JSDoc emitter leaves `makeEvent`'s parameters
+  // untyped, which is unrelated to what this checks.
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": false,
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["jsdoc-mocks.js"]
+}

@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "check:bindings": "tsc -p tests/typescript/tsconfig.json",
+    "check:bindings": "tsc -p tests/typescript/tsconfig.json && tsc -p tests/typescript/tsconfig.jsdoc.json",
     "test:mocks": "node --experimental-strip-types --test \"tests/mocks/**/*.test.mjs\""
   },
   "dependencies": {

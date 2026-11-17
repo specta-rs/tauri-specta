@@ -146,6 +146,22 @@ test("the real command keeps running its own transforms around the mock", async 
 	assert.deepEqual(await commands.echoProfile(profile), profile);
 });
 
+test("the event plugin's own invokes are not recorded", async () => {
+	const calls = mockCommands({ greet: () => "hi" });
+
+	// `shouldMockEvents` intercepts `plugin:event|*` inside Tauri's mock, before the
+	// callback the bindings install, so event plumbing must never reach the history.
+	const unlisten = await events.messageEvent.listen(() => {});
+	await events.messageEvent.emit("hello");
+	await events.messageEvent.emitTo("main", "hello");
+	await unlisten();
+
+	await commands.greet("x");
+
+	// Also proves a command is recorded exactly once.
+	assert.deepEqual(calls.calls, [{ command: "greet", args: { myName: "x" } }]);
+});
+
 test("a call is recorded with the accessor and the arguments it was invoked with", async () => {
 	const handle = mockCommands({ greet: ({ myName }) => `Hello, ${myName}!` });
 
@@ -233,4 +249,30 @@ test("a fresh install returns a fresh handle and the previous one stops growing"
 	assert.deepEqual(second.calls, [{ command: "greet", args: { myName: "b" } }]);
 	// The old handle keeps what it recorded, but the replaced handlers never touch it.
 	assert.deepEqual(first.calls, [{ command: "greet", args: { myName: "a" } }]);
+});
+
+test("`clearMocks` stops recording but keeps the handle's history", async () => {
+	const calls = mockCommands({ greet: () => "hi" });
+	await commands.greet("a");
+
+	clearMocks();
+
+	// Tauri's own cleanup removes the install without touching this handle: nothing new
+	// can reach it, and what it already recorded stays put.
+	assert.deepEqual(calls.calls, [{ command: "greet", args: { myName: "a" } }]);
+	calls.clear();
+	assert.deepEqual(calls.calls, []);
+});
+
+test("the handle's history cannot be detached from the recording", async () => {
+	const calls = mockCommands({ greet: () => "hi" });
+	await commands.greet("a");
+
+	// `readonly` is a compile-time promise; the object is frozen so a caller that ignores
+	// it (plain JavaScript, or a cast) can't orphan the array the handler keeps appending
+	// to and then see an empty-looking handle.
+	assert.throws(() => {
+		calls.calls = [];
+	}, TypeError);
+	assert.deepEqual(calls.calls, [{ command: "greet", args: { myName: "a" } }]);
 });
