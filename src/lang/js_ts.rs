@@ -2239,11 +2239,15 @@ const CHANNEL_STREAM_IMPL_JS: &str = r#"/**
  * }}
  */
 export function channelStream() {
+    /** @type {T[]} */
     const queue = [];
+    /** @type {{ resolve: (result: IteratorResult<T>) => void, reject: (error: unknown) => void }[]} */
     const waiters = [];
+    /** @type {{ error: unknown } | "done" | null} */
     let terminal = null;
     let consumed = false;
 
+    /** @param {{ error: unknown } | "done"} next */
     const end = (next) => {
         if (terminal !== null) return;
         terminal = next;
@@ -2255,13 +2259,16 @@ export function channelStream() {
         }
     };
 
-    const channel = new Channel((message) => {
-        // A terminal ends the stream, so late messages must not leak past it.
-        if (terminal !== null) return;
-        const waiter = waiters.shift();
-        if (waiter) waiter.resolve({ done: false, value: message });
-        else queue.push(message);
-    });
+    const channel = new Channel(
+        /** @param {T} message */
+        (message) => {
+            // A terminal ends the stream, so late messages must not leak past it.
+            if (terminal !== null) return;
+            const waiter = waiters.shift();
+            if (waiter) waiter.resolve({ done: false, value: message });
+            else queue.push(message);
+        },
+    );
 
     return {
         channel,
@@ -2271,18 +2278,20 @@ export function channelStream() {
             if (consumed) throw new Error("A ChannelStream can only be consumed once.");
             consumed = true;
             return {
+                /** @returns {Promise<IteratorResult<T>>} */
                 next: () => {
                     // `fail()` is sticky: a `next()` after the rejection throws again.
                     if (terminal !== null && terminal !== "done") {
                         return Promise.reject(terminal.error);
                     }
                     if (queue.length > 0) {
-                        return Promise.resolve({ done: false, value: queue.shift() });
+                        return Promise.resolve({ done: false, value: /** @type {T} */ (queue.shift()) });
                     }
                     if (terminal === "done") return Promise.resolve({ done: true, value: undefined });
                     return new Promise((resolve, reject) => waiters.push({ resolve, reject }));
                 },
                 // `for await ... break` disposes the only consumer, who can never read the rest.
+                /** @returns {Promise<IteratorResult<T>>} */
                 return: () => {
                     end("done");
                     queue.length = 0;
