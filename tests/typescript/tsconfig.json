@@ -1,8 +1,9 @@
 {
-  // Type-checks the committed TypeScript fixtures in `tests/snapshots/*_ts/`.
+  // Type-checks the committed TypeScript fixtures in `tests/snapshots/*_ts/` and the
+  // compile-time assertions in this directory (e.g. `tauri-events.ts`).
   // The JSDoc fixtures are mostly excluded: they only type-check under `--checkJs`, and
   // carry pre-existing diagnostics unrelated to the generated runtime. `tsconfig.jsdoc.json`
-  // checks the one part of that surface this repo added and can vouch for.
+  // checks the parts of that surface this repo added and can vouch for.
   "compilerOptions": {
     "strict": true,
     "noEmit": true,
@@ -13,5 +14,5 @@
     "skipLibCheck": true,
     "types": []
   },
-  "include": ["../snapshots/*_ts/**/*.ts"]
+  "include": ["../snapshots/*_ts/**/*.ts", "*.ts"]
 }

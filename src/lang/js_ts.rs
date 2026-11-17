@@ -99,16 +99,18 @@ fn runtime(
     map_channel_impl: &str,
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
-    let enabled_events = !cfg.events.is_empty();
+    let has_user_events = !cfg.events.is_empty();
     let is_raw_request_used = cfg.commands.iter().any(|command| {
         command
             .args()
             .iter()
             .any(|(_, dt)| is_ipc_type(dt, exporter.types, "TAURI_REQUEST"))
     });
-    // A builder with nothing registered has no commands to stub and no events to mock, so
-    // installing the IPC handler would only buy an import and an always-rejecting switch.
-    let enabled_mocks = cfg.mocks && (enabled_commands || enabled_events);
+    // `mockCommands` is not only a command stub: the `mockIPC` it installs is also what
+    // enables Tauri's event mock, so it has something to do even when there are no
+    // commands and no user events. The accessors for Tauri's own events are always
+    // emitted and need that mock under test.
+    let enabled_mocks = cfg.mocks;
     let semantic_types_runtime_types = semantic_types_runtime_types(cfg)?;
     let semantic_types_runtime_types = semantic_types_runtime_types
         .as_ref()
@@ -242,9 +244,9 @@ fn runtime(
             }
         }
     }
-    if enabled_events {
-        out.push_str("import * as __TAURI_EVENT from \"@tauri-apps/api/event\";\n");
-    }
+
+    // `tauriEvents` is always emitted, so the event namespace is always imported.
+    out.push_str("import * as __TAURI_EVENT from \"@tauri-apps/api/event\";\n");
     if enabled_mocks {
         out.push_str("import { mockIPC as __TAURI_MOCK_IPC } from \"@tauri-apps/api/mocks\";\n");
     }
@@ -698,7 +700,7 @@ fn runtime(
     }
 
     // Events
-    if enabled_events {
+    if has_user_events {
         let mut s = Struct::named();
         for (name, (_, r)) in &cfg.events {
             let event_name_escaped =
@@ -790,6 +792,38 @@ fn runtime(
         out.push_str(";\n");
     }
 
+    // Built-in events. These are always emitted: Tauri sends them whether or not
+    // the user registered any of their own.
+    let mut s = Struct::named();
+    for event in BUILTIN_EVENTS {
+        // A unit payload is `null` in both emitters, which is the same shape a user's
+        // `null` event payload gets. In TypeScript, `EventEmit` then types `emit` as
+        // taking no argument.
+        let payload = event.payload.unwrap_or("null");
+        let accessor = if jsdoc {
+            format!("makeEvent(\"{}\")", event.name)
+        } else {
+            format!("makeEvent<{payload}>(\"{}\")", event.name)
+        };
+
+        let mut field = Field::new(define(accessor).into());
+        field.docs = if jsdoc {
+            format!(
+                "{}\n@type {{ReturnType<typeof makeEvent<{payload}>>}}",
+                event.docs
+            )
+            .into()
+        } else {
+            event.docs.into()
+        };
+        s = s.field(event.accessor, field);
+    }
+
+    out.push_str("\n/** Built-in Tauri events */");
+    out.push_str("\nexport const tauriEvents = ");
+    out.push_str(&exporter.reference(&s.build())?);
+    out.push_str(";\n");
+
     // Constants
     if !cfg.constants.is_empty() {
         out.push_str("\n/* Constants */");
@@ -833,35 +867,27 @@ fn runtime(
     }
 
     // Runtime
-    if has_typed_error || enabled_events || is_channel_transform_used {
-        out.push_str("\n/* Tauri Specta runtime */\n");
+    // `tauriEvents` always needs `makeEvent`, so this block is always emitted.
+    out.push_str("\n/* Tauri Specta runtime */\n");
 
-        if is_channel_transform_used {
-            out.push_str(map_channel_impl);
-            out.push('\n');
-            if has_typed_error || enabled_events {
-                out.push('\n');
-            }
-        }
-        if has_typed_error {
-            out.push_str(typed_error_impl);
-            out.push('\n');
-            // We check against `cfg` not `typed_error_assertion` as we only include the assertion if the user-provides an impl.
-            // It's assumed the internal one is correct.
-            if !cfg.typed_error_impl.is_empty() {
-                out.push('\n');
-                out.push_str(typed_error_assertion);
-                out.push('\n');
-            }
-            if enabled_events {
-                out.push('\n');
-            }
-        }
-        if enabled_events {
-            out.push_str(make_event_impl);
-            out.push('\n');
-        }
+    if is_channel_transform_used {
+        out.push_str(map_channel_impl);
+        out.push_str("\n\n");
     }
+    if has_typed_error {
+        out.push_str(typed_error_impl);
+        out.push('\n');
+        // We check against `cfg` not `typed_error_assertion` as we only include the assertion if the user-provides an impl.
+        // It's assumed the internal one is correct.
+        if !cfg.typed_error_impl.is_empty() {
+            out.push('\n');
+            out.push_str(typed_error_assertion);
+            out.push('\n');
+        }
+        out.push('\n');
+    }
+    out.push_str(make_event_impl);
+    out.push('\n');
 
     // Mocks
     if enabled_mocks {
@@ -897,6 +923,129 @@ fn runtime(
 
     Ok(Cow::Owned(out))
 }
+
+/// One of Tauri's own events, as it is serialized by the Tauri runtime.
+struct BuiltinEvent {
+    /// The accessor name under `tauriEvents`, matching the event's `TauriEvent` variant.
+    accessor: &'static str,
+    /// The Tauri event name.
+    name: &'static str,
+    /// The TypeScript payload type. `None` for a unit payload, which Tauri sends as `null`.
+    payload: Option<&'static str>,
+    /// One-line description of the event for the generated docs.
+    docs: &'static str,
+}
+
+/// Tauri's built-in events, with the payload each emitter serializes.
+///
+/// Verified against tauri 2.12.5: window and drag-and-drop events in
+/// `src/manager/window.rs` (`on_window_event`), `tauri://window-created` in
+/// `src/window/mod.rs` (`WindowBuilder::build_internal`), `tauri://webview-created` in
+/// `src/manager/webview.rs` (`prepare_webview`), and `Theme`'s bare-string
+/// serialization in `tauri-utils`' `src/lib.rs`.
+///
+/// Keep this in step with `TauriEvent` in `@tauri-apps/api/event`; the accessor names here
+/// are that enum's variants in camel case.
+const BUILTIN_EVENTS: &[BuiltinEvent] = &[
+    BuiltinEvent {
+        accessor: "windowResized",
+        name: "tauri://resize",
+        payload: Some("{ width: number; height: number }"),
+        docs: "A window was resized. Payload: the new inner size, in physical pixels.",
+    },
+    BuiltinEvent {
+        accessor: "windowMoved",
+        name: "tauri://move",
+        payload: Some("{ x: number; y: number }"),
+        docs: "A window moved. Payload: the new outer position, in physical pixels.",
+    },
+    BuiltinEvent {
+        accessor: "windowCloseRequested",
+        name: "tauri://close-requested",
+        payload: None,
+        docs: "The user requested that a window close.",
+    },
+    BuiltinEvent {
+        accessor: "windowDestroyed",
+        name: "tauri://destroyed",
+        payload: None,
+        docs: "A window was destroyed.",
+    },
+    BuiltinEvent {
+        accessor: "windowFocus",
+        name: "tauri://focus",
+        payload: None,
+        docs: "A window gained focus.",
+    },
+    BuiltinEvent {
+        accessor: "windowBlur",
+        name: "tauri://blur",
+        payload: None,
+        docs: "A window lost focus.",
+    },
+    BuiltinEvent {
+        accessor: "windowScaleFactorChanged",
+        name: "tauri://scale-change",
+        payload: Some("{ scaleFactor: number; size: { width: number; height: number } }"),
+        docs: "The scale factor of the monitor a window is on changed. Payload: the new scale factor and inner size, in physical pixels.",
+    },
+    BuiltinEvent {
+        accessor: "windowThemeChanged",
+        name: "tauri://theme-changed",
+        // `Theme` serializes through `Display` to a bare string, not an object.
+        payload: Some("\"light\" | \"dark\""),
+        docs: "The system or window theme changed.",
+    },
+    BuiltinEvent {
+        accessor: "windowCreated",
+        name: "tauri://window-created",
+        payload: Some("{ label: string }"),
+        docs: "A window was created.",
+    },
+    BuiltinEvent {
+        accessor: "windowSuspended",
+        name: "tauri://suspended",
+        payload: None,
+        docs: "A window's event loop was suspended. Mobile only.",
+    },
+    BuiltinEvent {
+        accessor: "windowResumed",
+        name: "tauri://resumed",
+        payload: None,
+        docs: "A window's event loop was resumed. Mobile only.",
+    },
+    BuiltinEvent {
+        accessor: "webviewCreated",
+        name: "tauri://webview-created",
+        payload: Some("{ label: string }"),
+        docs: "A webview was created.",
+    },
+    BuiltinEvent {
+        accessor: "dragEnter",
+        name: "tauri://drag-enter",
+        payload: Some("{ paths: string[]; position: { x: number; y: number } }"),
+        docs: "The user dragged files onto a window. Payload: the dragged paths and the pointer position.",
+    },
+    BuiltinEvent {
+        accessor: "dragOver",
+        name: "tauri://drag-over",
+        // Tauri skips serializing `paths` when the payload comes from an `Over` event.
+        payload: Some("{ position: { x: number; y: number } }"),
+        docs: "The user is moving dragged files over a window. Payload: the pointer position.",
+    },
+    BuiltinEvent {
+        accessor: "dragDrop",
+        name: "tauri://drag-drop",
+        payload: Some("{ paths: string[]; position: { x: number; y: number } }"),
+        docs: "The user dropped files onto a window. Payload: the dropped paths and the pointer position.",
+    },
+    BuiltinEvent {
+        accessor: "dragLeave",
+        name: "tauri://drag-leave",
+        payload: None,
+        docs: "The drag operation left a window or was cancelled.",
+    },
+];
 
 /// A command accessor as it should appear as an object key.
 ///
@@ -1885,6 +2034,7 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "Channel",
     "__TAURI_EVENT",
     "__TAURI_INVOKE",
+    "tauriEvents",
     "typedError",
     "makeEvent",
     "mapChannel",
@@ -2094,11 +2244,11 @@ const MOCK_COMMANDS_DOC: &str = r#"/**
  * with an empty history; the previous handle keeps its calls but stops growing.
  *
  * Tauri's event mocking is enabled as part of the install (`shouldMockEvents`), so
- * `events` keeps working under test without a second installer fighting this one, and the
- * event plugin's internal invokes never reach the record. Note that Tauri's own mock does
- * not implement `emitTo`, which resolves without reaching any listener. Call `clearMocks`
- * from `@tauri-apps/api/mocks` between tests; it uninstalls the handlers but leaves a
- * handle's history alone."#;
+ * `events` and `tauriEvents` keep working under test without a second installer fighting
+ * this one, and the event plugin's internal invokes never reach the record. Note that
+ * Tauri's own mock does not implement `emitTo`, which resolves without reaching any
+ * listener. Call `clearMocks` from `@tauri-apps/api/mocks` between tests; it uninstalls
+ * the handlers but leaves a handle's history alone."#;
 
 const MOCK_HANDLER_REGISTRY_IMPL_TS: &str = r#"    // A copy with no prototype, so a command named after an `Object.prototype` member
     // (`toString`, `constructor`, …) reports that it is unregistered instead of calling
@@ -2163,7 +2313,12 @@ const MAKE_EVENT_IMPL_JS: &str = r#"/**
  * @param {(payload: any) => T} [deserialize]
  */
 function makeEvent(name, serialize, deserialize) {
+    /**
+     * @param {__TAURI_EVENT.EventCallback<T>} cb
+     * @returns {(event: __TAURI_EVENT.Event<any>) => void}
+     */
     const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    /** @param {T} payload */
     const mapPayload = (payload) => serialize ? serialize(payload) : payload;
 
     const base = {
@@ -2269,6 +2424,18 @@ mod tests {
         #[derive(Serialize, Deserialize, Type)]
         #[allow(dead_code)]
         pub struct MockCommandsHandle {
+            value: String,
+        }
+    }
+
+    /// A user type named after something the built-in events runtime declares.
+    mod builtin_event_names {
+        use super::*;
+
+        #[derive(Serialize, Deserialize, Type)]
+        #[serde(rename = "tauriEvents")]
+        #[allow(dead_code)]
+        pub struct TauriEvents {
             value: String,
         }
     }
@@ -2601,6 +2768,66 @@ mod tests {
         assert!(err.to_string().contains(
             "DataError mode requires a non-nullable command error type because null marks a successful result"
         ));
+    }
+
+    #[test]
+    fn builtin_event_runtime_names_are_reserved() {
+        let output_dir = std::path::Path::new("target/tests/builtin-events-reserved-names");
+        let _ = fs::remove_dir_all(output_dir);
+        fs::create_dir_all(output_dir).expect("failed to create test output directory");
+
+        // `tauriEvents` is always emitted, so a user type with that name can never be
+        // exported, by either exporter.
+        let ts_err = Builder::<tauri::Wry>::new()
+            .typ::<builtin_event_names::TauriEvents>()
+            .export(Typescript::default(), output_dir.join("bindings.ts"))
+            .expect_err("`tauriEvents` should always be reserved");
+        assert!(
+            ts_err
+                .to_string()
+                .contains("User defined type 'tauriEvents'"),
+            "{ts_err}"
+        );
+
+        let jsdoc_err = Builder::<tauri::Wry>::new()
+            .typ::<builtin_event_names::TauriEvents>()
+            .export(JSDoc::default(), output_dir.join("bindings.js"))
+            .expect_err("`tauriEvents` should always be reserved");
+        assert!(
+            jsdoc_err
+                .to_string()
+                .contains("User defined type 'tauriEvents'"),
+            "{jsdoc_err}"
+        );
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn builtin_event_names_are_not_plugin_prefixed() {
+        // Built-in events are emitted by Tauri itself, so they must not pick up the
+        // plugin name the user's own commands and events are prefixed with.
+        let output_dir = std::path::Path::new("target/tests/builtin-events-plugin-name");
+        let _ = fs::remove_dir_all(output_dir);
+        fs::create_dir_all(output_dir).expect("failed to create test output directory");
+
+        Builder::<tauri::Wry>::new()
+            .plugin_name("my-plugin")
+            .export(Typescript::default(), output_dir.join("bindings.ts"))
+            .expect("failed to export TypeScript bindings");
+
+        let ts = fs::read_to_string(output_dir.join("bindings.ts"))
+            .expect("failed to read TypeScript bindings");
+        assert!(
+            ts.contains(r#"makeEvent<{ label: string }>("tauri://window-created")"#),
+            "built-in event names should stay unprefixed:\n{ts}"
+        );
+        assert!(
+            !ts.contains(r#""plugin:my-plugin|tauri://"#),
+            "built-in event names must not be plugin-prefixed:\n{ts}"
+        );
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
     }
 
     #[test]

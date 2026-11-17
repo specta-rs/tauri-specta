@@ -37,6 +37,42 @@ export const events = {
 	structEvent: makeEvent<kitchen_sink.StructEvent, kitchen_sink.StructEvent>("struct-event"),
 };
 
+/** Built-in Tauri events */
+export const tauriEvents = {
+	/** A window was resized. Payload: the new inner size, in physical pixels. */
+	windowResized: makeEvent<{ width: number; height: number }>("tauri://resize"),
+	/** A window moved. Payload: the new outer position, in physical pixels. */
+	windowMoved: makeEvent<{ x: number; y: number }>("tauri://move"),
+	/** The user requested that a window close. */
+	windowCloseRequested: makeEvent<null>("tauri://close-requested"),
+	/** A window was destroyed. */
+	windowDestroyed: makeEvent<null>("tauri://destroyed"),
+	/** A window gained focus. */
+	windowFocus: makeEvent<null>("tauri://focus"),
+	/** A window lost focus. */
+	windowBlur: makeEvent<null>("tauri://blur"),
+	/** The scale factor of the monitor a window is on changed. Payload: the new scale factor and inner size, in physical pixels. */
+	windowScaleFactorChanged: makeEvent<{ scaleFactor: number; size: { width: number; height: number } }>("tauri://scale-change"),
+	/** The system or window theme changed. */
+	windowThemeChanged: makeEvent<"light" | "dark">("tauri://theme-changed"),
+	/** A window was created. */
+	windowCreated: makeEvent<{ label: string }>("tauri://window-created"),
+	/** A window's event loop was suspended. Mobile only. */
+	windowSuspended: makeEvent<null>("tauri://suspended"),
+	/** A window's event loop was resumed. Mobile only. */
+	windowResumed: makeEvent<null>("tauri://resumed"),
+	/** A webview was created. */
+	webviewCreated: makeEvent<{ label: string }>("tauri://webview-created"),
+	/** The user dragged files onto a window. Payload: the dragged paths and the pointer position. */
+	dragEnter: makeEvent<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-enter"),
+	/** The user is moving dragged files over a window. Payload: the pointer position. */
+	dragOver: makeEvent<{ position: { x: number; y: number } }>("tauri://drag-over"),
+	/** The user dropped files onto a window. Payload: the dropped paths and the pointer position. */
+	dragDrop: makeEvent<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-drop"),
+	/** The drag operation left a window or was cancelled. */
+	dragLeave: makeEvent<null>("tauri://drag-leave"),
+};
+
 /* Constants */
 export const APP_NAME = "Kitchen Sink" as const;
 
