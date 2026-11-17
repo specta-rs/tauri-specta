@@ -28,6 +28,10 @@ globalThis.window = { crypto: webcrypto };
 const { commands, events, mockCommands } = await import(
 	"../snapshots/kitchen_sink_mocks_ts/bindings.ts"
 );
+// The generated target-bound accessor forwards to a `Window`/`Webview`, whose
+// `listen` is this same function with a target attached. Calling it directly keeps
+// the test on the generated wiring rather than Tauri's target plumbing.
+const { listen: tauriListen } = await import("@tauri-apps/api/event");
 const wrapped = await import("../snapshots/mocks_result_ts/bindings.ts");
 
 afterEach(() => clearMocks());
@@ -195,6 +199,26 @@ test("a listener with an already-aborted signal never fires", async () => {
 	assert.deepEqual(received, []);
 });
 
+test("an event delivered before an already-aborted listen settles is dropped", async () => {
+	mockCommands({});
+
+	const controller = new AbortController();
+	controller.abort();
+
+	const received = [];
+	const listening = events.messageEvent.listen(
+		(event) => received.push(event.payload),
+		{ signal: controller.signal },
+	);
+
+	// The mock registers the handler synchronously, so this emit reaches the generated
+	// callback while `listen` is still resolving — the window before `bindAbort` runs.
+	await events.messageEvent.emit("hello");
+	await listening;
+
+	assert.deepEqual(received, []);
+});
+
 test("aborting a signal unlistens the listener", async () => {
 	mockCommands({});
 	const unlistens = trackUnlistens();
@@ -233,6 +257,88 @@ test("`once` honours the signal too", async () => {
 	await quietly(() => events.messageEvent.emit("hello"));
 
 	assert.deepEqual(received, []);
+});
+
+test("the target-bound form honours the signal as well", async () => {
+	mockCommands({});
+	const unlistens = trackUnlistens();
+
+	const target = { listen: (name, handler) => tauriListen(name, handler) };
+
+	const controller = new AbortController();
+	const received = [];
+	const unlisten = await events.messageEvent(target).listen(
+		(event) => received.push(event.payload),
+		{ signal: controller.signal },
+	);
+
+	await events.messageEvent.emit("before");
+	controller.abort();
+	assert.equal(unlistens.length, 1, "aborting unlistens the target-bound listener");
+
+	await quietly(() => events.messageEvent.emit("after"));
+	unlisten();
+	assert.equal(unlistens.length, 1, "unlisten is a no-op after the abort");
+
+	assert.deepEqual(received, ["before"]);
+});
+
+test("unlistening first detaches the abort listener", async () => {
+	mockCommands({});
+	const unlistens = trackUnlistens();
+
+	// A real `AbortSignal` doesn't expose its listeners, and the `removed` flag would
+	// hide a missing `removeEventListener` from the IPC count, so track them directly.
+	const abortListeners = new Set();
+	const signal = {
+		aborted: false,
+		addEventListener: (_event, listener) => abortListeners.add(listener),
+		removeEventListener: (_event, listener) => abortListeners.delete(listener),
+	};
+
+	const unlisten = await events.messageEvent.listen(() => {}, { signal });
+	assert.equal(abortListeners.size, 1, "the listener is bound to the signal");
+
+	unlisten();
+	assert.equal(abortListeners.size, 0, "unlisten detaches the abort listener");
+
+	unlisten();
+	assert.equal(unlistens.length, 1, "unlisten is idempotent");
+});
+
+test("the JSDoc runtime wires the signal the same way", async () => {
+	// The TypeScript and JSDoc runtimes are hand-maintained copies, so exercise the
+	// JSDoc one too rather than trusting the TS fixture for both.
+	const { events: jsdocEvents } = await import(
+		"../snapshots/kitchen_sink_mocks_jsdoc/bindings.js"
+	);
+	mockCommands({});
+	const unlistens = trackUnlistens();
+
+	// Already aborted: the callback must not run even though the mock delivers it
+	// while `listen` is still resolving.
+	const aborted = new AbortController();
+	aborted.abort();
+	const received = [];
+	const listening = jsdocEvents.messageEvent.listen(
+		(event) => received.push(event.payload),
+		{ signal: aborted.signal },
+	);
+	await jsdocEvents.messageEvent.emit("hello");
+	await listening;
+	assert.deepEqual(received, []);
+	assert.equal(unlistens.length, 1);
+
+	// Target-bound: aborting unlistens, and the returned unlisten stays a no-op.
+	const target = { listen: (name, handler) => tauriListen(name, handler) };
+	const controller = new AbortController();
+	const unlisten = await jsdocEvents.messageEvent(target).listen(() => {}, {
+		signal: controller.signal,
+	});
+	controller.abort();
+	assert.equal(unlistens.length, 2);
+	unlisten();
+	assert.equal(unlistens.length, 2);
 });
 
 test("the real command keeps running its own transforms around the mock", async () => {

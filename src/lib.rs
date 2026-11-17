@@ -248,8 +248,8 @@
 //! await events.demoEvent.listen((e) => console.log(e), { signal: controller.signal });
 //! ```
 //!
-//! If the signal is already aborted, the listener is removed straight away, and no
-//! callback fires after an abort.
+//! Aborting unlistens the listener, and its callback never fires once the signal has
+//! aborted — including a signal that was already aborted when `listen` was called.
 //!
 //! Refer to [`Event`] for all the possible methods for listening and emitting events.
 //!

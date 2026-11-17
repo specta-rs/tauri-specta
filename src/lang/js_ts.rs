@@ -2055,7 +2055,7 @@ const RESERVED_NDT_NAMES_MOCKS_ONLY: &[&str] = &[
 /// Names only the TypeScript runtime declares. The JSDoc runtime has no
 /// corresponding typedefs, so user types may use them there (and a JSDoc export
 /// must not fail over a name it never emits).
-const RESERVED_NDT_NAMES_TS_ONLY: &[&str] = &["EventEmit", "EventEmitTo", "EventListenOptions"];
+const RESERVED_NDT_NAMES_TS_ONLY: &[&str] = &["EventEmit", "EventEmitTo"];
 
 fn is_reserved_ndt_name(name: &str, jsdoc: bool, mocks: bool) -> bool {
     RESERVED_NDT_NAMES.contains(&name)
@@ -2286,8 +2286,6 @@ const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () 
 
 type EventEmitTo<T> = [T] extends [null] ? (target: __TAURI_EVENT.EventTarget | string) => Promise<void> : (target: __TAURI_EVENT.EventTarget | string, payload: T) => Promise<void>;
 
-type EventListenOptions = { signal?: AbortSignal };
-
 function bindAbort(unlisten: __TAURI_EVENT.UnlistenFn, signal?: AbortSignal): __TAURI_EVENT.UnlistenFn {
     if (!signal) return unlisten;
     if (signal.aborted) {
@@ -2310,19 +2308,23 @@ function bindAbort(unlisten: __TAURI_EVENT.UnlistenFn, signal?: AbortSignal): __
 }
 
 function makeEvent<TListen, TEmit = TListen>(name: string, serialize?: (payload: TEmit) => unknown, deserialize?: (payload: any) => TListen) {
-    const mapEvent = (cb: __TAURI_EVENT.EventCallback<TListen>) => (event: __TAURI_EVENT.Event<any>) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    // A signal can abort before `bindAbort` has an unlisten to call, so check it here too.
+    const mapEvent = (cb: __TAURI_EVENT.EventCallback<TListen>, signal?: AbortSignal) => (event: __TAURI_EVENT.Event<any>) => {
+        if (signal?.aborted) return;
+        cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    };
     const mapPayload = (payload: TEmit) => serialize ? serialize(payload) : payload;
 
     const base = {
-        listen: (cb: __TAURI_EVENT.EventCallback<TListen>, options?: EventListenOptions) => __TAURI_EVENT.listen(name, mapEvent(cb)).then((u) => bindAbort(u, options?.signal)),
-        once: (cb: __TAURI_EVENT.EventCallback<TListen>, options?: EventListenOptions) => __TAURI_EVENT.once(name, mapEvent(cb)).then((u) => bindAbort(u, options?.signal)),
+        listen: (cb: __TAURI_EVENT.EventCallback<TListen>, options?: { signal?: AbortSignal }) => __TAURI_EVENT.listen(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
+        once: (cb: __TAURI_EVENT.EventCallback<TListen>, options?: { signal?: AbortSignal }) => __TAURI_EVENT.once(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
         emit: ((payload: TEmit) => __TAURI_EVENT.emit(name, mapPayload(payload)) as unknown) as EventEmit<TEmit>,
         emitTo: ((to: __TAURI_EVENT.EventTarget | string, payload: TEmit) => __TAURI_EVENT.emitTo(to, name, mapPayload(payload)) as unknown) as EventEmitTo<TEmit>
     };
 
     const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
-        listen: (cb: __TAURI_EVENT.EventCallback<TListen>, options?: EventListenOptions) => target.listen(name, mapEvent(cb)).then((u) => bindAbort(u, options?.signal)),
-        once: (cb: __TAURI_EVENT.EventCallback<TListen>, options?: EventListenOptions) => target.once(name, mapEvent(cb)).then((u) => bindAbort(u, options?.signal)),
+        listen: (cb: __TAURI_EVENT.EventCallback<TListen>, options?: { signal?: AbortSignal }) => target.listen(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
+        once: (cb: __TAURI_EVENT.EventCallback<TListen>, options?: { signal?: AbortSignal }) => target.once(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
         emit: ((payload: TEmit) => target.emit(name, mapPayload(payload)) as unknown) as EventEmit<TEmit>,
         emitTo: ((to: __TAURI_EVENT.EventTarget | string, payload: TEmit) => target.emitTo(to, name, mapPayload(payload)) as unknown) as EventEmitTo<TEmit>
     });
@@ -2363,11 +2365,16 @@ function bindAbort(unlisten, signal) {
  * @param {(payload: any) => T} [deserialize]
  */
 function makeEvent(name, serialize, deserialize) {
+    // A signal can abort before `bindAbort` has an unlisten to call, so check it here too.
     /**
      * @param {__TAURI_EVENT.EventCallback<T>} cb
+     * @param {AbortSignal} [signal]
      * @returns {(event: __TAURI_EVENT.Event<any>) => void}
      */
-    const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapEvent = (cb, signal) => (event) => {
+        if (signal?.aborted) return;
+        cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    };
     /** @param {T} payload */
     const mapPayload = (payload) => serialize ? serialize(payload) : payload;
 
@@ -2376,12 +2383,12 @@ function makeEvent(name, serialize, deserialize) {
          * @param {__TAURI_EVENT.EventCallback<T>} cb
          * @param {{ signal?: AbortSignal }} [options]
          */
-        listen: (cb, options) => __TAURI_EVENT.listen(name, mapEvent(cb)).then((u) => bindAbort(u, options?.signal)),
+        listen: (cb, options) => __TAURI_EVENT.listen(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
         /**
          * @param {__TAURI_EVENT.EventCallback<T>} cb
          * @param {{ signal?: AbortSignal }} [options]
          */
-        once: (cb, options) => __TAURI_EVENT.once(name, mapEvent(cb)).then((u) => bindAbort(u, options?.signal)),
+        once: (cb, options) => __TAURI_EVENT.once(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
         /** @param {T} payload */
         emit: (payload) => __TAURI_EVENT.emit(name, mapPayload(payload)),
         /**
@@ -2397,12 +2404,12 @@ function makeEvent(name, serialize, deserialize) {
          * @param {__TAURI_EVENT.EventCallback<T>} cb
          * @param {{ signal?: AbortSignal }} [options]
          */
-        listen: (cb, options) => target.listen(name, mapEvent(cb)).then((u) => bindAbort(u, options?.signal)),
+        listen: (cb, options) => target.listen(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
         /**
          * @param {__TAURI_EVENT.EventCallback<T>} cb
          * @param {{ signal?: AbortSignal }} [options]
          */
-        once: (cb, options) => target.once(name, mapEvent(cb)).then((u) => bindAbort(u, options?.signal)),
+        once: (cb, options) => target.once(name, mapEvent(cb, options?.signal)).then((u) => bindAbort(u, options?.signal)),
         /** @param {T} payload */
         emit: (payload) => target.emit(name, mapPayload(payload)),
         /**

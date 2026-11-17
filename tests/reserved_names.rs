@@ -1,7 +1,8 @@
 //! Regression coverage for names the generated runtime declares.
 //!
 //! The TypeScript runtime declares `EventEmit`/`EventEmitTo`; the JSDoc runtime
-//! does not, so the reserved-name check has to stay emitter-aware.
+//! does not, so the reserved-name check has to stay emitter-aware. `bindAbort` is
+//! declared by both, so neither emitter may let a user type shadow it.
 //!
 //! https://github.com/specta-rs/tauri-specta/issues/187
 
@@ -18,12 +19,6 @@ use tauri_specta::{Builder, LanguageExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 struct EventEmit {
-    value: String,
-}
-
-/// A name only the TypeScript runtime declares, like `EventEmit`.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-struct EventListenOptions {
     value: String,
 }
 
@@ -56,11 +51,6 @@ fn jsdoc_allows_types_named_after_typescript_only_runtime_helpers() {
 
     export(&builder, JSDoc::default(), "bindings.js")
         .expect("the JSDoc runtime has no `EventEmit` typedef for this name to collide with");
-
-    let builder = Builder::<MockRuntime>::new().typ::<EventListenOptions>();
-    export(&builder, JSDoc::default(), "bindings.js").expect(
-        "the JSDoc runtime has no `EventListenOptions` typedef for this name to collide with",
-    );
 }
 
 #[test]
@@ -68,11 +58,6 @@ fn typescript_rejects_types_named_after_its_runtime_helpers() {
     let builder = Builder::<MockRuntime>::new().typ::<EventEmit>();
     let err = export(&builder, Typescript::default(), "bindings.ts")
         .expect_err("the TypeScript runtime declares `EventEmit`");
-    assert!(err.contains("must be renamed"), "unexpected error: {err}");
-
-    let builder = Builder::<MockRuntime>::new().typ::<EventListenOptions>();
-    let err = export(&builder, Typescript::default(), "bindings.ts")
-        .expect_err("the TypeScript runtime declares `EventListenOptions`");
     assert!(err.contains("must be renamed"), "unexpected error: {err}");
 }
 
