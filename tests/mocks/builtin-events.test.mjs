@@ -16,12 +16,12 @@ import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 globalThis.window = { crypto: webcrypto };
 
 const { tauriEvents } = await import(
-	"../snapshots/builtin_events_only_ts/bindings.ts"
+	"../snapshots/events_only_ts/bindings.ts"
 );
 // The same builder with `.mocks()`: no commands to stub, but `mockCommands` is still
 // what installs the mock IPC that delivers events.
 const { mockCommands } = await import(
-	"../snapshots/builtin_events_mocks_ts/bindings.ts"
+	"../snapshots/events_only_mocks_ts/bindings.ts"
 );
 
 afterEach(() => clearMocks());

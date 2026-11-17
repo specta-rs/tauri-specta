@@ -7,7 +7,7 @@
 // `any`. The rejected cases carry the proof: if the payload were `any`, the
 // `@ts-expect-error` directives below would be unused.
 
-import { tauriEvents } from "../snapshots/builtin_events_only_jsdoc/bindings.js";
+import { tauriEvents } from "../snapshots/events_only_jsdoc/bindings.js";
 
 const aNumber = (/** @type {number} */ value) => value;
 

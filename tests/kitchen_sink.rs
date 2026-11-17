@@ -245,28 +245,6 @@ fn events_only() -> Builder<MockRuntime> {
     Builder::<MockRuntime>::new().events(collect_events![EmptyEvent, StructEvent])
 }
 
-/// Built-in events next to commands and user events, so one `__TAURI_EVENT` import and
-/// one `makeEvent` runtime are shared by both event objects rather than emitted twice.
-fn builtin_events() -> Builder<MockRuntime> {
-    Builder::<MockRuntime>::new()
-        .commands(collect_commands![greet])
-        .events(collect_events![EmptyEvent, StructEvent])
-        .builtin_events()
-}
-
-/// No commands and no user events: `builtin_events()` alone has to pull in the event
-/// import and the `makeEvent` runtime.
-fn builtin_events_only() -> Builder<MockRuntime> {
-    Builder::<MockRuntime>::new().builtin_events()
-}
-
-/// Built-in events with mocks and no commands. The generated `mockCommands` installs
-/// Tauri's mock IPC with `shouldMockEvents`, which is what makes `tauriEvents` deliver
-/// under test.
-fn builtin_events_mocks() -> Builder<MockRuntime> {
-    Builder::<MockRuntime>::new().builtin_events().mocks()
-}
-
 fn constants_only() -> Builder<MockRuntime> {
     Builder::<MockRuntime>::new()
         .constant("APP_NAME", "Kitchen Sink")
@@ -357,11 +335,6 @@ fn unified() -> Builder<MockRuntime> {
 const SCENARIOS: &[&str] = &[
     "bigints_as_number_jsdoc",
     "bigints_as_number_ts",
-    "builtin_events_jsdoc",
-    "builtin_events_mocks_ts",
-    "builtin_events_only_jsdoc",
-    "builtin_events_only_ts",
-    "builtin_events_ts",
     "commands_only_jsdoc",
     "commands_only_ts",
     "constants_only_jsdoc",
@@ -631,60 +604,6 @@ fn events_only_jsdoc() {
         "bindings.js",
         &events_only(),
         JSDoc::default(),
-    );
-}
-
-#[test]
-fn builtin_events_ts() {
-    assert_export(
-        "builtin_events_ts",
-        "bindings.ts",
-        &builtin_events(),
-        Typescript::default(),
-    );
-}
-
-#[test]
-fn builtin_events_jsdoc() {
-    assert_export(
-        "builtin_events_jsdoc",
-        "bindings.js",
-        &builtin_events(),
-        JSDoc::default(),
-    );
-}
-
-/// With nothing else registered, `builtin_events()` is the only thing that needs the
-/// event import and `makeEvent` runtime.
-#[test]
-fn builtin_events_only_ts() {
-    assert_export(
-        "builtin_events_only_ts",
-        "bindings.ts",
-        &builtin_events_only(),
-        Typescript::default(),
-    );
-}
-
-#[test]
-fn builtin_events_only_jsdoc() {
-    assert_export(
-        "builtin_events_only_jsdoc",
-        "bindings.js",
-        &builtin_events_only(),
-        JSDoc::default(),
-    );
-}
-
-/// Built-in events alone are still worth a `mockCommands`, because its `mockIPC`
-/// install is what enables event delivery in a test.
-#[test]
-fn builtin_events_mocks_ts() {
-    assert_export(
-        "builtin_events_mocks_ts",
-        "bindings.ts",
-        &builtin_events_mocks(),
-        Typescript::default(),
     );
 }
 

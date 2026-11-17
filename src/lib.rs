@@ -243,13 +243,9 @@
 //! ### Tauri's built-in events
 //!
 //! Tauri emits its own events for window and webview lifecycle changes and for file
-//! drag-and-drop. [`Builder::builtin_events`] types them, adding a `tauriEvents` object
-//! to the bindings alongside your own `events`:
-//!
-//! ```rust
-//! # use tauri_specta::Builder;
-//! let builder = Builder::<tauri::Wry>::new().builtin_events();
-//! ```
+//! drag-and-drop (`tauri://resize`, `tauri://drag-drop`, …). They aren't registered
+//! through [`Builder::events`], so the bindings always include a `tauriEvents` object
+//! with one typed accessor per built-in event, alongside your own `events`:
 //!
 //! ```ts
 //! import { tauriEvents } from "./bindings";

@@ -10,6 +10,90 @@ export const events = {
 	structEvent: makeEvent("struct-event"),
 };
 
+/** Built-in Tauri events */
+export const tauriEvents = {
+	/**
+	 * A window was resized. Payload: the new inner size, in physical pixels.
+	 * @type {ReturnType<typeof makeEvent<{ width: number; height: number }>>}
+	 */
+	windowResized: makeEvent("tauri://resize"),
+	/**
+	 * A window moved. Payload: the new outer position, in physical pixels.
+	 * @type {ReturnType<typeof makeEvent<{ x: number; y: number }>>}
+	 */
+	windowMoved: makeEvent("tauri://move"),
+	/**
+	 * The user requested that a window close.
+	 * @type {ReturnType<typeof makeEvent<null>>}
+	 */
+	windowCloseRequested: makeEvent("tauri://close-requested"),
+	/**
+	 * A window was destroyed.
+	 * @type {ReturnType<typeof makeEvent<null>>}
+	 */
+	windowDestroyed: makeEvent("tauri://destroyed"),
+	/**
+	 * A window gained focus.
+	 * @type {ReturnType<typeof makeEvent<null>>}
+	 */
+	windowFocus: makeEvent("tauri://focus"),
+	/**
+	 * A window lost focus.
+	 * @type {ReturnType<typeof makeEvent<null>>}
+	 */
+	windowBlur: makeEvent("tauri://blur"),
+	/**
+	 * The scale factor of the monitor a window is on changed. Payload: the new scale factor and inner size, in physical pixels.
+	 * @type {ReturnType<typeof makeEvent<{ scaleFactor: number; size: { width: number; height: number } }>>}
+	 */
+	windowScaleFactorChanged: makeEvent("tauri://scale-change"),
+	/**
+	 * The system or window theme changed.
+	 * @type {ReturnType<typeof makeEvent<"light" | "dark">>}
+	 */
+	windowThemeChanged: makeEvent("tauri://theme-changed"),
+	/**
+	 * A window was created.
+	 * @type {ReturnType<typeof makeEvent<{ label: string }>>}
+	 */
+	windowCreated: makeEvent("tauri://window-created"),
+	/**
+	 * A window's event loop was suspended. Mobile only.
+	 * @type {ReturnType<typeof makeEvent<null>>}
+	 */
+	windowSuspended: makeEvent("tauri://suspended"),
+	/**
+	 * A window's event loop was resumed. Mobile only.
+	 * @type {ReturnType<typeof makeEvent<null>>}
+	 */
+	windowResumed: makeEvent("tauri://resumed"),
+	/**
+	 * A webview was created.
+	 * @type {ReturnType<typeof makeEvent<{ label: string }>>}
+	 */
+	webviewCreated: makeEvent("tauri://webview-created"),
+	/**
+	 * The user dragged files onto a window. Payload: the dragged paths and the pointer position.
+	 * @type {ReturnType<typeof makeEvent<{ paths: string[]; position: { x: number; y: number } }>>}
+	 */
+	dragEnter: makeEvent("tauri://drag-enter"),
+	/**
+	 * The user is moving dragged files over a window. Payload: the pointer position.
+	 * @type {ReturnType<typeof makeEvent<{ position: { x: number; y: number } }>>}
+	 */
+	dragOver: makeEvent("tauri://drag-over"),
+	/**
+	 * The user dropped files onto a window. Payload: the dropped paths and the pointer position.
+	 * @type {ReturnType<typeof makeEvent<{ paths: string[]; position: { x: number; y: number } }>>}
+	 */
+	dragDrop: makeEvent("tauri://drag-drop"),
+	/**
+	 * The drag operation left a window or was cancelled.
+	 * @type {ReturnType<typeof makeEvent<null>>}
+	 */
+	dragLeave: makeEvent("tauri://drag-leave"),
+};
+
 /* Types */
 /**
 	* @typedef {null} EmptyEvent

@@ -7,7 +7,7 @@
 
 import { TauriEvent } from "@tauri-apps/api/event";
 
-import { tauriEvents } from "../snapshots/builtin_events_ts/bindings";
+import { tauriEvents } from "../snapshots/kitchen_sink_ts/bindings";
 
 const aNumber = (value: number): number => value;
 

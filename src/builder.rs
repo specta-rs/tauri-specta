@@ -152,9 +152,6 @@ pub struct BuilderConfiguration {
     pub function_casing: Casing,
     /// Whether typed mock helpers are exported alongside the bindings.
     pub mocks: bool,
-    /// Whether typed accessors for Tauri's built-in events are exported alongside the
-    /// bindings.
-    pub builtin_events: bool,
 }
 
 impl BuilderConfiguration {
@@ -450,28 +447,6 @@ impl<R: Runtime> Builder<R> {
     /// ```
     pub fn mocks(mut self) -> Self {
         self.cfg.mocks = true;
-        self
-    }
-
-    /// Export typed accessors for Tauri's built-in events.
-    ///
-    /// Tauri emits events of its own for window and webview lifecycle changes and for
-    /// file drag-and-drop (`tauri://resize`, `tauri://drag-drop`, …). They aren't
-    /// registered through [`Builder::events`], so today their names only appear untyped
-    /// in `@tauri-apps/api/event`'s `TauriEvent` enum. This adds a `tauriEvents` object
-    /// to the generated bindings with one typed accessor per built-in event, reusing the
-    /// same runtime as `events`.
-    ///
-    /// The names and payload types mirror Tauri 2.12. An event Tauri adds later won't be
-    /// here until Tauri Specta is updated.
-    ///
-    /// ```rust
-    /// use tauri_specta::Builder;
-    ///
-    /// let builder = Builder::<tauri::Wry>::new().builtin_events();
-    /// ```
-    pub fn builtin_events(mut self) -> Self {
-        self.cfg.builtin_events = true;
         self
     }
 

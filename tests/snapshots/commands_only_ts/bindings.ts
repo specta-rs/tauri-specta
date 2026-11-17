@@ -2,6 +2,7 @@
 
 import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 import type { InvokeOptions } from "@tauri-apps/api/core";
+import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
@@ -11,5 +12,67 @@ export const commands = {
 	plainError: (options?: InvokeOptions) => __TAURI_INVOKE<string>("plain_error", undefined, options),
 };
 
+/** Built-in Tauri events */
+export const tauriEvents = {
+	/** A window was resized. Payload: the new inner size, in physical pixels. */
+	windowResized: makeEvent<{ width: number; height: number }>("tauri://resize"),
+	/** A window moved. Payload: the new outer position, in physical pixels. */
+	windowMoved: makeEvent<{ x: number; y: number }>("tauri://move"),
+	/** The user requested that a window close. */
+	windowCloseRequested: makeEvent<null>("tauri://close-requested"),
+	/** A window was destroyed. */
+	windowDestroyed: makeEvent<null>("tauri://destroyed"),
+	/** A window gained focus. */
+	windowFocus: makeEvent<null>("tauri://focus"),
+	/** A window lost focus. */
+	windowBlur: makeEvent<null>("tauri://blur"),
+	/** The scale factor of the monitor a window is on changed. Payload: the new scale factor and inner size, in physical pixels. */
+	windowScaleFactorChanged: makeEvent<{ scaleFactor: number; size: { width: number; height: number } }>("tauri://scale-change"),
+	/** The system or window theme changed. */
+	windowThemeChanged: makeEvent<"light" | "dark">("tauri://theme-changed"),
+	/** A window was created. */
+	windowCreated: makeEvent<{ label: string }>("tauri://window-created"),
+	/** A window's event loop was suspended. Mobile only. */
+	windowSuspended: makeEvent<null>("tauri://suspended"),
+	/** A window's event loop was resumed. Mobile only. */
+	windowResumed: makeEvent<null>("tauri://resumed"),
+	/** A webview was created. */
+	webviewCreated: makeEvent<{ label: string }>("tauri://webview-created"),
+	/** The user dragged files onto a window. Payload: the dragged paths and the pointer position. */
+	dragEnter: makeEvent<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-enter"),
+	/** The user is moving dragged files over a window. Payload: the pointer position. */
+	dragOver: makeEvent<{ position: { x: number; y: number } }>("tauri://drag-over"),
+	/** The user dropped files onto a window. Payload: the dropped paths and the pointer position. */
+	dragDrop: makeEvent<{ paths: string[]; position: { x: number; y: number } }>("tauri://drag-drop"),
+	/** The drag operation left a window or was cancelled. */
+	dragLeave: makeEvent<null>("tauri://drag-leave"),
+};
+
 /* Types */
 export type PlainError = "NotFound" | { PermissionDenied: string };
+
+/* Tauri Specta runtime */
+type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
+
+type EventEmitTo<T> = [T] extends [null] ? (target: __TAURI_EVENT.EventTarget | string) => Promise<void> : (target: __TAURI_EVENT.EventTarget | string, payload: T) => Promise<void>;
+
+function makeEvent<TListen, TEmit = TListen>(name: string, serialize?: (payload: TEmit) => unknown, deserialize?: (payload: any) => TListen) {
+    const mapEvent = (cb: __TAURI_EVENT.EventCallback<TListen>) => (event: __TAURI_EVENT.Event<any>) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
+    const mapPayload = (payload: TEmit) => serialize ? serialize(payload) : payload;
+
+    const base = {
+        listen: (cb: __TAURI_EVENT.EventCallback<TListen>) => __TAURI_EVENT.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<TListen>) => __TAURI_EVENT.once(name, mapEvent(cb)),
+        emit: ((payload: TEmit) => __TAURI_EVENT.emit(name, mapPayload(payload)) as unknown) as EventEmit<TEmit>,
+        emitTo: ((to: __TAURI_EVENT.EventTarget | string, payload: TEmit) => __TAURI_EVENT.emitTo(to, name, mapPayload(payload)) as unknown) as EventEmitTo<TEmit>
+    };
+
+    const fn = (target: import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window) => ({
+        listen: (cb: __TAURI_EVENT.EventCallback<TListen>) => target.listen(name, mapEvent(cb)),
+        once: (cb: __TAURI_EVENT.EventCallback<TListen>) => target.once(name, mapEvent(cb)),
+        emit: ((payload: TEmit) => target.emit(name, mapPayload(payload)) as unknown) as EventEmit<TEmit>,
+        emitTo: ((to: __TAURI_EVENT.EventTarget | string, payload: TEmit) => target.emitTo(to, name, mapPayload(payload)) as unknown) as EventEmitTo<TEmit>
+    });
+
+    return Object.assign(fn, base);
+}

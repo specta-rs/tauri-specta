@@ -19,7 +19,6 @@
     "types": []
   },
   "include": [
-    "../snapshots/builtin_events*_jsdoc/**/*.js",
     "jsdoc-mocks.js",
     "tauri-events.js"
   ]

@@ -100,18 +100,15 @@ fn runtime(
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let has_user_events = !cfg.events.is_empty();
-    // Built-in events reuse `makeEvent`, so asking for them is enough to need the event
-    // import and runtime even when no event of the user's own was registered.
-    let enabled_events = has_user_events || cfg.builtin_events;
     let is_raw_request_used = cfg.commands.iter().any(|command| {
         command
             .args()
             .iter()
             .any(|(_, dt)| is_ipc_type(dt, exporter.types, "TAURI_REQUEST"))
     });
-    // A builder with nothing registered has no commands to stub and no events to mock, so
-    // installing the IPC handler would only buy an import and an always-rejecting switch.
-    let enabled_mocks = cfg.mocks && (enabled_commands || enabled_events);
+    // The built-in event accessors always need `mockIPC`, so a mocks export always has
+    // something to install even with no commands and no events of the user's own.
+    let enabled_mocks = cfg.mocks;
     let semantic_types_runtime_types = semantic_types_runtime_types(cfg)?;
     let semantic_types_runtime_types = semantic_types_runtime_types
         .as_ref()
@@ -126,7 +123,7 @@ fn runtime(
         .find_map(|ndt| {
             runtime_scope_name(jsdoc, exporter.layout, ndt)
                 .filter(|name| {
-                    is_reserved_ndt_name(name, jsdoc, enabled_mocks, cfg.builtin_events)
+                    is_reserved_ndt_name(name, jsdoc, enabled_mocks)
                         || (is_raw_request_used && name == "InvokeArgs")
                         || (enabled_commands && name == "InvokeOptions")
                 })
@@ -245,9 +242,9 @@ fn runtime(
             }
         }
     }
-    if enabled_events {
-        out.push_str("import * as __TAURI_EVENT from \"@tauri-apps/api/event\";\n");
-    }
+
+    // `tauriEvents` is always emitted, so the event namespace is always imported.
+    out.push_str("import * as __TAURI_EVENT from \"@tauri-apps/api/event\";\n");
     if enabled_mocks {
         out.push_str("import { mockIPC as __TAURI_MOCK_IPC } from \"@tauri-apps/api/mocks\";\n");
     }
@@ -793,38 +790,37 @@ fn runtime(
         out.push_str(";\n");
     }
 
-    // Built-in events
-    if cfg.builtin_events {
-        let mut s = Struct::named();
-        for event in BUILTIN_EVENTS {
-            // A unit payload is `null` in both emitters, which is the same shape a user's
-            // `null` event payload gets. In TypeScript, `EventEmit` then types `emit` as
-            // taking no argument.
-            let payload = event.payload.unwrap_or("null");
-            let accessor = if jsdoc {
-                format!("makeEvent(\"{}\")", event.name)
-            } else {
-                format!("makeEvent<{payload}>(\"{}\")", event.name)
-            };
+    // Built-in events. These are always emitted: Tauri sends them whether or not
+    // the user registered any of their own.
+    let mut s = Struct::named();
+    for event in BUILTIN_EVENTS {
+        // A unit payload is `null` in both emitters, which is the same shape a user's
+        // `null` event payload gets. In TypeScript, `EventEmit` then types `emit` as
+        // taking no argument.
+        let payload = event.payload.unwrap_or("null");
+        let accessor = if jsdoc {
+            format!("makeEvent(\"{}\")", event.name)
+        } else {
+            format!("makeEvent<{payload}>(\"{}\")", event.name)
+        };
 
-            let mut field = Field::new(define(accessor).into());
-            field.docs = if jsdoc {
-                format!(
-                    "{}\n@type {{ReturnType<typeof makeEvent<{payload}>>}}",
-                    event.docs
-                )
-                .into()
-            } else {
-                event.docs.into()
-            };
-            s = s.field(event.accessor, field);
-        }
-
-        out.push_str("\n/** Built-in Tauri events */");
-        out.push_str("\nexport const tauriEvents = ");
-        out.push_str(&exporter.reference(&s.build())?);
-        out.push_str(";\n");
+        let mut field = Field::new(define(accessor).into());
+        field.docs = if jsdoc {
+            format!(
+                "{}\n@type {{ReturnType<typeof makeEvent<{payload}>>}}",
+                event.docs
+            )
+            .into()
+        } else {
+            event.docs.into()
+        };
+        s = s.field(event.accessor, field);
     }
+
+    out.push_str("\n/** Built-in Tauri events */");
+    out.push_str("\nexport const tauriEvents = ");
+    out.push_str(&exporter.reference(&s.build())?);
+    out.push_str(";\n");
 
     // Constants
     if !cfg.constants.is_empty() {
@@ -869,35 +865,27 @@ fn runtime(
     }
 
     // Runtime
-    if has_typed_error || enabled_events || is_channel_transform_used {
-        out.push_str("\n/* Tauri Specta runtime */\n");
+    // `tauriEvents` always needs `makeEvent`, so this block is always emitted.
+    out.push_str("\n/* Tauri Specta runtime */\n");
 
-        if is_channel_transform_used {
-            out.push_str(map_channel_impl);
-            out.push('\n');
-            if has_typed_error || enabled_events {
-                out.push('\n');
-            }
-        }
-        if has_typed_error {
-            out.push_str(typed_error_impl);
-            out.push('\n');
-            // We check against `cfg` not `typed_error_assertion` as we only include the assertion if the user-provides an impl.
-            // It's assumed the internal one is correct.
-            if !cfg.typed_error_impl.is_empty() {
-                out.push('\n');
-                out.push_str(typed_error_assertion);
-                out.push('\n');
-            }
-            if enabled_events {
-                out.push('\n');
-            }
-        }
-        if enabled_events {
-            out.push_str(make_event_impl);
-            out.push('\n');
-        }
+    if is_channel_transform_used {
+        out.push_str(map_channel_impl);
+        out.push_str("\n\n");
     }
+    if has_typed_error {
+        out.push_str(typed_error_impl);
+        out.push('\n');
+        // We check against `cfg` not `typed_error_assertion` as we only include the assertion if the user-provides an impl.
+        // It's assumed the internal one is correct.
+        if !cfg.typed_error_impl.is_empty() {
+            out.push('\n');
+            out.push_str(typed_error_assertion);
+            out.push('\n');
+        }
+        out.push('\n');
+    }
+    out.push_str(make_event_impl);
+    out.push('\n');
 
     // Mocks
     if enabled_mocks {
@@ -2044,15 +2032,11 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "Channel",
     "__TAURI_EVENT",
     "__TAURI_INVOKE",
+    "tauriEvents",
     "typedError",
     "makeEvent",
     "mapChannel",
 ];
-
-/// Names only the built-in events runtime declares, and so only reserved on an export
-/// that [`Builder::builtin_events`](crate::Builder::builtin_events) actually emits them
-/// for.
-const RESERVED_NDT_NAMES_BUILTIN_EVENTS_ONLY: &[&str] = &["tauriEvents"];
 
 /// Names only the mocks runtime declares, and so only reserved on an export that
 /// [`Builder::mocks`](crate::Builder::mocks) actually emits them for.
@@ -2070,11 +2054,10 @@ const RESERVED_NDT_NAMES_MOCKS_ONLY: &[&str] = &[
 /// must not fail over a name it never emits).
 const RESERVED_NDT_NAMES_TS_ONLY: &[&str] = &["EventEmit", "EventEmitTo"];
 
-fn is_reserved_ndt_name(name: &str, jsdoc: bool, mocks: bool, builtin_events: bool) -> bool {
+fn is_reserved_ndt_name(name: &str, jsdoc: bool, mocks: bool) -> bool {
     RESERVED_NDT_NAMES.contains(&name)
         || (!jsdoc && RESERVED_NDT_NAMES_TS_ONLY.contains(&name))
         || (mocks && RESERVED_NDT_NAMES_MOCKS_ONLY.contains(&name))
-        || (builtin_events && RESERVED_NDT_NAMES_BUILTIN_EVENTS_ONLY.contains(&name))
 }
 
 const FRAMEWORK_HEADER: &str =
@@ -2786,41 +2769,33 @@ mod tests {
     }
 
     #[test]
-    fn builtin_event_runtime_names_are_only_reserved_for_a_builtin_events_export() {
+    fn builtin_event_runtime_names_are_reserved() {
         let output_dir = std::path::Path::new("target/tests/builtin-events-reserved-names");
         let _ = fs::remove_dir_all(output_dir);
         fs::create_dir_all(output_dir).expect("failed to create test output directory");
 
-        // The built-in events object is opt-in, so its name must not stop a user type
-        // from exporting on a build that never emits it.
-        let builder = Builder::<tauri::Wry>::new().typ::<builtin_event_names::TauriEvents>();
-
-        builder
-            .export(Typescript::default(), output_dir.join("bindings.ts"))
-            .expect("`tauriEvents` should not be reserved without `Builder::builtin_events`");
-        assert!(
-            fs::read_to_string(output_dir.join("bindings.ts"))
-                .expect("failed to read TypeScript bindings")
-                .contains("export type tauriEvents = {")
-        );
-
-        builder
-            .export(JSDoc::default(), output_dir.join("bindings.js"))
-            .expect("`tauriEvents` should not be reserved without `Builder::builtin_events`");
-        assert!(
-            fs::read_to_string(output_dir.join("bindings.js"))
-                .expect("failed to read JSDoc bindings")
-                .contains("tauriEvents")
-        );
-
-        let err = Builder::<tauri::Wry>::new()
-            .builtin_events()
+        // `tauriEvents` is always emitted, so a user type with that name can never be
+        // exported, by either exporter.
+        let ts_err = Builder::<tauri::Wry>::new()
             .typ::<builtin_event_names::TauriEvents>()
-            .export(Typescript::default(), output_dir.join("conflict.ts"))
-            .expect_err("`tauriEvents` should be reserved by `Builder::builtin_events`");
+            .export(Typescript::default(), output_dir.join("bindings.ts"))
+            .expect_err("`tauriEvents` should always be reserved");
         assert!(
-            err.to_string().contains("User defined type 'tauriEvents'"),
-            "{err}"
+            ts_err
+                .to_string()
+                .contains("User defined type 'tauriEvents'"),
+            "{ts_err}"
+        );
+
+        let jsdoc_err = Builder::<tauri::Wry>::new()
+            .typ::<builtin_event_names::TauriEvents>()
+            .export(JSDoc::default(), output_dir.join("bindings.js"))
+            .expect_err("`tauriEvents` should always be reserved");
+        assert!(
+            jsdoc_err
+                .to_string()
+                .contains("User defined type 'tauriEvents'"),
+            "{jsdoc_err}"
         );
 
         fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
@@ -2836,7 +2811,6 @@ mod tests {
 
         Builder::<tauri::Wry>::new()
             .plugin_name("my-plugin")
-            .builtin_events()
             .export(Typescript::default(), output_dir.join("bindings.ts"))
             .expect("failed to export TypeScript bindings");
 
