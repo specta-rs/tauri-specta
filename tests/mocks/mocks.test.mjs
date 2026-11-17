@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { afterEach, test } from "node:test";
 
+import { invoke } from "@tauri-apps/api/core";
 import { clearMocks } from "@tauri-apps/api/mocks";
 
 // `@tauri-apps/api` expects browser globals. The mock layer only reaches for `crypto`.
@@ -143,4 +144,93 @@ test("the real command keeps running its own transforms around the mock", async 
 
 	const profile = { userId: 1, displayName: "Oscar", tags: [], homepage: null, scores: {} };
 	assert.deepEqual(await commands.echoProfile(profile), profile);
+});
+
+test("a call is recorded with the accessor and the arguments it was invoked with", async () => {
+	const handle = mockCommands({ greet: ({ myName }) => `Hello, ${myName}!` });
+
+	// The handle's array is live, so a reference taken before the call sees it too.
+	const history = handle.calls;
+	assert.deepEqual(history, []);
+
+	await commands.greet("Brendan");
+
+	assert.deepEqual(history, [{ command: "greet", args: { myName: "Brendan" } }]);
+	assert.equal(handle.calls, history);
+});
+
+test("a command invoked without arguments records empty args", async () => {
+	const calls = mockCommands({ maybe: () => null });
+
+	await commands.maybe();
+
+	assert.deepEqual(calls.calls, [{ command: "maybe", args: {} }]);
+});
+
+test("a call to an unregistered handler is recorded before it rejects", async () => {
+	const calls = mockCommands({});
+
+	await assert.rejects(
+		commands.greet("Brendan"),
+		/No mock handler registered for command 'greet'/,
+	);
+
+	assert.deepEqual(calls.calls, [{ command: "greet", args: { myName: "Brendan" } }]);
+});
+
+test("a command the bindings do not generate is recorded under its Tauri name", async () => {
+	const calls = mockCommands({});
+
+	await assert.rejects(
+		invoke("not_generated", { value: 1 }),
+		/No mock handler registered for command 'not_generated'/,
+	);
+
+	assert.deepEqual(calls.calls, [
+		{ command: "not_generated", args: { value: 1 } },
+	]);
+});
+
+test("a call whose handler throws is still recorded", async () => {
+	const calls = mockCommands({
+		plainError: () => {
+			throw { PermissionDenied: "no" };
+		},
+	});
+
+	await rejectionOf(commands.plainError());
+
+	assert.deepEqual(calls.calls, [{ command: "plainError", args: {} }]);
+});
+
+test("a call whose handler rejects is still recorded", async () => {
+	const calls = mockCommands({ taggedError: () => Promise.reject({ Io: "boom" }) });
+
+	await rejectionOf(commands.taggedError());
+
+	assert.deepEqual(calls.calls, [{ command: "taggedError", args: {} }]);
+});
+
+test("`clear` empties the history but leaves the handlers installed", async () => {
+	const calls = mockCommands({ greet: ({ myName }) => `Hello, ${myName}!` });
+
+	await commands.greet("Brendan");
+	calls.clear();
+
+	assert.deepEqual(calls.calls, []);
+	assert.equal(await commands.greet("Oscar"), "Hello, Oscar!");
+	assert.deepEqual(calls.calls, [{ command: "greet", args: { myName: "Oscar" } }]);
+});
+
+test("a fresh install returns a fresh handle and the previous one stops growing", async () => {
+	const first = mockCommands({ greet: () => "first" });
+	await commands.greet("a");
+
+	const second = mockCommands({ greet: () => "second" });
+	assert.deepEqual(second.calls, []);
+
+	assert.equal(await commands.greet("b"), "second");
+	assert.deepEqual(second.calls, [{ command: "greet", args: { myName: "b" } }]);
+	// The old handle keeps what it recorded, but the replaced handlers never touch it.
+	assert.deepEqual(first.calls, [{ command: "greet", args: { myName: "a" } }]);
 });

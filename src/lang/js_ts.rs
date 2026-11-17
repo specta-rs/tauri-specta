@@ -1032,9 +1032,16 @@ fn validate_mock_transforms(
 /// handler.
 fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String, Error> {
     let mut out = String::new();
+    out.push_str(if jsdoc {
+        MOCK_CALL_TYPES_JS
+    } else {
+        MOCK_CALL_TYPES_TS
+    });
+    out.push('\n');
     out.push_str(MOCK_COMMANDS_DOC);
     if jsdoc {
         out.push_str("\n *\n * @param {Partial<MockCommandHandlers>} [handlers]");
+        out.push_str("\n * @returns {MockCommandsHandle}");
     }
     out.push_str("\n */\n");
 
@@ -1042,7 +1049,7 @@ fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String,
         out.push_str("export function mockCommands(handlers = {}) {\n");
     } else {
         out.push_str(
-            "export function mockCommands(handlers: Partial<MockCommandHandlers> = {}): void {\n",
+            "export function mockCommands(handlers: Partial<MockCommandHandlers> = {}): MockCommandsHandle {\n",
         );
     }
     out.push_str(if jsdoc {
@@ -1050,17 +1057,12 @@ fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String,
     } else {
         MOCK_HANDLER_REGISTRY_IMPL_TS
     });
-
-    // An events-only builder never reads `args`, which `noUnusedParameters` (set by every
-    // tsconfig in this repo's examples) would reject.
-    let callback_args = if cfg.commands.is_empty() {
-        "_args"
+    out.push_str(if jsdoc {
+        "    /** @type {MockCall[]} */\n    const calls = [];\n"
     } else {
-        "args"
-    };
-    out.push_str(&format!(
-        "    return __TAURI_MOCK_IPC((cmd, {callback_args}) => {{\n"
-    ));
+        "    const calls: MockCall[] = [];\n"
+    });
+    out.push_str("    __TAURI_MOCK_IPC((cmd, args) => {\n");
     out.push_str("        switch (cmd) {\n");
 
     for command in cfg.commands.iter() {
@@ -1069,21 +1071,33 @@ fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String,
             .apply(cfg.command_accessor_name(command))
             .into_owned();
         let access = js_member_access("mockHandlers", &accessor)?;
+        // The recorded name is the accessor, not the Tauri command name, so a test can
+        // assert against the same name it uses for `commands`.
+        let accessor_literal = serde_json::to_string(&accessor)
+            .map_err(|err| Error::framework("failed to serialize a command accessor", err))?;
         let command_name =
             serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
                 .map_err(|err| {
                     Error::framework("failed to serialize a command name for bindings", err)
                 })?;
         out.push_str(&format!(
-            "            case {command_name}: return mockCommandHandler({access}, {command_name}, args);\n"
+            "            case {command_name}: calls.push({{ command: {accessor_literal}, args }}); return mockCommandHandler({access}, {command_name}, args);\n"
         ));
     }
 
+    // Record before dispatching, so a call that fails is still part of the history. A
+    // command the bindings don't generate has no accessor to record, so it keeps the raw
+    // Tauri command name the frontend passed to `invoke`.
+    out.push_str("            default:\n");
+    out.push_str("                calls.push({ command: cmd, args });\n");
     out.push_str(
-        "            default: throw new Error(`No mock handler registered for command '${cmd}'`);\n",
+        "                throw new Error(`No mock handler registered for command '${cmd}'`);\n",
     );
     out.push_str("        }\n");
     out.push_str("    }, { shouldMockEvents: true });\n");
+    out.push_str(
+        "    return {\n        calls,\n        clear: () => {\n            calls.length = 0;\n        },\n    };\n",
+    );
     out.push_str("}\n");
 
     Ok(out)
@@ -1738,7 +1752,9 @@ const RESERVED_NDT_NAMES: &[&str] = &[
 /// [`Builder::mocks`](crate::Builder::mocks) actually emits them for.
 const RESERVED_NDT_NAMES_MOCKS_ONLY: &[&str] = &[
     "__TAURI_MOCK_IPC",
+    "MockCall",
     "MockCommandHandlers",
+    "MockCommandsHandle",
     "mockCommandHandler",
     "mockCommands",
 ];
@@ -1843,6 +1859,71 @@ async function typedError(result) {
 
 const TYPED_ERROR_ASSERTION_TS: &str = "const _assertTypedErrorFollowsContract: <T, E>(result: Promise<T>) => Promise<any> = typedError;";
 
+const MOCK_CALL_TYPES_TS: &str = r#"/**
+ * One command invocation observed by a set of mock handlers.
+ *
+ * `command` is the `commands` accessor that was called, e.g. `greet`. A command the
+ * bindings do not generate has no accessor to record, so it keeps the raw Tauri command
+ * name the frontend passed to `invoke`.
+ *
+ * `args` is the value the command was invoked with, before any transform. The generated
+ * `commands` accessor passes `{}` for a command with no arguments, and a raw `invoke` can
+ * also pass Tauri's array and buffer payload shapes, so it is not narrowed to an object.
+ */
+export type MockCall = {
+    /**
+     * The generated command accessor, e.g. `greet`, or, for a command the bindings don't
+     * generate, its raw Tauri command name.
+     */
+    command: string;
+    /**
+     * The arguments object the command was invoked with, before any transform; `{}` when it
+     * was invoked without arguments.
+     */
+    args: unknown;
+};
+
+/** The handle `mockCommands` returns for the handlers it installed. */
+export type MockCommandsHandle = {
+    /**
+     * Every call observed since this handle's handlers were installed, oldest first. The
+     * array is live, so it keeps growing for as long as those handlers stay installed.
+     */
+    readonly calls: readonly MockCall[];
+    /** Drop the recorded calls. The handlers stay installed. */
+    clear(): void;
+};
+"#;
+
+const MOCK_CALL_TYPES_JS: &str = r#"/**
+ * One command invocation observed by a set of mock handlers.
+ *
+ * `command` is the `commands` accessor that was called, e.g. `greet`. A command the
+ * bindings do not generate has no accessor to record, so it keeps the raw Tauri command
+ * name the frontend passed to `invoke`.
+ *
+ * `args` is the value the command was invoked with, before any transform. The generated
+ * `commands` accessor passes `{}` for a command with no arguments, and a raw `invoke` can
+ * also pass Tauri's array and buffer payload shapes, so it is not narrowed to an object.
+ *
+ * @typedef {object} MockCall
+ * @property {string} command The generated command accessor, e.g. `greet`, or, for a
+ * command the bindings don't generate, its raw Tauri command name.
+ * @property {unknown} args The arguments object the command was invoked with, before any
+ * transform; `{}` when it was invoked without arguments.
+ */
+
+/**
+ * The handle `mockCommands` returns for the handlers it installed.
+ *
+ * @typedef {object} MockCommandsHandle
+ * @property {MockCall[]} calls Every call observed since this handle's handlers were
+ * installed, oldest first. The array is live, so it keeps growing for as long as those
+ * handlers stay installed.
+ * @property {() => void} clear Drop the recorded calls. The handlers stay installed.
+ */
+"#;
+
 const MOCK_COMMANDS_DOC: &str = r#"/**
  * Install typed mock handlers for the generated commands.
  *
@@ -1853,6 +1934,24 @@ const MOCK_COMMANDS_DOC: &str = r#"/**
  * A handler receives the command's arguments and returns its success value; throw (or
  * return a rejected promise) to make the command fail. A command with no handler rejects
  * with an error rather than resolving `undefined`, so a test can't pass by accident.
+ *
+ * The returned handle records every call these handlers observe, so a test can assert
+ * what was invoked:
+ *
+ * ```ts
+ * const calls = mockCommands({ greet: ({ myName }) => `Hello, ${myName}!` });
+ * await commands.greet("Brendan");
+ * expect(calls.calls).toEqual([{ command: "greet", args: { myName: "Brendan" } }]);
+ * ```
+ *
+ * `calls` is the live history, oldest first, and grows for as long as these handlers stay
+ * installed. `clear()` empties it without uninstalling anything. Every call is recorded
+ * before it is dispatched, including one that fails because it has no handler or because
+ * its handler throws. A command the bindings do not generate is recorded under its raw
+ * Tauri command name, since it has no `commands` accessor.
+ *
+ * Calling `mockCommands` again installs a fresh set of handlers and returns a fresh handle
+ * with an empty history; the previous handle keeps its calls but stops growing.
  *
  * Tauri's event mocking is enabled as part of the install (`shouldMockEvents`), so
  * `events` keeps working under test without a second installer fighting this one. Note
@@ -2016,6 +2115,18 @@ mod tests {
         #[derive(Serialize, Deserialize, Type)]
         #[allow(dead_code)]
         pub struct MockCommandHandlers {
+            value: String,
+        }
+
+        #[derive(Serialize, Deserialize, Type)]
+        #[allow(dead_code)]
+        pub struct MockCall {
+            value: String,
+        }
+
+        #[derive(Serialize, Deserialize, Type)]
+        #[allow(dead_code)]
+        pub struct MockCommandsHandle {
             value: String,
         }
     }
@@ -2390,6 +2501,35 @@ mod tests {
             "{err}"
         );
 
+        // `MockCall` and `MockCommandsHandle` are declared by the mocks runtime too, so
+        // they are reserved under the same rule.
+        for (name, result) in [
+            (
+                "MockCall",
+                Builder::<tauri::Wry>::new()
+                    .commands(collect_commands![nullable_result])
+                    .mocks()
+                    .typ::<mock_names::MockCall>()
+                    .export(Typescript::default(), output_dir.join("conflict-call.ts")),
+            ),
+            (
+                "MockCommandsHandle",
+                Builder::<tauri::Wry>::new()
+                    .commands(collect_commands![nullable_result])
+                    .mocks()
+                    .typ::<mock_names::MockCommandsHandle>()
+                    .export(Typescript::default(), output_dir.join("conflict-handle.ts")),
+            ),
+        ] {
+            let err =
+                result.expect_err("mocks runtime names should be reserved by `Builder::mocks`");
+            assert!(
+                err.to_string()
+                    .contains(&format!("User defined type '{name}'")),
+                "{err}"
+            );
+        }
+
         fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
     }
 
@@ -2449,7 +2589,7 @@ mod tests {
             .expect("failed to read TypeScript bindings");
         assert!(
             ts.contains(
-                r#"case "plugin:my-plugin|nullable_result": return mockCommandHandler(mockHandlers.nullableResult, "plugin:my-plugin|nullable_result", args);"#
+                r#"case "plugin:my-plugin|nullable_result": calls.push({ command: "nullableResult", args }); return mockCommandHandler(mockHandlers.nullableResult, "plugin:my-plugin|nullable_result", args);"#
             ),
             "{ts}"
         );
