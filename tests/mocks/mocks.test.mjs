@@ -35,6 +35,39 @@ afterEach(() => clearMocks());
 /** The value `promise` rejects with, or `undefined` if it resolves. */
 const rejectionOf = (promise) => promise.then(() => undefined, (reason) => reason);
 
+/**
+ * Record the `plugin:event|unlisten` IPC calls, which is how a generated `unlisten`
+ * removes a listener.
+ */
+const trackUnlistens = () => {
+	const invoke = window.__TAURI_INTERNALS__.invoke;
+	const calls = [];
+	window.__TAURI_INTERNALS__.invoke = (cmd, args, options) => {
+		if (cmd === "plugin:event|unlisten") calls.push(args);
+		return invoke(cmd, args, options);
+	};
+	return calls;
+};
+
+/**
+ * Run `fn` with `console.warn` silenced.
+ *
+ * `@tauri-apps/api/mocks` 2.12.4 looks the listener up by `args.id` when handling
+ * `plugin:event|unlisten`, while `event.listen` sends the id as `eventId`. The mock's
+ * private registry therefore keeps a stale id, and emitting that event again warns
+ * about a callback that no longer exists — which is exactly what the signal tests
+ * assert (our callback is gone), so the warning is expected noise.
+ */
+const quietly = async (fn) => {
+	const warn = console.warn;
+	console.warn = () => {};
+	try {
+		return await fn();
+	} finally {
+		console.warn = warn;
+	}
+};
+
 test("a handler receives the command's arguments", async () => {
 	mockCommands({ greet: ({ myName }) => `Hello, ${myName}!` });
 
@@ -135,6 +168,71 @@ test("event payloads keep their generated shape", async () => {
 	unlisten();
 
 	assert.deepEqual(received, [{ eventId: 7, payload: "seven" }]);
+});
+
+test("a listener with an already-aborted signal never fires", async () => {
+	mockCommands({});
+	const unlistens = trackUnlistens();
+
+	const controller = new AbortController();
+	controller.abort();
+
+	const received = [];
+	const unlisten = await events.messageEvent.listen(
+		(event) => received.push(event.payload),
+		{ signal: controller.signal },
+	);
+
+	// It was registered and unlistened straight away, so nothing is left behind.
+	assert.equal(unlistens.length, 1);
+	// The returned unlisten is a no-op, and calling it more than once must not throw.
+	unlisten();
+	unlisten();
+	assert.equal(unlistens.length, 1, "the returned unlisten is a no-op");
+
+	await quietly(() => events.messageEvent.emit("hello"));
+
+	assert.deepEqual(received, []);
+});
+
+test("aborting a signal unlistens the listener", async () => {
+	mockCommands({});
+	const unlistens = trackUnlistens();
+
+	const controller = new AbortController();
+	const received = [];
+	const unlisten = await events.messageEvent.listen(
+		(event) => received.push(event.payload),
+		{ signal: controller.signal },
+	);
+
+	await events.messageEvent.emit("before");
+	controller.abort();
+	assert.equal(unlistens.length, 1);
+
+	await quietly(() => events.messageEvent.emit("after"));
+	unlisten();
+	assert.equal(unlistens.length, 1, "unlisten is a no-op after the abort");
+
+	assert.deepEqual(received, ["before"]);
+});
+
+test("`once` honours the signal too", async () => {
+	mockCommands({});
+	const unlistens = trackUnlistens();
+
+	const controller = new AbortController();
+	const received = [];
+	await events.messageEvent.once(
+		(event) => received.push(event.payload),
+		{ signal: controller.signal },
+	);
+
+	controller.abort();
+	assert.equal(unlistens.length, 1);
+	await quietly(() => events.messageEvent.emit("hello"));
+
+	assert.deepEqual(received, []);
 });
 
 test("the real command keeps running its own transforms around the mock", async () => {

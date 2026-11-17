@@ -238,6 +238,19 @@
 //! await events.demoEvent(appWindow).emit("Test")
 //! ```
 //!
+//! `listen` and `once` also accept an optional `{ signal }` so a listener can be tied to
+//! an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal):
+//!
+//! ```ts
+//! const controller = new AbortController();
+//!
+//! // Unlistens when `controller.abort()` is called, so a component can clean up on unmount.
+//! await events.demoEvent.listen((e) => console.log(e), { signal: controller.signal });
+//! ```
+//!
+//! If the signal is already aborted, the listener is removed straight away, and no
+//! callback fires after an abort.
+//!
 //! Refer to [`Event`] for all the possible methods for listening and emitting events.
 //!
 //! ### Tauri's built-in events

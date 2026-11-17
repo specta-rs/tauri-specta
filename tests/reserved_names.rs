@@ -21,6 +21,19 @@ struct EventEmit {
     value: String,
 }
 
+/// A name only the TypeScript runtime declares, like `EventEmit`.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+struct EventListenOptions {
+    value: String,
+}
+
+/// A runtime helper both exporters declare.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename = "bindAbort")]
+struct BindAbort {
+    value: String,
+}
+
 fn export<L: LanguageExt>(
     builder: &Builder<MockRuntime>,
     language: L,
@@ -40,8 +53,14 @@ fn export<L: LanguageExt>(
 #[test]
 fn jsdoc_allows_types_named_after_typescript_only_runtime_helpers() {
     let builder = Builder::<MockRuntime>::new().typ::<EventEmit>();
+
     export(&builder, JSDoc::default(), "bindings.js")
         .expect("the JSDoc runtime has no `EventEmit` typedef for this name to collide with");
+
+    let builder = Builder::<MockRuntime>::new().typ::<EventListenOptions>();
+    export(&builder, JSDoc::default(), "bindings.js").expect(
+        "the JSDoc runtime has no `EventListenOptions` typedef for this name to collide with",
+    );
 }
 
 #[test]
@@ -49,5 +68,29 @@ fn typescript_rejects_types_named_after_its_runtime_helpers() {
     let builder = Builder::<MockRuntime>::new().typ::<EventEmit>();
     let err = export(&builder, Typescript::default(), "bindings.ts")
         .expect_err("the TypeScript runtime declares `EventEmit`");
+    assert!(err.contains("must be renamed"), "unexpected error: {err}");
+
+    let builder = Builder::<MockRuntime>::new().typ::<EventListenOptions>();
+    let err = export(&builder, Typescript::default(), "bindings.ts")
+        .expect_err("the TypeScript runtime declares `EventListenOptions`");
+    assert!(err.contains("must be renamed"), "unexpected error: {err}");
+}
+
+#[test]
+fn both_exporters_reject_types_named_after_shared_runtime_helpers() {
+    let err = export(
+        &Builder::<MockRuntime>::new().typ::<BindAbort>(),
+        Typescript::default(),
+        "bindings.ts",
+    )
+    .expect_err("the TypeScript runtime declares `bindAbort`");
+    assert!(err.contains("must be renamed"), "unexpected error: {err}");
+
+    let err = export(
+        &Builder::<MockRuntime>::new().typ::<BindAbort>(),
+        JSDoc::default(),
+        "bindings.js",
+    )
+    .expect_err("the JSDoc runtime declares `bindAbort`");
     assert!(err.contains("must be renamed"), "unexpected error: {err}");
 }
