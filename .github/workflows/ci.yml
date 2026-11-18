@@ -80,6 +80,47 @@ jobs:
       - name: Test generated mocks
         run: pnpm run test:mocks
 
+  tauri-v3:
+    name: Tauri v3 (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: tests/tauri-v3
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tests/tauri-v3 -> target
+          key: tauri-v3
+      - name: Check formatting
+        run: cargo fmt -- --check
+      - name: Lint v3 consumer
+        run: cargo clippy --locked --all-targets -- -D warnings
+      # This fixture has its own lockfile and uses published v3, not the v2
+      # applications or the root workspace's Tauri patch. No Wry/GTK is needed.
+      - name: Run v3 consumer tests and generate bindings
+        run: cargo test --locked
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: tests/tauri-v3/pnpm-lock.yaml
+      - name: Install prerelease frontend API
+        run: pnpm install --frozen-lockfile
+      - name: Type-check TypeScript, JSDoc, and query bindings
+        run: pnpm run check:bindings
+      - name: Test generated bindings against v3 mocks
+        run: pnpm test
+
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -97,4 +138,3 @@ jobs:
       # from leaking into dependencies.
       - name: Build docs
         run: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features --no-deps
-

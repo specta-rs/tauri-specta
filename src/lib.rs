@@ -25,6 +25,43 @@
 //! - `javascript` - Enables the JSDoc exporter.
 //! - `typescript` - Enables the Typescript exporter.
 //!
+//! ## Tauri versions
+//!
+//! Tauri Specta supports Tauri v2 and experimentally supports **Tauri
+//! 3.0.0-alpha.6** with `@tauri-apps/api` **3.0.0-alpha.3**. Your application's
+//! direct `tauri` dependency selects the version; no Tauri Specta feature flag is
+//! needed. The examples below use v2. Keep the frontend API on the same major as
+//! your Rust application.
+//!
+//! V3 requires Rust 1.95 or newer and selects a runtime explicitly rather than
+//! through `tauri/wry`. For example, after adding the matching v3
+//! `tauri-runtime-wry` dependency:
+//!
+//! ```rust,ignore
+//! let builder = tauri_specta::Builder::<tauri::DynRuntime>::new()
+//!     .commands(tauri_specta::collect_commands![hello_world]);
+//!
+//! tauri::Builder::default()
+//!     .runtime(tauri_runtime_wry::Wry::default())
+//!     .invoke_handler(builder.invoke_handler())
+//!     .run(tauri::generate_context!())
+//!     .expect("error while running tauri application");
+//! ```
+//!
+//! `tauri::Wry` no longer exists in v3. Use `tauri::DynRuntime` when specifying
+//! the default runtime explicitly, or name the concrete runtime from its crate.
+//! Metadata collection and binding export do not require a concrete runtime.
+//!
+//! ### Prerelease limitations
+//!
+//! Published v3 alpha.6 does not yet implement Specta support for
+//! `tauri::ipc::Request` and `tauri::ipc::Response`; commands using them require
+//! an application-level Tauri patch until the upstream support is released.
+//! Semantic channel payload transforms also need `Channel.deserialize`, which
+//! is not present in the published v3 frontend API alpha.3. Ordinary commands,
+//! events, channels without those transforms, and query exports use the shared
+//! implementation. New Tauri prereleases require a tested dependency-bound update.
+//!
 //! ## Setup
 //!
 //! The follow is a minimal example of how to setup Tauri Specta with Typescript.

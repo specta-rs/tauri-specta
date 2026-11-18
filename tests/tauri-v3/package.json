@@ -1,0 +1,18 @@
+{
+  "name": "tauri-specta-v3-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:bindings": "tsc -p tsconfig.json && tsc -p tsconfig.jsdoc.json",
+    "test": "node --experimental-strip-types --test mocks.test.mjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.107.1",
+    "@tauri-apps/api": "3.0.0-alpha.3",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -44,9 +44,10 @@ specta-serde = { workspace = true }
 specta-util = { workspace = true }
 
 [dev-dependencies]
-tauri = { workspace = true, features = ["test", "wry"] }
+tauri = { version = "2", default-features = false, features = ["test", "wry"] }
 
 [workspace]
+exclude = ["tests/tauri-v3"]
 members = [
   "crates/tauri-specta-query",
   "examples/app/src-tauri",
@@ -70,7 +71,8 @@ todo = { level = "warn", priority = -1 }
 panic_in_result_fn = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
-tauri = { version = "2", default-features = false }
+# Bound v3 prereleases to the latest tested alpha. Applications select their Tauri major.
+tauri = { version = ">=2, <=3.0.0-alpha.6", default-features = false }
 tauri-build = { version = "2" }
 tauri-plugin = { version = "2" }
 specta = { version = "=2.0.0-rc.28", features = ["derive"] }
