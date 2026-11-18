@@ -63,6 +63,10 @@ for coverage and details. Newer Tauri alphas **and v3 stable** are excluded unti
 the dependency upper bound is updated. The range also admits earlier 3.0.0 alphas,
 but only alpha.6 is tested; pin that version for experimental v3 support.
 
+Semantic mappings remain attached to their channel, including when passed to an
+untransformed command. Use a fresh channel when switching payload contracts, and
+leave mapped channels extensible (do not freeze or seal them).
+
 ## Development
 
 Run an example:

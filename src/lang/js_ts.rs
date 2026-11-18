@@ -2203,10 +2203,8 @@ const MOCK_CALL_TYPES_JS: &str = r#"/**
 const MAP_CHANNEL_IMPL_TS: &str = r#"const channelTransform = Symbol.for("tauri-specta.channelTransform");
 function mapChannel<T>(channel: Channel<T>, transform: (value: any) => T): Channel<T> {
     const mapped: Channel<T> & {
-        deserialize?: (transform: (value: any) => T) => Channel<T>;
         [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T };
     } = channel;
-    if (typeof mapped.deserialize === "function") return mapped.deserialize(transform);
     const existing = mapped[channelTransform];
     if (existing) {
         existing.transform = transform;
@@ -2232,9 +2230,8 @@ const MAP_CHANNEL_IMPL_JS: &str = r#"const channelTransform = Symbol.for("tauri-
  * @returns {Channel<T>}
  */
 function mapChannel(channel, transform) {
-    /** @type {Channel<T> & { deserialize?: (transform: (value: any) => T) => Channel<T>; [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T } }} */
+    /** @type {Channel<T> & { [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T } }} */
     const mapped = channel;
-    if (typeof mapped.deserialize === "function") return mapped.deserialize(transform);
     const existing = mapped[channelTransform];
     if (existing) {
         existing.transform = transform;

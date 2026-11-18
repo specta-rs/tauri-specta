@@ -14,15 +14,26 @@ struct Payload {
     url: SemanticUrl,
 }
 
+#[derive(Serialize, Type)]
+struct PlainPayload {
+    url: String,
+}
+
 #[tauri::command]
 #[specta::specta]
 fn stream_urls(channel: tauri::ipc::Channel<Payload>) {
     let _ = channel;
 }
 
+#[tauri::command]
+#[specta::specta]
+fn plain_urls(channel: tauri::ipc::Channel<PlainPayload>) {
+    let _ = channel;
+}
+
 pub fn builder() -> Builder<MockRuntime> {
     Builder::new()
-        .commands(collect_commands![stream_urls])
+        .commands(collect_commands![stream_urls, plain_urls])
         .semantic_types(semantic::Configuration::empty().define::<SemanticUrl>(
             |_| define("URL").into(),
             None,

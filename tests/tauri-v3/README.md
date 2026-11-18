@@ -34,8 +34,10 @@ mocks against the real v3 frontend API in all four error-handling modes.
 Shared semantic-channel tests run against both frontend majors in TypeScript and
 JSDoc, checking the original channel/callback id, ordered delivery, end-message
 cleanup, late handler assignment, and repeated/cross-module registration without
-stacking transforms. A same-channel fallback uses the released `onmessage` API
-when `Channel.deserialize` is unavailable.
+stacking transforms. The adapter uses only the released `onmessage` API, not a
+speculative native `Channel.deserialize` method. Mapping remains attached when a
+channel is passed to an untransformed command: use a fresh channel when switching
+payload contracts. Mapped channels must remain extensible, not frozen/sealed.
 
 ## Known gaps
 

@@ -58,5 +58,26 @@ export function channelTests({ Channel, mockIPC, clearMocks }, ts, js) {
         globalThis.URL = OriginalURL;
       }
     });
+
+    test(`${name} mapped channels retain their mapping; plain contracts need a fresh channel`, async () => {
+      mockIPC(() => {});
+      const values = [];
+      const mapped = new Channel((value) => values.push(value.url));
+      await api.commands.streamUrls(mapped);
+      // Deliberately mixing contracts demonstrates the documented restriction:
+      // a plain command does not reset the mapping on an existing channel.
+      await api.commands.plainUrls(mapped);
+      window.__TAURI_INTERNALS__.callbacks.get(mapped.id)({
+        index: 0, message: { url: "https://example.com/" },
+      });
+      assert.ok(values[0] instanceof URL);
+
+      const fresh = new Channel((value) => values.push(value.url));
+      await api.commands.plainUrls(fresh);
+      window.__TAURI_INTERNALS__.callbacks.get(fresh.id)({
+        index: 0, message: { url: "https://example.com/" },
+      });
+      assert.equal(values[1], "https://example.com/");
+    });
   }
 }

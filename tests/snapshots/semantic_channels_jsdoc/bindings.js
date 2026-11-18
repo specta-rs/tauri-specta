@@ -12,6 +12,12 @@ export const commands = {
 	 * @returns {Promise<void>}
 	 */
 	streamUrls: (channel, options) => __TAURI_INVOKE("stream_urls", { channel: mapChannel(channel, (v) => ({...v,url:new URL(v.url)})) }, options),
+	/**
+	 * @param {Channel<PlainPayload>} channel
+	 * @param {InvokeOptions} [options]
+	 * @returns {Promise<void>}
+	 */
+	plainUrls: (channel, options) => __TAURI_INVOKE("plain_urls", { channel }, options),
 };
 
 /** Built-in Tauri events */
@@ -105,6 +111,11 @@ export const tauriEvents = {
 	*	}} Payload
 	* @property {URL} url
 	*
+	* @typedef {{
+	*		url: string,
+	*	}} PlainPayload
+	* @property {string} url
+	*
 	* @typedef {URL} SemanticUrl
 	*/
 
@@ -117,9 +128,8 @@ const channelTransform = Symbol.for("tauri-specta.channelTransform");
  * @returns {Channel<T>}
  */
 function mapChannel(channel, transform) {
-    /** @type {Channel<T> & { deserialize?: (transform: (value: any) => T) => Channel<T>; [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T } }} */
+    /** @type {Channel<T> & { [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T } }} */
     const mapped = channel;
-    if (typeof mapped.deserialize === "function") return mapped.deserialize(transform);
     const existing = mapped[channelTransform];
     if (existing) {
         existing.transform = transform;
