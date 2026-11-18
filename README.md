@@ -30,8 +30,8 @@ Follow the documentation links above for help getting started.
 
 The same Tauri Specta implementation supports either Tauri v2 or the tested v3
 prerelease. **Stable Tauri v2 is the default**, including for code-generation-only
-crates that never depend on `tauri` themselves. Selecting v3 takes two explicit
-changes: disable default features, enable `v3`, and add the Tauri v3 dependency
+crates that never depend on `tauri` themselves. Selecting v3 takes three changes
+together: disable default features, enable `v3`, and add the Tauri v3 dependency
 yourself.
 
 ```toml
@@ -51,31 +51,68 @@ tauri-specta = { version = "=2.0.0-rc.29", default-features = false, features = 
     "typescript",
     "v3",
 ] }
+# Same treatment if you use it:
+tauri-specta-query = { version = "=2.0.0-rc.29", default-features = false, features = ["v3"] }
 
 [build-dependencies]
 tauri-build = "=3.0.0-alpha.4"
 ```
 
-Use `@tauri-apps/api@3.0.0-alpha.3` on the v3 frontend. The `v2` feature is what
-pins an otherwise unconstrained graph to stable v2; `v3` is required so a build
-that selected neither fails with a clear error instead of silently picking a
-prerelease. If you also use `tauri-specta-query`, give it the same treatment
-(`default-features = false, features = ["v3"]`). Both Tauri versions declare
-`links = "Tauri"`, so one graph can only contain one of them. Two
-misconfigurations are caught rather than silently building the wrong major:
+The Rust API is unchanged. The differences are naming the runtime and selecting it
+when building the app; `tauri::Wry` does not exist in v3.
+
+```rust
+use specta_typescript::Typescript;
+use tauri_specta::{Builder, collect_commands};
+
+#[tauri::command]
+#[specta::specta]
+fn hello_world(my_name: String) -> String {
+    format!("Hello, {my_name}! You've been greeted from Rust!")
+}
+
+fn main() {
+    // v3's type-erased default runtime. A concrete runtime such as
+    // `tauri_runtime_wry::WryRuntime` also works for static dispatch.
+    let builder = Builder::<tauri::DynRuntime>::new()
+        .commands(collect_commands![hello_world]);
+
+    #[cfg(debug_assertions)]
+    builder
+        .export(Typescript::default(), "../src/bindings.ts")
+        .expect("Failed to export typescript bindings");
+
+    tauri::Builder::default()
+        // v3 selects the runtime here instead of through the `wry` feature.
+        .runtime(tauri_runtime_wry::Wry::default())
+        .invoke_handler(builder.invoke_handler())
+        .setup(move |app| {
+            builder.mount_events(app); // still required if you use events
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+```
+
+`build.rs` is unchanged (`tauri_build::build()`), and generated bindings are
+unchanged: import `commands`, `events`, and `tauriEvents` exactly as on v2. For the
+covered API, exports are byte-identical between the majors; CI compares them. Use
+`@tauri-apps/api@3.0.0-alpha.3` on the v3 frontend, matching the Rust major.
+
+The `v2` feature is what pins an otherwise unconstrained graph to stable v2; `v3`
+is required so a build that selected neither fails with a clear error instead of
+silently picking a prerelease. Both Tauri versions declare `links = "Tauri"`, so
+one graph can only contain one of them. Two misconfigurations are caught rather
+than silently building the wrong major:
 
 - Enabling `v3` while the graph still resolves stable v2 fails to compile; the
   crate asserts on a v3-only type.
 - Adding a Tauri v3 dependency with default features still enabled keeps the v2
   pin, so Cargo refuses the graph instead of mixing the two.
 
-V3 requires Rust 1.95+ and an explicit runtime dependency and selection. Replace
-explicit `tauri::Wry` type arguments with `tauri::DynRuntime` for the default
-type-erased runtime, and configure the application with
-`.runtime(tauri_runtime_wry::Wry::default())` (or another runtime).
-
-Plugins must likewise support Tauri v3; the v2 examples' plugin/build dependencies
-are not a v3 application template.
+V3 requires Rust 1.95+ and v3-compatible Tauri plugins; the v2 examples' build and
+plugin dependencies are not a v3 application template.
 
 **Known limitations:** published v3 does not yet provide Specta implementations
 for IPC `Request`/`Response`. Semantic channel transforms work with the published

@@ -32,60 +32,106 @@
 //! ## Tauri versions
 //!
 //! Tauri Specta supports Tauri v2 and experimentally supports **Tauri
-//! 3.0.0-alpha.6** with `@tauri-apps/api` **3.0.0-alpha.3**. The examples below
-//! use v2.
+//! 3.0.0-alpha.6**. The examples below use v2. **Stable Tauri v2 is the default**,
+//! including for code-generation-only crates that never depend on `tauri`
+//! themselves.
 //!
-//! The default `v2` feature keeps an application that has not selected a Tauri
-//! version itself on stable v2. To use the prerelease, disable default features,
-//! enable `v3`, and add the matching Tauri dependency yourself:
+//! ### Selecting a version
+//!
+//! The `v2` feature is enabled by default and adds a `tauri = "2"` constraint, so
+//! Cargo cannot drift an unconstrained graph onto the v3 prerelease admitted by
+//! Tauri Specta's own dependency range.
+//!
+//! To use Tauri v3, make all three changes together:
+//!
+//! 1. Disable Tauri Specta's default features.
+//! 2. Enable the `v3` feature.
+//! 3. Add the Tauri v3 dependency yourself.
 //!
 //! ```toml
+//! [dependencies]
+//! tauri = "=3.0.0-alpha.6"
+//! tauri-runtime-wry = "=3.0.0-alpha.6"
 //! tauri-specta = { version = "=2.0.0-rc.29", default-features = false, features = [
 //!     "derive",
 //!     "typescript",
 //!     "v3",
 //! ] }
-//! tauri = "=3.0.0-alpha.6"
+//! # Same treatment if you use it: `default-features = false, features = ["v3"]`.
+//! tauri-specta-query = { version = "=2.0.0-rc.29", default-features = false, features = ["v3"] }
+//!
+//! [build-dependencies]
+//! tauri-build = "=3.0.0-alpha.4"
 //! ```
 //!
 //! With neither `v2` nor `v3` enabled, the crate fails to compile rather than
 //! silently selecting a version. Enabling `v3` while the graph still resolves
 //! stable v2 also fails, because the crate asserts on a v3-only type. A Tauri v2
 //! dependency cannot coexist with v3: both declare `links = "Tauri"`, so Cargo
-//! refuses to build a graph containing both. The range admits older 3.0.0 alphas,
-//! but only alpha.6 is tested; newer alphas and v3 stable need a tested
-//! dependency-bound update. Keep the frontend API on the same major as your Rust
-//! application.
+//! refuses to build a graph containing both.
 //!
-//! V3 requires Rust 1.95 or newer and selects a runtime explicitly rather than
-//! through `tauri/wry`. For example, after adding the matching v3
-//! `tauri-runtime-wry` dependency:
+//! ### Using Tauri v3 in an application
 //!
-//! ```toml
-//! [dependencies]
-//! tauri = "=3.0.0-alpha.6"
-//! tauri-runtime-wry = "=3.0.0-alpha.6"
-//!
-//! [build-dependencies]
-//! tauri-build = "=3.0.0-alpha.4"
-//! ```
-//!
-//! Use v3-compatible versions of any Tauri plugins as well.
+//! `build.rs` is unchanged:
 //!
 //! ```rust,ignore
-//! let builder = tauri_specta::Builder::<tauri::DynRuntime>::new()
-//!     .commands(tauri_specta::collect_commands![hello_world]);
-//!
-//! tauri::Builder::default()
-//!     .runtime(tauri_runtime_wry::Wry::default())
-//!     .invoke_handler(builder.invoke_handler())
-//!     .run(tauri::generate_context!())
-//!     .expect("error while running tauri application");
+//! fn main() {
+//!     tauri_build::build()
+//! }
 //! ```
 //!
-//! `tauri::Wry` no longer exists in v3. Use `tauri::DynRuntime` when specifying
-//! the default runtime explicitly, or name the concrete runtime from its crate.
-//! Metadata collection and binding export do not require a concrete runtime.
+//! Tauri Specta's API is the same, but name the runtime explicitly and select it
+//! when building the app. `tauri::Wry` does not exist in v3:
+//!
+//! ```rust,ignore
+//! use specta_typescript::Typescript;
+//! use tauri_specta::{Builder, collect_commands, collect_events};
+//!
+//! #[tauri::command]
+//! #[specta::specta]
+//! fn hello_world(my_name: String) -> String {
+//!     format!("Hello, {my_name}! You've been greeted from Rust!")
+//! }
+//!
+//! fn main() {
+//!     // `DynRuntime` is v3's type-erased default. A concrete runtime such as
+//!     // `tauri_runtime_wry::WryRuntime` also works when you want static dispatch.
+//!     let builder = Builder::<tauri::DynRuntime>::new()
+//!         .commands(collect_commands![hello_world]);
+//!
+//!     #[cfg(debug_assertions)]
+//!     builder
+//!         .export(Typescript::default(), "../src/bindings.ts")
+//!         .expect("Failed to export typescript bindings");
+//!
+//!     tauri::Builder::default()
+//!         // v3 selects the runtime here instead of through the `wry` feature.
+//!         .runtime(tauri_runtime_wry::Wry::default())
+//!         .invoke_handler(builder.invoke_handler())
+//!         .setup(move |app| {
+//!             // Still required if you use events.
+//!             builder.mount_events(app);
+//!             Ok(())
+//!         })
+//!         .run(tauri::generate_context!())
+//!         .expect("error while running tauri application");
+//! }
+//! ```
+//!
+//! Generated bindings are unchanged: import `commands`, `events`, and
+//! `tauriEvents` from the exported file as on v2. Keep the JavaScript API on the
+//! same major as Rust, so `@tauri-apps/api@3.0.0-alpha.3` with alpha.6. For the
+//! covered API, generated bindings are byte-identical between the two majors; CI
+//! compares them.
+//!
+//! Other v3 differences:
+//!
+//! - Rust 1.95 or newer is required. v2 keeps its lower minimum.
+//! - `tauri/wry`, `tauri::Wry`, and `tauri::wry` are gone. Use
+//!   `tauri::DynRuntime` (type-erased) or a concrete runtime type, and add a
+//!   runtime crate such as `tauri-runtime-wry`.
+//! - Build with `tauri-build` v3 and use v3-compatible Tauri plugins.
+//! - Metadata collection and binding export do not require a webview runtime.
 //!
 //! ### Prerelease limitations
 //!
@@ -94,6 +140,10 @@
 //! an application-level Tauri patch until the upstream support is released.
 //! Ordinary commands, events, semantic channel payload transforms, and query
 //! exports use the shared implementation on the published frontend APIs.
+//!
+//! Tauri Specta's range admits earlier 3.0.0 alphas, but only alpha.6 is tested;
+//! newer alphas and v3 stable need a tested dependency-bound update. Pin the
+//! exact version, as every v3 snippet above does.
 //!
 //! ## Setup
 //!
