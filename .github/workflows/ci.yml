@@ -46,6 +46,13 @@ jobs:
           echo "::error::the example bindings are out of date; run \`cargo test --workspace --all-features\` and commit the result"
           exit 1
         fi
+    - name: Upload v2 parity bindings
+      uses: actions/upload-artifact@v7
+      with:
+        name: bindings-v2-${{ matrix.os }}
+        path: target/version-parity/v2/
+        if-no-files-found: error
+        retention-days: 7
 
   clippy:
     runs-on: ubuntu-latest
@@ -117,6 +124,14 @@ jobs:
       # applications or the root workspace's Tauri patch. No Wry/GTK is needed.
       - name: Run v3 consumer tests and generate bindings
         run: cargo test --locked
+      - name: Upload v3 parity bindings
+        if: matrix.toolchain == 'stable'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bindings-v3-${{ matrix.os }}
+          path: tests/tauri-v3/target/bindings/
+          if-no-files-found: error
+          retention-days: 7
       - uses: pnpm/action-setup@v6
         if: matrix.toolchain == 'stable'
         with:
@@ -136,6 +151,34 @@ jobs:
       - name: Test generated bindings against v3 mocks
         if: matrix.toolchain == 'stable'
         run: pnpm test
+
+  binding-parity:
+    name: Identical v2/v3 bindings (all desktop platforms)
+    needs: [build, tauri-v3]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - name: Test the parity checker
+        run: python -m unittest discover -s tests -p test_compare_bindings.py
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bindings-v*
+          path: target/binding-parity/
+          merge-multiple: false
+      # Compare every platform and Tauri version to the v2 Linux export. Do not
+      # normalize contents: a change in bytes OR the generated file set is drift.
+      - name: Compare generated binding trees byte-for-byte
+        run: |
+          python tests/compare_bindings.py \
+            target/binding-parity/bindings-v2-ubuntu-latest \
+            target/binding-parity/bindings-v2-macos-latest \
+            target/binding-parity/bindings-v2-windows-latest \
+            target/binding-parity/bindings-v3-ubuntu-latest \
+            target/binding-parity/bindings-v3-macos-latest \
+            target/binding-parity/bindings-v3-windows-latest
 
   docs:
     runs-on: ubuntu-latest

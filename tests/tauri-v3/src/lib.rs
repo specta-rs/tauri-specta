@@ -5,60 +5,17 @@
 mod semantic_channels;
 
 #[cfg(test)]
+#[path = "../../support/version_parity.rs"]
+mod version_parity;
+
+#[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use serde::{Deserialize, Serialize};
-    use specta::Type;
-    use specta_typescript::{JSDoc, Typescript};
     use tauri::test::MockRuntime;
-    use tauri_specta::{Builder, ErrorHandlingMode, Event, collect_commands, collect_events};
-    use tauri_specta_query::{CommandSet, TanstackQueryFramework};
+    use tauri_specta::{Builder, Event, collect_commands};
 
-    #[derive(Clone, Debug, Deserialize, Serialize, Type, Event)]
-    struct Progress {
-        completed: u32,
-    }
-
-    #[tauri::command(rename = "greet-v3")]
-    #[specta::specta]
-    fn greet(name: String, state: tauri::State<'_, u32>) -> String {
-        format!("Hello, {name}: {}", *state)
-    }
-
-    #[tauri::command]
-    #[specta::specta]
-    async fn double(value: u32) -> u32 {
-        value * 2
-    }
-
-    #[tauri::command]
-    #[specta::specta]
-    fn fail() -> Result<String, String> {
-        Err("failed".into())
-    }
-
-    #[tauri::command]
-    #[specta::specta]
-    fn stream(on_progress: tauri::ipc::Channel<u32>) {
-        let _ = on_progress.send(42);
-    }
-
-    #[tauri::command]
-    #[specta::specta]
-    fn handle<R: tauri::Runtime>(_app: tauri::AppHandle<R>) {}
-
-    fn builder() -> Builder<MockRuntime> {
-        Builder::new()
-            .commands(collect_commands![
-                greet,
-                double,
-                fail,
-                stream,
-                handle::<MockRuntime>
-            ])
-            .events(collect_events![Progress])
-    }
+    use super::version_parity::{self, Progress, builder};
 
     fn app(builder: &Builder<MockRuntime>) -> tauri::App<MockRuntime> {
         let app = tauri::test::mock_builder()
@@ -141,8 +98,10 @@ mod tests {
 
     #[test]
     fn accepts_the_default_type_erased_runtime() {
-        let builder = Builder::<tauri::DynRuntime>::new()
-            .commands(collect_commands![greet, handle::<tauri::DynRuntime>]);
+        let builder = Builder::<tauri::DynRuntime>::new().commands(collect_commands![
+            version_parity::greet,
+            version_parity::handle::<tauri::DynRuntime>
+        ]);
         // No concrete webview runtime is needed to collect commands or attach a handler.
         let _ = tauri::Builder::default().invoke_handler(builder.invoke_handler());
     }
@@ -150,52 +109,6 @@ mod tests {
     #[test]
     fn exports_bindings_for_frontend_checks() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/bindings");
-        std::fs::create_dir_all(&dir).unwrap();
-
-        let builder = builder().mocks();
-        builder
-            .export(Typescript::default(), dir.join("bindings.ts"))
-            .unwrap();
-        builder
-            .export(JSDoc::default(), dir.join("bindings.js"))
-            .unwrap();
-        super::semantic_channels::builder()
-            .export(Typescript::default(), dir.join("semantic.ts"))
-            .unwrap();
-        super::semantic_channels::builder()
-            .export(JSDoc::default(), dir.join("semantic.js"))
-            .unwrap();
-        let bindings = std::fs::read_to_string(dir.join("bindings.ts")).unwrap();
-        assert!(bindings.contains("\"greet-v3\""));
-        assert!(bindings.contains("onProgress: Channel<number>"));
-        assert!(!bindings.contains("state:"));
-
-        for (name, mode) in [
-            ("result", ErrorHandlingMode::Result),
-            ("result-unknown", ErrorHandlingMode::ResultUnknown),
-            ("data-error", ErrorHandlingMode::DataError),
-        ] {
-            builder
-                .clone()
-                .error_handling(mode)
-                .export(Typescript::default(), dir.join(format!("{name}.ts")))
-                .unwrap();
-        }
-
-        let (query, builder) =
-            CommandSet::<MockRuntime>::new(collect_commands![greet], collect_commands![double])
-                .build(TanstackQueryFramework::React);
-        assert!(query.contains("commands.greet"));
-        builder
-            .export(Typescript::default().with_raw(query), dir.join("query.ts"))
-            .unwrap();
-
-        builder
-            .clone()
-            .plugin_name("demo")
-            .export(Typescript::default(), dir.join("plugin.ts"))
-            .unwrap();
-        let bindings = std::fs::read_to_string(dir.join("plugin.ts")).unwrap();
-        assert!(bindings.contains("plugin:demo|greet-v3"));
+        version_parity::export(&dir);
     }
 }

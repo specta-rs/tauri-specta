@@ -21,6 +21,35 @@ pnpm --dir tests/tauri-v3 run check:bindings
 pnpm --dir tests/tauri-v3 test
 ```
 
+## Binding parity with v2
+
+CI compiles **the same** `tests/support/version_parity.rs` fixture against both
+Tauri majors, rather than comparing bindings from unrelated examples. The v2
+query-crate integration test and v3 consumer test each export 12 files covering
+TypeScript/JSDoc, every error mode, renamed/async commands, injected arguments,
+plain/semantic channels, typed and built-in events, mocks, plugin prefixes, and
+React Query helpers.
+
+Each desktop job uploads its generated tree. The `binding-parity` job downloads
+all six v2/v3 × Linux/macOS/Windows artifacts and compares every file's **bytes**
+and the complete file sets against the v2 Linux export. Missing/empty artifacts,
+added/removed files, line-ending differences, and changed contents fail CI; there
+is no snapshot update or normalization that could hide a version difference.
+The comparator has separate positive and negative tests.
+
+To run the same comparison locally:
+
+```sh
+cargo test --locked -p tauri-specta-query --test version_parity
+cargo test --locked --manifest-path tests/tauri-v3/Cargo.toml
+python3 -m unittest discover -s tests -p test_compare_bindings.py
+python3 tests/compare_bindings.py target/version-parity/v2 tests/tauri-v3/target/bindings
+```
+
+The shared fixture deliberately excludes IPC `Request`/`Response`: published v3
+cannot collect them yet. Parity covers the common supported API, not an assertion
+that the upstream limitation is resolved.
+
 Rust tests generate the TypeScript, JSDoc, and query bindings under
 `target/bindings/`. Run them before the frontend checks, even when the Rust
 target directory is redirected. Tests use `MockRuntime`, so they do not launch a
