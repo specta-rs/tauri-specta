@@ -19,7 +19,11 @@ categories = ["web-programming", "asynchronous"]
 all-features = true
 
 [features]
-default = []
+# Tauri v2 is the default: this pins `tauri` to 2.x so an unconstrained consumer
+# does not resolve the v3 prerelease that the dependency range also admits. Disable
+# default features and depend on Tauri v3 yourself to use v3.
+default = ["v2"]
+v2 = ["dep:tauri-specta-v2-pin"]
 derive = ["dep:tauri-specta-macros"]
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
@@ -32,6 +36,7 @@ workspace = true
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
 tauri-specta-macros = { version = "=2.0.0-rc.29", optional = true, path = "./macros" }
+tauri-specta-v2-pin = { version = "=2.0.0-rc.29", optional = true, path = "./crates/tauri-specta-v2-pin" }
 serde = "1"
 serde_json = "1"
 thiserror = "2"
@@ -44,11 +49,13 @@ specta-serde = { workspace = true }
 specta-util = { workspace = true }
 
 [dev-dependencies]
-tauri = { workspace = true, features = ["test", "wry"] }
+tauri = { version = "2", default-features = false, features = ["test", "wry"] }
 
 [workspace]
+exclude = ["tests/tauri-default", "tests/tauri-v3"]
 members = [
   "crates/tauri-specta-query",
+  "crates/tauri-specta-v2-pin",
   "examples/app/src-tauri",
   "examples/tanstack-query/src-tauri",
   "examples/custom-plugin/app/src-tauri",
@@ -70,7 +77,8 @@ todo = { level = "warn", priority = -1 }
 panic_in_result_fn = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
-tauri = { version = "2", default-features = false }
+# Bound v3 prereleases to the latest tested alpha. Applications select their Tauri major.
+tauri = { version = ">=2, <=3.0.0-alpha.6", default-features = false }
 tauri-build = { version = "2" }
 tauri-plugin = { version = "2" }
 specta = { version = "=2.0.0-rc.28", features = ["derive"] }

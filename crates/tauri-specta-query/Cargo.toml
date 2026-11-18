@@ -1,8 +1,9 @@
 [package]
 name = "tauri-specta-query"
 description = "Generate typesafe TanStack Query helpers for Tauri Specta commands"
-# Versioned in lockstep with `tauri-specta` and `tauri-specta-macros`; the
-# `release` workflow requires all three to match the `v*` tag.
+# Versioned in lockstep with `tauri-specta`, `tauri-specta-macros` and
+# `tauri-specta-v2-pin`; the `release` workflow requires all four to match the
+# `v*` tag.
 version = "2.0.0-rc.29"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2024"
@@ -17,18 +18,23 @@ categories = ["web-programming", "asynchronous"]
 [package.metadata."docs.rs"]
 all-features = true
 
+[features]
+# Mirrors `tauri-specta`: the v2 pin is on unless default features are disabled.
+default = ["v2"]
+v2 = ["tauri-specta/v2"]
+
 [dependencies]
 heck = "0.5"
-tauri = { version = "2", default-features = false }
+tauri.workspace = true
 specta.workspace = true
 serde = "1"
 serde_json = "1"
-tauri-specta = { version = "=2.0.0-rc.29", path = "../.." }
+tauri-specta = { version = "=2.0.0-rc.29", path = "../..", default-features = false }
 
 [dev-dependencies]
 specta-typescript.workspace = true
-tauri = { workspace = true, features = ["test", "wry"] }
-tauri-specta = { path = "../..", features = ["typescript"] }
+tauri = { version = "2", default-features = false, features = ["test", "wry"] }
+tauri-specta = { path = "../..", features = ["derive", "typescript", "javascript"] }
 
 [lints]
 workspace = true

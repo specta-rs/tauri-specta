@@ -30,6 +30,9 @@ use tauri_specta::{
     Builder, Casing, ErrorHandlingMode, Event, LanguageExt, collect_commands, collect_events,
 };
 
+#[path = "support/semantic_channels.rs"]
+mod semantic_channels;
+
 // ----- types -----
 
 /// A struct with a doc comment and common field shapes.
@@ -368,6 +371,8 @@ const SCENARIOS: &[&str] = &[
     "no_serde_phases_ts",
     "plugin_jsdoc",
     "plugin_ts",
+    "semantic_channels_jsdoc",
+    "semantic_channels_ts",
 ];
 
 /// `UPDATE_SNAPSHOTS=1` (or `true`) regenerates the committed fixtures. Any other
@@ -512,6 +517,26 @@ fn scenario_list_matches_snapshots() {
 }
 
 // ----- default configuration -----
+
+#[test]
+fn semantic_channels_ts() {
+    assert_export(
+        "semantic_channels_ts",
+        "bindings.ts",
+        &semantic_channels::builder(),
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn semantic_channels_jsdoc() {
+    assert_export(
+        "semantic_channels_jsdoc",
+        "bindings.js",
+        &semantic_channels::builder(),
+        JSDoc::default(),
+    );
+}
 
 #[test]
 fn kitchen_sink_ts() {

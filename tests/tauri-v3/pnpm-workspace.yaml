@@ -1,0 +1,3 @@
+# Keep the prerelease API install separate from the v2 example workspace.
+packages:
+  - "."

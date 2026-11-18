@@ -12,7 +12,7 @@ tauri-plugin = { workspace = true, features = ["build"] }
 rand = "0.10.3"
 serde = "1"
 specta = { workspace = true }
-tauri = { workspace = true }
+tauri = { version = "2", default-features = false }
 tauri-specta = { path = "../../../", features = ["derive", "typescript"] }
 
 [dev-dependencies]

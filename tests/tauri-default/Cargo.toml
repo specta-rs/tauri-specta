@@ -1,0 +1,17 @@
+[package]
+name = "tauri-specta-default-tests"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# A downstream consumer with no Tauri dependency of its own. Its committed
+# lockfile must resolve stable Tauri v2 through `tauri-specta`'s default `v2`
+# feature; `tests/assert_tauri_version.py` enforces that in CI.
+[workspace]
+
+[dependencies]
+tauri-specta = { path = "../..", features = ["derive", "typescript"] }
+tauri-specta-query = { path = "../../crates/tauri-specta-query" }
+specta = { version = "=2.0.0-rc.28", features = ["derive"] }
+specta-typescript = "0.0.15"
+serde = { version = "1", features = ["derive"] }

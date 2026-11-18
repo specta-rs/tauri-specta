@@ -46,6 +46,21 @@ jobs:
           echo "::error::the example bindings are out of date; run \`cargo test --workspace --all-features\` and commit the result"
           exit 1
         fi
+    - name: An unconstrained consumer still selects Tauri v2
+      # `tests/tauri-default` never mentions `tauri`. The default `v2` feature is
+      # what keeps it on stable v2 instead of the v3 prerelease the range admits.
+      # Resolution is platform-independent, so one runner is enough.
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        cargo check --locked --manifest-path tests/tauri-default/Cargo.toml
+        python3 tests/assert_tauri_version.py tests/tauri-default/Cargo.toml 2
+    - name: Upload v2 parity bindings
+      uses: actions/upload-artifact@v7
+      with:
+        name: bindings-v2-${{ matrix.os }}
+        path: target/version-parity/v2/
+        if-no-files-found: error
+        retention-days: 7
 
   clippy:
     runs-on: ubuntu-latest
@@ -80,6 +95,102 @@ jobs:
       - name: Test generated mocks
         run: pnpm run test:mocks
 
+  tauri-v3:
+    name: Tauri v3 (${{ matrix.os }}, ${{ matrix.toolchain }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        toolchain: [stable]
+        include:
+          - os: ubuntu-latest
+            toolchain: 1.95.0
+    runs-on: ${{ matrix.os }}
+    env:
+      RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
+    defaults:
+      run:
+        working-directory: tests/tauri-v3
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        run: rustup toolchain install "${{ matrix.toolchain }}" --profile minimal
+      - name: Install lint components
+        if: matrix.toolchain == 'stable'
+        run: rustup component add rustfmt clippy
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tests/tauri-v3 -> target
+          key: tauri-v3-${{ matrix.toolchain }}
+      - name: Check formatting
+        if: matrix.toolchain == 'stable'
+        run: cargo fmt -- --check
+      - name: Lint v3 consumer
+        if: matrix.toolchain == 'stable'
+        run: cargo clippy --locked --all-targets -- -D warnings
+      # This fixture has its own lockfile and uses published v3, not the v2
+      # applications or the root workspace's Tauri patch. No Wry/GTK is needed.
+      - name: Run v3 consumer tests and generate bindings
+        run: cargo test --locked
+      - name: The v3 opt-in resolves Tauri v3
+        if: matrix.toolchain == 'stable'
+        run: python3 ../assert_tauri_version.py Cargo.toml 3
+      - name: Upload v3 parity bindings
+        if: matrix.toolchain == 'stable'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bindings-v3-${{ matrix.os }}
+          path: tests/tauri-v3/target/bindings/
+          if-no-files-found: error
+          retention-days: 7
+      - uses: pnpm/action-setup@v6
+        if: matrix.toolchain == 'stable'
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        if: matrix.toolchain == 'stable'
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: tests/tauri-v3/pnpm-lock.yaml
+      - name: Install prerelease frontend API
+        if: matrix.toolchain == 'stable'
+        run: pnpm install --frozen-lockfile
+      - name: Type-check TypeScript, JSDoc, and query bindings
+        if: matrix.toolchain == 'stable'
+        run: pnpm run check:bindings
+      - name: Test generated bindings against v3 mocks
+        if: matrix.toolchain == 'stable'
+        run: pnpm test
+
+  binding-parity:
+    name: Identical v2/v3 bindings (all desktop platforms)
+    needs: [build, tauri-v3]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - name: Test the parity checker
+        run: python -m unittest discover -s tests -p test_compare_bindings.py
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bindings-v*
+          path: target/binding-parity/
+          merge-multiple: false
+      # Compare every platform and Tauri version to the v2 Linux export. Do not
+      # normalize contents: a change in bytes OR the generated file set is drift.
+      - name: Compare generated binding trees byte-for-byte
+        run: |
+          python tests/compare_bindings.py \
+            target/binding-parity/bindings-v2-ubuntu-latest \
+            target/binding-parity/bindings-v2-macos-latest \
+            target/binding-parity/bindings-v2-windows-latest \
+            target/binding-parity/bindings-v3-ubuntu-latest \
+            target/binding-parity/bindings-v3-macos-latest \
+            target/binding-parity/bindings-v3-windows-latest
+
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -97,4 +208,3 @@ jobs:
       # from leaking into dependencies.
       - name: Build docs
         run: RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features --no-deps
-

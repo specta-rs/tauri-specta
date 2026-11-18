@@ -21,9 +21,129 @@
 //!
 //! There are the following optional features which can be enabled:
 //!
+//! - `v2` *(enabled by default)* - Pins Tauri to stable v2. Without it, Cargo's
+//!   highest-match rule can select the v3 prerelease admitted by the dependency
+//!   range. Disable default features to use Tauri v3.
 //! - `derive` - Enables the `Event` derive macro. This is only required if your using events.
 //! - `javascript` - Enables the JSDoc exporter.
 //! - `typescript` - Enables the Typescript exporter.
+//!
+//! ## Tauri versions
+//!
+//! Tauri Specta supports Tauri v2 and experimentally supports **Tauri
+//! 3.0.0-alpha.6**. The examples below use v2. **Stable Tauri v2 is the default**,
+//! including for code-generation-only crates that never depend on `tauri`
+//! themselves.
+//!
+//! ### Selecting a version
+//!
+//! For an application, the `tauri` dependency you already have selects the major:
+//! `tauri = "2"` builds against v2 and `tauri = "=3.0.0-alpha.6"` against the
+//! prerelease. No Tauri Specta feature is involved.
+//!
+//! One thing is not automatic. Tauri Specta's own requirement spans both majors,
+//! and Cargo picks the highest match, so a crate that never depends on `tauri`
+//! would drift onto the prerelease. The default `v2` feature prevents that by
+//! adding a `tauri = "2"` constraint. To use Tauri v3, **disable default features**
+//! so that pin disappears, and depend on Tauri v3 yourself:
+//!
+//! ```toml
+//! [dependencies]
+//! tauri = "=3.0.0-alpha.6"
+//! tauri-runtime-wry = "=3.0.0-alpha.6"
+//! tauri-specta = { version = "=2.0.0-rc.29", default-features = false, features = [
+//!     "derive",
+//!     "typescript",
+//! ] }
+//! # Same treatment if you use it: `default-features = false`.
+//! tauri-specta-query = { version = "=2.0.0-rc.29", default-features = false }
+//!
+//! [build-dependencies]
+//! tauri-build = "=3.0.0-alpha.4"
+//! ```
+//!
+//! Both Tauri versions declare `links = "Tauri"`, so Cargo builds a graph
+//! containing only one of them. Adding a v3 dependency without disabling default
+//! features keeps the v2 pin, and resolution fails instead of mixing the two.
+
+//!
+//! ### Using Tauri v3 in an application
+//!
+//! `build.rs` is unchanged:
+//!
+//! ```rust,ignore
+//! fn main() {
+//!     tauri_build::build()
+//! }
+//! ```
+//!
+//! Tauri Specta's API is the same, but name the runtime explicitly and select it
+//! when building the app. `tauri::Wry` does not exist in v3:
+//!
+//! ```rust,ignore
+//! use specta_typescript::Typescript;
+//! use tauri_specta::{Builder, collect_commands, collect_events};
+//!
+//! #[tauri::command]
+//! #[specta::specta]
+//! fn hello_world(my_name: String) -> String {
+//!     format!("Hello, {my_name}! You've been greeted from Rust!")
+//! }
+//!
+//! fn main() {
+//!     // `DynRuntime` is v3's type-erased default. A concrete runtime such as
+//!     // `tauri_runtime_wry::WryRuntime` also works when you want static dispatch.
+//!     let builder = Builder::<tauri::DynRuntime>::new()
+//!         .commands(collect_commands![hello_world]);
+//!
+//!     #[cfg(debug_assertions)]
+//!     builder
+//!         .export(Typescript::default(), "../src/bindings.ts")
+//!         .expect("Failed to export typescript bindings");
+//!
+//!     tauri::Builder::default()
+//!         // v3 selects the runtime here instead of through the `wry` feature.
+//!         .runtime(tauri_runtime_wry::Wry::default())
+//!         .invoke_handler(builder.invoke_handler())
+//!         .setup(move |app| {
+//!             // Still required if you use events.
+//!             builder.mount_events(app);
+//!             Ok(())
+//!         })
+//!         .run(tauri::generate_context!())
+//!         .expect("error while running tauri application");
+//! }
+//! ```
+//!
+//! Generated bindings are unchanged: import `commands`, `events`, and
+//! `tauriEvents` from the exported file as on v2. Keep the JavaScript API on the
+//! same major as Rust, so `@tauri-apps/api@3.0.0-alpha.3` with alpha.6. For the
+//! covered API, generated bindings are byte-identical between the two majors; CI
+//! compares them.
+//!
+//! Other v3 differences:
+//!
+//! - Rust 1.95 or newer is required. v2 keeps its lower minimum.
+//! - `tauri/wry`, `tauri::Wry`, and `tauri::wry` are gone. Use
+//!   `tauri::DynRuntime` (type-erased) or a concrete runtime type, and add a
+//!   runtime crate such as `tauri-runtime-wry`.
+//! - Build with `tauri-build` v3 and use v3-compatible Tauri plugins.
+//! - Metadata collection and binding export do not require a webview runtime.
+//!
+//! ### Prerelease limitations
+//!
+//! Published v3 alpha.6 does not yet implement Specta support for
+//! `tauri::ipc::Request` and `tauri::ipc::Response`; commands using them require
+//! an application-level Tauri patch until the upstream support is released.
+//! Ordinary commands, events, semantic channel payload transforms, and query
+//! exports use the shared implementation on the published frontend APIs.
+//!
+//! Tauri Specta's range admits earlier 3.0.0 alphas, but only alpha.6 is tested;
+//! newer alphas and v3 stable need a tested dependency-bound update. Pin the
+//! exact version, as every v3 snippet above does.
+//!
+//! Disabling default features without adding a Tauri dependency of your own leaves
+//! the selection to Cargo's highest match, which is the v3 prerelease.
 //!
 //! ## Setup
 //!
@@ -167,6 +287,17 @@
 //!     // ...
 //! }
 //! ```
+//!
+//! When a channel's payload contains a [semantic type](#semantic-frontend-types),
+//! the generated binding registers the payload transform on the channel using
+//! the published `onmessage` getter/setter API. The channel id Tauri addresses stays
+//! unchanged. Handlers can be replaced after registration, and repeated registration
+//! replaces rather than stacks transforms. A channel can only carry one deserializer.
+//! The mapping remains attached even when the channel is passed to
+//! a command whose payload has **no transform**. Use a fresh channel when switching
+//! between transformed and untransformed payloads, and do not share a channel
+//! concurrently between commands needing different transforms. Registration adds
+//! properties to the channel, so leave it extensible (do not freeze or seal it).
 //!
 //! ## Custom types
 //!
@@ -441,6 +572,10 @@ pub use tauri_specta_macros::Event;
 
 pub(crate) use event::EventRegistry;
 
+// The pin crate has no API. Its value is the `tauri = "2"` dependency edge it puts
+// into the graph, so it is intentionally never named by this crate's code.
+#[cfg(feature = "v2")]
+use tauri_specta_v2_pin as _;
 #[doc(hidden)]
 pub mod internal {
     //! Internal logic for Tauri Specta.
