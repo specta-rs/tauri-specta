@@ -1,6 +1,10 @@
 //! Consumer tests for the published Tauri v3 prerelease, without the workspace's v2 patch.
 
 #[cfg(test)]
+#[path = "../../support/semantic_channels.rs"]
+mod semantic_channels;
+
+#[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
 
@@ -154,6 +158,12 @@ mod tests {
             .unwrap();
         builder
             .export(JSDoc::default(), dir.join("bindings.js"))
+            .unwrap();
+        super::semantic_channels::builder()
+            .export(Typescript::default(), dir.join("semantic.ts"))
+            .unwrap();
+        super::semantic_channels::builder()
+            .export(JSDoc::default(), dir.join("semantic.js"))
             .unwrap();
         let bindings = std::fs::read_to_string(dir.join("bindings.ts")).unwrap();
         assert!(bindings.contains("\"greet-v3\""));

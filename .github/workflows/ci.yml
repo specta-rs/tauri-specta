@@ -81,23 +81,29 @@ jobs:
         run: pnpm run test:mocks
 
   tauri-v3:
-    name: Tauri v3 (${{ matrix.os }})
+    name: Tauri v3 (${{ matrix.os }}, ${{ matrix.toolchain }})
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        toolchain: [stable]
+        include:
+          - os: ubuntu-latest
+            toolchain: 1.95.0
     runs-on: ${{ matrix.os }}
+    env:
+      RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
     defaults:
       run:
         working-directory: tests/tauri-v3
     steps:
       - uses: actions/checkout@v7
       - name: Install Rust toolchain
-        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+        run: rustup toolchain install "${{ matrix.toolchain }}" --profile minimal --component rustfmt,clippy
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: tests/tauri-v3 -> target
-          key: tauri-v3
+          key: tauri-v3-${{ matrix.toolchain }}
       - name: Check formatting
         run: cargo fmt -- --check
       - name: Lint v3 consumer

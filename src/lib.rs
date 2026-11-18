@@ -31,11 +31,26 @@
 //! 3.0.0-alpha.6** with `@tauri-apps/api` **3.0.0-alpha.3**. Your application's
 //! direct `tauri` dependency selects the version; no Tauri Specta feature flag is
 //! needed. The examples below use v2. Keep the frontend API on the same major as
-//! your Rust application.
+//! your Rust application. Keep an explicit `tauri = "2"` dependency to stay on
+//! v2, including in code-generation-only crates; an unconstrained consumer may
+//! otherwise select v3 and its higher Rust minimum. The range admits older
+//! 3.0.0 alphas, but only alpha.6 is tested. Newer alphas and v3 stable need a
+//! tested dependency-bound update.
 //!
 //! V3 requires Rust 1.95 or newer and selects a runtime explicitly rather than
 //! through `tauri/wry`. For example, after adding the matching v3
 //! `tauri-runtime-wry` dependency:
+//!
+//! ```toml
+//! [dependencies]
+//! tauri = "=3.0.0-alpha.6"
+//! tauri-runtime-wry = "=3.0.0-alpha.6"
+//!
+//! [build-dependencies]
+//! tauri-build = "=3.0.0-alpha.4"
+//! ```
+//!
+//! Use v3-compatible versions of any Tauri plugins as well.
 //!
 //! ```rust,ignore
 //! let builder = tauri_specta::Builder::<tauri::DynRuntime>::new()
@@ -57,10 +72,8 @@
 //! Published v3 alpha.6 does not yet implement Specta support for
 //! `tauri::ipc::Request` and `tauri::ipc::Response`; commands using them require
 //! an application-level Tauri patch until the upstream support is released.
-//! Semantic channel payload transforms also need `Channel.deserialize`, which
-//! is not present in the published v3 frontend API alpha.3. Ordinary commands,
-//! events, channels without those transforms, and query exports use the shared
-//! implementation. New Tauri prereleases require a tested dependency-bound update.
+//! Ordinary commands, events, semantic channel payload transforms, and query
+//! exports use the shared implementation on the published frontend APIs.
 //!
 //! ## Setup
 //!
@@ -206,11 +219,13 @@
 //! ```
 //!
 //! When a channel's payload contains a [semantic type](#semantic-frontend-types),
-//! the generated binding registers the payload transform on the channel with its
-//! `deserialize` method. It is applied to the channel you pass, so the channel id
-//! Tauri addresses is the one the binding sends. A channel can only carry one
+//! the generated binding registers the payload transform on the channel. It uses
+//! `deserialize` when available, with a fallback using the published `onmessage`
+//! getter/setter API. The channel id Tauri addresses stays unchanged, handlers
+//! can be replaced after registration, and repeated registration replaces rather
+//! than stacks transforms. A channel can only carry one
 //! deserializer, so don't pass the same channel instance to commands whose payloads
-//! need different transforms. This needs `@tauri-apps/api` v2.13 or newer.
+//! need different transforms.
 //!
 //! ## Custom types
 //!

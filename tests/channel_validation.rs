@@ -263,7 +263,7 @@ fn top_level_channel_argument_stays_untouched_without_a_semantic_payload() {
     .expect("a channel whose payload needs no transform is passed as-is");
 
     assert!(
-        !bindings.contains(".deserialize("),
+        !bindings.contains("mapChannel("),
         "the channel should not be touched when its payload is already the wire shape:\n{bindings}"
     );
 }
@@ -274,13 +274,16 @@ fn semantic_channel_payload_is_deserialized_by_the_channel() {
         .commands(collect_commands![semantic_channel_arg])
         .semantic_types(semantic_types());
 
-    let expected = "channel.deserialize((v) => ({...v,url:new URL(v.url)}))";
+    let expected = "mapChannel(channel, (v) => ({...v,url:new URL(v.url)}))";
 
     let bindings = export(&builder, "semantic_channel").expect("semantic channel payload exports");
     assert!(bindings.contains(expected), "{bindings}");
     // The channel the caller passes is the one Rust addresses, so the deserializer is
     // registered on it rather than on a replacement channel.
-    assert!(!bindings.contains("mapChannel"), "{bindings}");
+    assert!(
+        bindings.contains("Object.defineProperty(channel"),
+        "{bindings}"
+    );
     assert!(!bindings.contains("new Channel("), "{bindings}");
 
     let jsdoc = export_with(
@@ -291,6 +294,6 @@ fn semantic_channel_payload_is_deserialized_by_the_channel() {
     )
     .expect("semantic channel payload exports for JSDoc");
     assert!(jsdoc.contains(expected), "{jsdoc}");
-    assert!(!jsdoc.contains("mapChannel"), "{jsdoc}");
+    assert!(jsdoc.contains("Object.defineProperty(channel"), "{jsdoc}");
     assert!(!jsdoc.contains("new Channel("), "{jsdoc}");
 }

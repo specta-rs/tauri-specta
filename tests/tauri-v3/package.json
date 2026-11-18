@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "check:bindings": "tsc -p tsconfig.json && tsc -p tsconfig.jsdoc.json",
-    "test": "node --experimental-strip-types --test mocks.test.mjs"
+    "test": "node --experimental-strip-types --test \"*.test.mjs\""
   },
   "dependencies": {
     "@tanstack/react-query": "^5.107.1",

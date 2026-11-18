@@ -11,7 +11,8 @@ optional dependencies or a version-selection feature cannot bypass that rule.
 
 ## Run
 
-From the repository root, with Rust 1.95+, Node 22, and pnpm 10:
+From the repository root, with Rust 1.95+, Node 22, and pnpm 10 (CI includes a
+Linux Rust 1.95.0 job as well as current stable on all three desktop platforms):
 
 ```sh
 cargo test --locked --manifest-path tests/tauri-v3/Cargo.toml
@@ -30,6 +31,11 @@ Coverage includes renamed and async command dispatch, injected state and app
 handles, command failures, typed event registration/emission/unlistening/once,
 channel argument types, plugin-prefixed exports, query generation, and generated
 mocks against the real v3 frontend API in all four error-handling modes.
+Shared semantic-channel tests run against both frontend majors in TypeScript and
+JSDoc, checking the original channel/callback id, ordered delivery, end-message
+cleanup, late handler assignment, and repeated/cross-module registration without
+stacking transforms. A same-channel fallback uses the released `onmessage` API
+when `Channel.deserialize` is unavailable.
 
 ## Known gaps
 
@@ -38,9 +44,6 @@ mocks against the real v3 frontend API in all four error-handling modes.
   propagate to downstream applications anyway. Track
   [tauri-apps/tauri#16374](https://github.com/tauri-apps/tauri/pull/16374) and its
   v3 release/backport before claiming binary IPC support without patches.
-- Semantic channel payload transforms require `Channel.deserialize`, absent
-  from frontend alpha.3. Plain channel arguments are exported and type-checked;
-  channel delivery through a real webview and semantic transforms are not tested.
 - The published frontend event mock omits the listener id in emitted payloads,
   so `once()` cannot unregister itself. The frontend suite retains this assertion
   as a TODO/expected failure; ordinary listen/emit/unlisten tests pass. Rust-side
@@ -52,6 +55,8 @@ mocks against the real v3 frontend API in all four error-handling modes.
 - These tests do not validate a real Wry/CEF application, mobile targets, or
   runtime-specific APIs. The application must add a matching runtime crate and
   select it with `tauri::Builder::runtime`; `tauri::Wry` and `tauri/wry` are gone.
+  Alpha.6 apps also need `tauri-build = "=3.0.0-alpha.4"` and v3-compatible plugins;
+  the main workspace's v2 build dependencies should not be copied unchanged.
 - V2-oriented library doctests still use v2 application setup. They run in the
   main workspace, not this consumer fixture.
 

@@ -31,18 +31,37 @@ Follow the documentation links above for help getting started.
 The same Tauri Specta implementation supports either Tauri v2 or the tested v3
 prerelease. Select `tauri = "=3.0.0-alpha.6"` in your application and use
 `@tauri-apps/api@3.0.0-alpha.3` on the frontend; there is no version-selection
-feature flag. V2 applications and the existing examples stay on v2.
+feature flag. To stay on v2, keep an explicit `tauri = "2"` dependency, including
+in code-generation-only crates: without a direct constraint the shared range
+can select v3 and its higher Rust minimum. The existing examples remain on v2.
 
 V3 requires Rust 1.95+ and an explicit runtime dependency and selection. Replace
 explicit `tauri::Wry` type arguments with `tauri::DynRuntime` for the default
 type-erased runtime, and configure the application with
 `.runtime(tauri_runtime_wry::Wry::default())` (or another runtime).
 
+For alpha.6 applications, use matching build tooling too:
+
+```toml
+[dependencies]
+tauri = "=3.0.0-alpha.6"
+tauri-runtime-wry = "=3.0.0-alpha.6"
+
+[build-dependencies]
+tauri-build = "=3.0.0-alpha.4"
+```
+
+Plugins must likewise support Tauri v3; the v2 examples' plugin/build dependencies
+are not a v3 application template.
+
 **Known limitations:** published v3 does not yet provide Specta implementations
-for IPC `Request`/`Response`, and frontend alpha.3 does not provide the
-`Channel.deserialize` method needed for semantic channel transforms. See the
-[v3 consumer fixture](tests/tauri-v3/README.md) for coverage and details. Untested
-newer Tauri alphas are excluded until the dependency upper bound is updated.
+for IPC `Request`/`Response`. Semantic channel transforms work with the published
+frontend APIs through a same-channel fallback; they do not require an unreleased
+`Channel.deserialize` method. See the
+[v3 consumer fixture](https://github.com/specta-rs/tauri-specta/blob/main/tests/tauri-v3/README.md)
+for coverage and details. Newer Tauri alphas **and v3 stable** are excluded until
+the dependency upper bound is updated. The range also admits earlier 3.0.0 alphas,
+but only alpha.6 is tested; pin that version for experimental v3 support.
 
 ## Development
 
@@ -61,7 +80,7 @@ cargo test --all --all-features
 ```
 
 Run v3 consumer and frontend checks separately, as described in
-[`tests/tauri-v3/README.md`](tests/tauri-v3/README.md). V2 and v3 cannot share one
+[`tests/tauri-v3/README.md`](https://github.com/specta-rs/tauri-specta/blob/main/tests/tauri-v3/README.md). V2 and v3 cannot share one
 Cargo lockfile because both Tauri packages declare `links = "Tauri"`.
 
 ## Credit
