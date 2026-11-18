@@ -30,9 +30,14 @@ Follow the documentation links above for help getting started.
 
 The same Tauri Specta implementation supports either Tauri v2 or the tested v3
 prerelease. **Stable Tauri v2 is the default**, including for code-generation-only
-crates that never depend on `tauri` themselves. Selecting v3 takes three changes
-together: disable default features, enable `v3`, and add the Tauri v3 dependency
-yourself.
+crates that never depend on `tauri` themselves.
+
+For an application, the `tauri` dependency you already have selects the major.
+Tauri Specta's own requirement spans both, and Cargo picks the highest match, so
+one thing is not automatic: a crate that never depends on `tauri` would drift onto
+the prerelease. The default `v2` feature prevents that with a `tauri = "2"`
+constraint. To use Tauri v3, disable default features (dropping the pin) and add
+the Tauri v3 dependency yourself.
 
 ```toml
 # Default (recommended): Tauri v2.
@@ -42,17 +47,16 @@ tauri-specta = { version = "=2.0.0-rc.29", features = ["derive", "typescript"] }
 ```
 
 ```toml
-# Opt in to the tested Tauri v3 prerelease.
+# Tauri v3 prerelease: disable default features and pin v3 yourself.
 [dependencies]
 tauri = "=3.0.0-alpha.6"
 tauri-runtime-wry = "=3.0.0-alpha.6"
 tauri-specta = { version = "=2.0.0-rc.29", default-features = false, features = [
     "derive",
     "typescript",
-    "v3",
 ] }
 # Same treatment if you use it:
-tauri-specta-query = { version = "=2.0.0-rc.29", default-features = false, features = ["v3"] }
+tauri-specta-query = { version = "=2.0.0-rc.29", default-features = false }
 
 [build-dependencies]
 tauri-build = "=3.0.0-alpha.4"
@@ -100,16 +104,13 @@ unchanged: import `commands`, `events`, and `tauriEvents` exactly as on v2. For 
 covered API, exports are byte-identical between the majors; CI compares them. Use
 `@tauri-apps/api@3.0.0-alpha.3` on the v3 frontend, matching the Rust major.
 
-The `v2` feature is what pins an otherwise unconstrained graph to stable v2; `v3`
-is required so a build that selected neither fails with a clear error instead of
-silently picking a prerelease. Both Tauri versions declare `links = "Tauri"`, so
-one graph can only contain one of them. Two misconfigurations are caught rather
-than silently building the wrong major:
-
-- Enabling `v3` while the graph still resolves stable v2 fails to compile; the
-  crate asserts on a v3-only type.
-- Adding a Tauri v3 dependency with default features still enabled keeps the v2
-  pin, so Cargo refuses the graph instead of mixing the two.
+The `v2` feature is what pins an otherwise unconstrained graph to stable v2; the
+Rust `tauri` dependency you add chooses the version otherwise. Both Tauri versions
+declare `links = "Tauri"`, so one graph can only contain one of them: adding a v3
+dependency while default features are still enabled keeps the v2 pin, and
+resolution fails rather than mixing the two. Disabling default features without
+adding a Tauri dependency of your own leaves Cargo's highest match in charge,
+which is the v3 prerelease.
 
 V3 requires Rust 1.95+ and v3-compatible Tauri plugins; the v2 examples' build and
 plugin dependencies are not a v3 application template.

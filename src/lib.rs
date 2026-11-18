@@ -23,8 +23,7 @@
 //!
 //! - `v2` *(enabled by default)* - Pins Tauri to stable v2. Without it, Cargo's
 //!   highest-match rule can select the v3 prerelease admitted by the dependency
-//!   range.
-//! - `v3` - Opts in to Tauri v3 support. Use it with `default-features = false`.
+//!   range. Disable default features to use Tauri v3.
 //! - `derive` - Enables the `Event` derive macro. This is only required if your using events.
 //! - `javascript` - Enables the JSDoc exporter.
 //! - `typescript` - Enables the Typescript exporter.
@@ -38,15 +37,15 @@
 //!
 //! ### Selecting a version
 //!
-//! The `v2` feature is enabled by default and adds a `tauri = "2"` constraint, so
-//! Cargo cannot drift an unconstrained graph onto the v3 prerelease admitted by
-//! Tauri Specta's own dependency range.
+//! For an application, the `tauri` dependency you already have selects the major:
+//! `tauri = "2"` builds against v2 and `tauri = "=3.0.0-alpha.6"` against the
+//! prerelease. No Tauri Specta feature is involved.
 //!
-//! To use Tauri v3, make all three changes together:
-//!
-//! 1. Disable Tauri Specta's default features.
-//! 2. Enable the `v3` feature.
-//! 3. Add the Tauri v3 dependency yourself.
+//! One thing is not automatic. Tauri Specta's own requirement spans both majors,
+//! and Cargo picks the highest match, so a crate that never depends on `tauri`
+//! would drift onto the prerelease. The default `v2` feature prevents that by
+//! adding a `tauri = "2"` constraint. To use Tauri v3, **disable default features**
+//! so that pin disappears, and depend on Tauri v3 yourself:
 //!
 //! ```toml
 //! [dependencies]
@@ -55,20 +54,18 @@
 //! tauri-specta = { version = "=2.0.0-rc.29", default-features = false, features = [
 //!     "derive",
 //!     "typescript",
-//!     "v3",
 //! ] }
-//! # Same treatment if you use it: `default-features = false, features = ["v3"]`.
-//! tauri-specta-query = { version = "=2.0.0-rc.29", default-features = false, features = ["v3"] }
+//! # Same treatment if you use it: `default-features = false`.
+//! tauri-specta-query = { version = "=2.0.0-rc.29", default-features = false }
 //!
 //! [build-dependencies]
 //! tauri-build = "=3.0.0-alpha.4"
 //! ```
 //!
-//! With neither `v2` nor `v3` enabled, the crate fails to compile rather than
-//! silently selecting a version. Enabling `v3` while the graph still resolves
-//! stable v2 also fails, because the crate asserts on a v3-only type. A Tauri v2
-//! dependency cannot coexist with v3: both declare `links = "Tauri"`, so Cargo
-//! refuses to build a graph containing both.
+//! Both Tauri versions declare `links = "Tauri"`, so Cargo builds a graph
+//! containing only one of them. Adding a v3 dependency without disabling default
+//! features keeps the v2 pin, and resolution fails instead of mixing the two.
+
 //!
 //! ### Using Tauri v3 in an application
 //!
@@ -144,6 +141,9 @@
 //! Tauri Specta's range admits earlier 3.0.0 alphas, but only alpha.6 is tested;
 //! newer alphas and v3 stable need a tested dependency-bound update. Pin the
 //! exact version, as every v3 snippet above does.
+//!
+//! Disabling default features without adding a Tauri dependency of your own leaves
+//! the selection to Cargo's highest match, which is the v3 prerelease.
 //!
 //! ## Setup
 //!
@@ -545,22 +545,6 @@
     html_logo_url = "https://github.com/specta-rs/tauri-specta/raw/main/.github/logo.png",
     html_favicon_url = "https://github.com/specta-rs/tauri-specta/raw/main/.github/logo.png"
 )]
-
-#[cfg(not(any(feature = "v2", feature = "v3")))]
-compile_error!(
-    "`tauri-specta` needs a Tauri major. Enable the default `v2` feature, or disable default \
-     features and enable `v3` together with a Tauri v3 dependency. This build has neither."
-);
-
-// `tauri::DynRuntime` was introduced in v3 and does not exist in v2. A `v3` opt-in
-// whose graph still resolves stable v2 (for example a leftover `tauri = "2"`) fails
-// here instead of silently building against the wrong major. All-features builds
-// enable `v2` too, which keeps this off.
-#[cfg(all(feature = "v3", not(feature = "v2")))]
-const _: () = {
-    const fn assert_tauri_v3<R: tauri::Runtime>() {}
-    assert_tauri_v3::<tauri::DynRuntime>();
-};
 
 mod builder;
 mod casing;

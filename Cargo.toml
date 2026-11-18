@@ -19,12 +19,11 @@ categories = ["web-programming", "asynchronous"]
 all-features = true
 
 [features]
-# Opt into Tauri v3 by disabling default features and enabling `v3`, together with
-# a Tauri v3 dependency of your own. The `v2` feature is the default so an
-# unconstrained consumer resolves stable Tauri v2 rather than a v3 alpha.
+# Tauri v2 is the default: this pins `tauri` to 2.x so an unconstrained consumer
+# does not resolve the v3 prerelease that the dependency range also admits. Disable
+# default features and depend on Tauri v3 yourself to use v3.
 default = ["v2"]
 v2 = ["dep:tauri-specta-v2-pin"]
-v3 = []
 derive = ["dep:tauri-specta-macros"]
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]

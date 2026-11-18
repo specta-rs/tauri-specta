@@ -11,9 +11,9 @@ rust-version = "1.95"
 
 [dev-dependencies]
 tauri = { version = "=3.0.0-alpha.6", default-features = false, features = ["test"] }
-# Disabling default features drops the v2 pin, and `v3` declares the intent.
-tauri-specta = { path = "../..", default-features = false, features = ["derive", "typescript", "javascript", "v3"] }
-tauri-specta-query = { path = "../../crates/tauri-specta-query", default-features = false, features = ["v3"] }
+# Disabling default features drops the v2 pin; the Tauri v3 dependency above decides.
+tauri-specta = { path = "../..", default-features = false, features = ["derive", "typescript", "javascript"] }
+tauri-specta-query = { path = "../../crates/tauri-specta-query", default-features = false }
 specta = { version = "=2.0.0-rc.28", features = ["derive"] }
 specta-typescript = "0.0.15"
 serde = { version = "1", features = ["derive"] }
