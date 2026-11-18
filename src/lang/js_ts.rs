@@ -47,7 +47,6 @@ impl LanguageExt for specta_typescript::Typescript {
                     },
                     TYPED_ERROR_ASSERTION_TS,
                     MAKE_EVENT_IMPL_TS,
-                    MAP_CHANNEL_IMPL_TS,
                 )
             })
             .export_to(path, &types, format)
@@ -82,7 +81,6 @@ impl LanguageExt for specta_typescript::JSDoc {
                     },
                     "",
                     MAKE_EVENT_IMPL_JS,
-                    MAP_CHANNEL_IMPL_JS,
                 )
             })
             .export_to(path, &types, format)
@@ -96,7 +94,6 @@ fn runtime(
     typed_error_impl: &str,
     typed_error_assertion: &str,
     make_event_impl: &str,
-    map_channel_impl: &str,
 ) -> Result<Cow<'static, str>, Error> {
     let enabled_commands = !cfg.commands.is_empty();
     let has_user_events = !cfg.events.is_empty();
@@ -180,21 +177,6 @@ fn runtime(
             .any(|(_, dt)| is_channel_type(dt, exporter.types))
             // Check if result contains a Channel
             || command.result().is_some_and(|dt| is_channel_type(dt, exporter.types))
-    });
-    let is_channel_transform_used = cfg.commands.iter().any(|command| {
-        command.args().iter().any(|(_, dt)| {
-            channel_generic_type(dt, exporter.types).is_some_and(|dt| {
-                render_result_transform_for_phase(
-                    dt,
-                    Phase::Deserialize,
-                    "v",
-                    &exporter,
-                    cfg,
-                    semantic_types_runtime_types,
-                )
-                .is_some()
-            })
-        })
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling != ErrorHandlingMode::Throw
@@ -320,30 +302,15 @@ fn runtime(
                     .filter_map(|(name, dt)| {
                         let name = name.to_lower_camel_case();
                         let input = format!("value.{name}");
-                        let transform =
-                            if let Some(generic) = channel_generic_type(dt, exporter.types) {
-                                render_result_transform_for_phase(
-                                    generic,
-                                    Phase::Deserialize,
-                                    "v",
-                                    &exporter,
-                                    cfg,
-                                    semantic_types_runtime_types,
-                                )
-                                .map(|transform| jsdoc_transform(transform, "v", jsdoc))
-                                .map(|transform| format!("mapChannel({input}, (v) => {transform})"))
-                            } else {
-                                render_result_transform_for_phase(
-                                    dt,
-                                    Phase::Serialize,
-                                    &input,
-                                    &exporter,
-                                    cfg,
-                                    semantic_types_runtime_types,
-                                )
-                                .map(|transform| jsdoc_transform(transform, &input, jsdoc))
-                            };
-                        transform.map(|transform| format!("{name}: {transform}"))
+                        invoke_argument(
+                            &input,
+                            dt,
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                            jsdoc,
+                        )
+                        .map(|transform| format!("{name}: {transform}"))
                     })
                     .collect::<Vec<_>>();
                 let value = if fields.is_empty() {
@@ -365,30 +332,14 @@ fn runtime(
                         .iter()
                         .map(|(name, dt)| {
                             let name = name.to_lower_camel_case();
-                            let value = if let Some(generic) =
-                                channel_generic_type(dt, exporter.types)
-                            {
-                                render_result_transform_for_phase(
-                                    generic,
-                                    Phase::Deserialize,
-                                    "v",
-                                    &exporter,
-                                    cfg,
-                                    semantic_types_runtime_types,
-                                )
-                                .map(|transform| jsdoc_transform(transform, "v", jsdoc))
-                                .map(|transform| format!("mapChannel({name}, (v) => {transform})"))
-                            } else {
-                                render_result_transform_for_phase(
-                                    dt,
-                                    Phase::Serialize,
-                                    &name,
-                                    &exporter,
-                                    cfg,
-                                    semantic_types_runtime_types,
-                                )
-                                .map(|transform| jsdoc_transform(transform, &name, jsdoc))
-                            };
+                            let value = invoke_argument(
+                                &name,
+                                dt,
+                                &exporter,
+                                cfg,
+                                semantic_types_runtime_types,
+                                jsdoc,
+                            );
 
                             value.map_or(name.clone(), |value| format!("{name}: {value}"))
                         })
@@ -870,10 +821,6 @@ fn runtime(
     // `tauriEvents` always needs `makeEvent`, so this block is always emitted.
     out.push_str("\n/* Tauri Specta runtime */\n");
 
-    if is_channel_transform_used {
-        out.push_str(map_channel_impl);
-        out.push_str("\n\n");
-    }
     if has_typed_error {
         out.push_str(typed_error_impl);
         out.push('\n');
@@ -1864,6 +1811,44 @@ fn channel_nested_error(site: ChannelSite<'_>, signature_subject: &str) -> Error
     )
 }
 
+/// The JavaScript expression that adapts one command argument for the IPC.
+///
+/// A `Channel` payload is decoded as messages arrive, so the transform is
+/// registered on the channel itself: `.deserialize(...)` keeps the channel the
+/// caller passed (and the callback id Rust addresses) intact. Every other
+/// argument is transformed before it is sent.
+fn invoke_argument(
+    input: &str,
+    dt: &DataType,
+    exporter: &FrameworkExporter,
+    cfg: &BuilderConfiguration,
+    semantic_types_runtime_types: &Types,
+    jsdoc: bool,
+) -> Option<String> {
+    if let Some(payload) = channel_generic_type(dt, exporter.types) {
+        render_result_transform_for_phase(
+            payload,
+            Phase::Deserialize,
+            "v",
+            exporter,
+            cfg,
+            semantic_types_runtime_types,
+        )
+        .map(|transform| jsdoc_transform(transform, "v", jsdoc))
+        .map(|transform| format!("{input}.deserialize((v) => {transform})"))
+    } else {
+        render_result_transform_for_phase(
+            dt,
+            Phase::Serialize,
+            input,
+            exporter,
+            cfg,
+            semantic_types_runtime_types,
+        )
+        .map(|transform| jsdoc_transform(transform, input, jsdoc))
+    }
+}
+
 fn render_result_transform_for_phase(
     dt: &DataType,
     phase: Phase,
@@ -2089,20 +2074,6 @@ const DATA_ERROR_IMPL_TS: &str = r#"async function typedError<T, E>(result: Prom
         if (e instanceof Error) throw e;
         return { data: null, error: e as any };
     }
-}"#;
-
-const MAP_CHANNEL_IMPL_TS: &str = r#"function mapChannel<T>(channel: Channel<T>, deserialize: (payload: any) => T): Channel<T> {
-    return new Channel((payload) => channel.onmessage(deserialize(payload)));
-}"#;
-
-const MAP_CHANNEL_IMPL_JS: &str = r#"/**
- * @template T
- * @param {Channel<T>} channel
- * @param {(payload: any) => T} deserialize
- * @returns {Channel<T>}
- */
-function mapChannel(channel, deserialize) {
-    return new Channel((payload) => channel.onmessage(deserialize(payload)));
 }"#;
 
 const TYPED_ERROR_IMPL_JS: &str = r#"/**

@@ -15,7 +15,7 @@ use std::fs;
 
 use serde::Serialize;
 use specta::Type;
-use specta_typescript::{JSDoc, Typescript};
+use specta_typescript::{JSDoc, Typescript, define, semantic};
 use tauri::test::MockRuntime;
 use tauri_specta::{Builder, Event, LanguageExt, collect_commands, collect_events};
 
@@ -57,6 +57,16 @@ struct ManuallyRegisteredChannel {
     channel: tauri::ipc::Channel<u32>,
 }
 
+/// A type whose TypeScript runtime value is not its JSON representation, so the
+/// bindings have to transform it at runtime.
+#[derive(Serialize, Type)]
+struct SemanticUrl(String);
+
+#[derive(Serialize, Type)]
+struct SemanticPayload {
+    url: SemanticUrl,
+}
+
 // ----- commands -----
 
 #[tauri::command]
@@ -87,6 +97,22 @@ fn channel_arg(channel: tauri::ipc::Channel<u32>) {
 #[specta::specta]
 fn payload_channel_arg(channel: tauri::ipc::Channel<ChannelPayload>) {
     let _ = channel;
+}
+
+#[tauri::command]
+#[specta::specta]
+fn semantic_channel_arg(channel: tauri::ipc::Channel<SemanticPayload>) {
+    let _ = channel;
+}
+
+fn semantic_types() -> semantic::Configuration {
+    semantic::Configuration::empty().define::<SemanticUrl>(
+        |_| define("URL").into(),
+        None,
+        Some(semantic::Transform::new(|value| {
+            format!("new URL({value})")
+        })),
+    )
 }
 
 // ----- harness -----
@@ -226,4 +252,45 @@ fn top_level_channel_argument_with_struct_payload_exports() {
     .expect("a channel whose payload is a plain type is still a top-level argument");
 
     assert!(bindings.contains("Channel<ChannelPayload>"), "{bindings}");
+}
+
+#[test]
+fn top_level_channel_argument_stays_untouched_without_a_semantic_payload() {
+    let bindings = export(
+        &Builder::<MockRuntime>::new().commands(collect_commands![payload_channel_arg]),
+        "top_level_payload_channel_plain",
+    )
+    .expect("a channel whose payload needs no transform is passed as-is");
+
+    assert!(
+        !bindings.contains(".deserialize("),
+        "the channel should not be touched when its payload is already the wire shape:\n{bindings}"
+    );
+}
+
+#[test]
+fn semantic_channel_payload_is_deserialized_by_the_channel() {
+    let builder = Builder::<MockRuntime>::new()
+        .commands(collect_commands![semantic_channel_arg])
+        .semantic_types(semantic_types());
+
+    let expected = "channel.deserialize((v) => ({...v,url:new URL(v.url)}))";
+
+    let bindings = export(&builder, "semantic_channel").expect("semantic channel payload exports");
+    assert!(bindings.contains(expected), "{bindings}");
+    // The channel the caller passes is the one Rust addresses, so the deserializer is
+    // registered on it rather than on a replacement channel.
+    assert!(!bindings.contains("mapChannel"), "{bindings}");
+    assert!(!bindings.contains("new Channel("), "{bindings}");
+
+    let jsdoc = export_with(
+        &builder,
+        JSDoc::default(),
+        "semantic_channel_jsdoc",
+        "bindings.js",
+    )
+    .expect("semantic channel payload exports for JSDoc");
+    assert!(jsdoc.contains(expected), "{jsdoc}");
+    assert!(!jsdoc.contains("mapChannel"), "{jsdoc}");
+    assert!(!jsdoc.contains("new Channel("), "{jsdoc}");
 }

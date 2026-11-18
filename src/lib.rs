@@ -168,6 +168,13 @@
 //! }
 //! ```
 //!
+//! When a channel's payload contains a [semantic type](#semantic-frontend-types),
+//! the generated binding registers the payload transform on the channel with its
+//! `deserialize` method. It is applied to the channel you pass, so the channel id
+//! Tauri addresses is the one the binding sends. A channel can only carry one
+//! deserializer, so don't pass the same channel instance to commands whose payloads
+//! need different transforms. This needs `@tauri-apps/api` v2.13 or newer.
+//!
 //! ## Custom types
 //!
 //! Similar to [`serde::Serialize`] you must put the [`specta::Type`] derive macro on your own types to allow Specta to understand your types. For example:
