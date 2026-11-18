@@ -105,6 +105,10 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
       - name: Publish tauri-specta-v2-pin
+        # crates.io only lets you configure a trusted publisher on a crate that
+        # already exists, so the *first* release of a new crate must be published
+        # manually with an API token before tagging. After that, this step works
+        # through the OIDC token from the step above.
         run: cargo publish -p tauri-specta-v2-pin
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

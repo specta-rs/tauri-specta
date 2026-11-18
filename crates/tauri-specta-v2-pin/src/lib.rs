@@ -15,12 +15,16 @@
 //!
 //! ```toml
 //! # Default: stable Tauri v2, even with no other Tauri dependency.
-//! tauri-specta = { version = "2", features = ["derive", "typescript"] }
+//! tauri-specta = { version = "=2.0.0-rc.29", features = ["derive", "typescript"] }
 //!
 //! # Tauri v3 prerelease: drop the pin and select the major yourself.
-//! tauri-specta = { version = "2", default-features = false, features = ["derive", "typescript"] }
+//! tauri-specta = { version = "=2.0.0-rc.29", default-features = false, features = ["derive", "typescript"] }
 //! tauri = "=3.0.0-alpha.6"
 //! ```
+//!
+//! Use the version of `tauri-specta` you depend on; it is shown here pinned
+//! because Tauri Specta is still a prerelease and Cargo only matches those when
+//! the requirement contains one.
 
 // The dependency is the entire purpose of this crate.
 use tauri as _;
