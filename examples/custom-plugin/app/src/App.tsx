@@ -1,4 +1,4 @@
-import { createSignal, onCleanup } from "solid-js";
+import { createSignal, onSettled } from "solid-js";
 import { addNumbers, events } from "tauri-specta-custom-plugin";
 import logo from "./assets/logo.svg";
 import "./App.css";
@@ -13,10 +13,14 @@ function App() {
   const [adding, setAdding] = createSignal(false);
 
   // The plugin exports its events the same way an application exports its own.
-  const listener = events.randomNumber.listen(({ payload }) =>
-    setLatestNumber(payload),
-  );
-  onCleanup(() => listener.then((unlisten) => unlisten()));
+  onSettled(() => {
+    const listener = events.randomNumber.listen(({ payload }) =>
+      setLatestNumber(payload),
+    );
+    return () => {
+      listener.then((unlisten) => unlisten());
+    };
+  });
 
   async function add() {
     setAdding(true);
