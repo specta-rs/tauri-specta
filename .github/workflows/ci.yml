@@ -46,6 +46,14 @@ jobs:
           echo "::error::the example bindings are out of date; run \`cargo test --workspace --all-features\` and commit the result"
           exit 1
         fi
+    - name: An unconstrained consumer still selects Tauri v2
+      # `tests/tauri-default` never mentions `tauri`. The default `v2` feature is
+      # what keeps it on stable v2 instead of the v3 prerelease the range admits.
+      # Resolution is platform-independent, so one runner is enough.
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        cargo check --locked --manifest-path tests/tauri-default/Cargo.toml
+        python3 tests/assert_tauri_version.py tests/tauri-default/Cargo.toml 2
     - name: Upload v2 parity bindings
       uses: actions/upload-artifact@v7
       with:
@@ -124,6 +132,9 @@ jobs:
       # applications or the root workspace's Tauri patch. No Wry/GTK is needed.
       - name: Run v3 consumer tests and generate bindings
         run: cargo test --locked
+      - name: The v3 opt-in resolves Tauri v3
+        if: matrix.toolchain == 'stable'
+        run: python3 ../assert_tauri_version.py Cargo.toml 3
       - name: Upload v3 parity bindings
         if: matrix.toolchain == 'stable'
         uses: actions/upload-artifact@v7

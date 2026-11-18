@@ -21,6 +21,10 @@
 //!
 //! There are the following optional features which can be enabled:
 //!
+//! - `v2` *(enabled by default)* - Pins Tauri to stable v2. Without it, Cargo's
+//!   highest-match rule can select the v3 prerelease admitted by the dependency
+//!   range.
+//! - `v3` - Opts in to Tauri v3 support. Use it with `default-features = false`.
 //! - `derive` - Enables the `Event` derive macro. This is only required if your using events.
 //! - `javascript` - Enables the JSDoc exporter.
 //! - `typescript` - Enables the Typescript exporter.
@@ -28,14 +32,30 @@
 //! ## Tauri versions
 //!
 //! Tauri Specta supports Tauri v2 and experimentally supports **Tauri
-//! 3.0.0-alpha.6** with `@tauri-apps/api` **3.0.0-alpha.3**. Your application's
-//! direct `tauri` dependency selects the version; no Tauri Specta feature flag is
-//! needed. The examples below use v2. Keep the frontend API on the same major as
-//! your Rust application. Keep an explicit `tauri = "2"` dependency to stay on
-//! v2, including in code-generation-only crates; an unconstrained consumer may
-//! otherwise select v3 and its higher Rust minimum. The range admits older
-//! 3.0.0 alphas, but only alpha.6 is tested. Newer alphas and v3 stable need a
-//! tested dependency-bound update.
+//! 3.0.0-alpha.6** with `@tauri-apps/api` **3.0.0-alpha.3**. The examples below
+//! use v2.
+//!
+//! The default `v2` feature keeps an application that has not selected a Tauri
+//! version itself on stable v2. To use the prerelease, disable default features,
+//! enable `v3`, and add the matching Tauri dependency yourself:
+//!
+//! ```toml
+//! tauri-specta = { version = "=2.0.0-rc.29", default-features = false, features = [
+//!     "derive",
+//!     "typescript",
+//!     "v3",
+//! ] }
+//! tauri = "=3.0.0-alpha.6"
+//! ```
+//!
+//! With neither `v2` nor `v3` enabled, the crate fails to compile rather than
+//! silently selecting a version. Enabling `v3` while the graph still resolves
+//! stable v2 also fails, because the crate asserts on a v3-only type. A Tauri v2
+//! dependency cannot coexist with v3: both declare `links = "Tauri"`, so Cargo
+//! refuses to build a graph containing both. The range admits older 3.0.0 alphas,
+//! but only alpha.6 is tested; newer alphas and v3 stable need a tested
+//! dependency-bound update. Keep the frontend API on the same major as your Rust
+//! application.
 //!
 //! V3 requires Rust 1.95 or newer and selects a runtime explicitly rather than
 //! through `tauri/wry`. For example, after adding the matching v3
@@ -476,6 +496,22 @@
     html_favicon_url = "https://github.com/specta-rs/tauri-specta/raw/main/.github/logo.png"
 )]
 
+#[cfg(not(any(feature = "v2", feature = "v3")))]
+compile_error!(
+    "`tauri-specta` needs a Tauri major. Enable the default `v2` feature, or disable default \
+     features and enable `v3` together with a Tauri v3 dependency. This build has neither."
+);
+
+// `tauri::DynRuntime` was introduced in v3 and does not exist in v2. A `v3` opt-in
+// whose graph still resolves stable v2 (for example a leftover `tauri = "2"`) fails
+// here instead of silently building against the wrong major. All-features builds
+// enable `v2` too, which keeps this off.
+#[cfg(all(feature = "v3", not(feature = "v2")))]
+const _: () = {
+    const fn assert_tauri_v3<R: tauri::Runtime>() {}
+    assert_tauri_v3::<tauri::DynRuntime>();
+};
+
 mod builder;
 mod casing;
 mod commands;
@@ -502,6 +538,10 @@ pub use tauri_specta_macros::Event;
 
 pub(crate) use event::EventRegistry;
 
+// The pin crate has no API. Its value is the `tauri = "2"` dependency edge it puts
+// into the graph, so it is intentionally never named by this crate's code.
+#[cfg(feature = "v2")]
+use tauri_specta_v2_pin as _;
 #[doc(hidden)]
 pub mod internal {
     //! Internal logic for Tauri Specta.

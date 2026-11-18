@@ -3475,6 +3475,7 @@ dependencies = [
  "specta-util",
  "tauri",
  "tauri-specta-macros",
+ "tauri-specta-v2-pin",
  "thiserror 2.0.21",
 ]
 
@@ -3540,6 +3541,13 @@ dependencies = [
  "specta-typescript",
  "tauri",
  "tauri-specta",
+]
+
+[[package]]
+name = "tauri-specta-v2-pin"
+version = "2.0.0-rc.29"
+dependencies = [
+ "tauri",
 ]
 
 [[package]]

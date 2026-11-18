@@ -5,6 +5,10 @@ This standalone workspace tests the real library manifests against published
 frontend install uses `@tauri-apps/api = 3.0.0-alpha.3`. Both lockfiles are
 committed so a new alpha cannot silently change the tested APIs.
 
+It depends on both libraries with `default-features = false` plus `v3`, which
+drops the default v2 pin. `tests/tauri-default` covers the opposite case: a
+consumer that never mentions `tauri` and must resolve stable v2.
+
 V2 applications remain in the main workspace. Cargo permits only one Tauri
 package per resolver graph because both versions declare `links = "Tauri"`;
 optional dependencies or a version-selection feature cannot bypass that rule.

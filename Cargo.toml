@@ -19,7 +19,12 @@ categories = ["web-programming", "asynchronous"]
 all-features = true
 
 [features]
-default = []
+# Opt into Tauri v3 by disabling default features and enabling `v3`, together with
+# a Tauri v3 dependency of your own. The `v2` feature is the default so an
+# unconstrained consumer resolves stable Tauri v2 rather than a v3 alpha.
+default = ["v2"]
+v2 = ["dep:tauri-specta-v2-pin"]
+v3 = []
 derive = ["dep:tauri-specta-macros"]
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
@@ -32,6 +37,7 @@ workspace = true
 specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
 tauri-specta-macros = { version = "=2.0.0-rc.29", optional = true, path = "./macros" }
+tauri-specta-v2-pin = { version = "=2.0.0-rc.29", optional = true, path = "./crates/tauri-specta-v2-pin" }
 serde = "1"
 serde_json = "1"
 thiserror = "2"
@@ -47,9 +53,10 @@ specta-util = { workspace = true }
 tauri = { version = "2", default-features = false, features = ["test", "wry"] }
 
 [workspace]
-exclude = ["tests/tauri-v3"]
+exclude = ["tests/tauri-default", "tests/tauri-v3"]
 members = [
   "crates/tauri-specta-query",
+  "crates/tauri-specta-v2-pin",
   "examples/app/src-tauri",
   "examples/tanstack-query/src-tauri",
   "examples/custom-plugin/app/src-tauri",
