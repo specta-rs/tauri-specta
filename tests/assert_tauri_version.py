@@ -14,7 +14,9 @@ def tauri_versions(manifest):
     output = subprocess.check_output(
         ["cargo", "metadata", "--locked", "--format-version", "1",
          "--manifest-path", str(manifest)],
-        text=True,
+        # Cargo emits UTF-8; the default text decoding uses the OS locale, which is
+        # not UTF-8 on Windows runners.
+        encoding="utf-8",
     )
     return sorted(
         package["version"]
