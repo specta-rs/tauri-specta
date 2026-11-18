@@ -114,7 +114,6 @@ fn runtime(
         .unwrap_or(exporter.types);
 
     let mut out = String::new();
-    let mut needs_channel_mapping = false;
 
     if let Some((ndt, name)) = exporter
         .types
@@ -311,10 +310,7 @@ fn runtime(
                             semantic_types_runtime_types,
                             jsdoc,
                         )
-                        .map(|transform| {
-                            needs_channel_mapping |= is_channel_type(dt, exporter.types);
-                            format!("{name}: {transform}")
-                        })
+                        .map(|transform| format!("{name}: {transform}"))
                     })
                     .collect::<Vec<_>>();
                 let value = if fields.is_empty() {
@@ -344,8 +340,6 @@ fn runtime(
                                 semantic_types_runtime_types,
                                 jsdoc,
                             );
-                            needs_channel_mapping |=
-                                value.is_some() && is_channel_type(dt, exporter.types);
 
                             value.map_or(name.clone(), |value| format!("{name}: {value}"))
                         })
@@ -826,15 +820,6 @@ fn runtime(
     // Runtime
     // `tauriEvents` always needs `makeEvent`, so this block is always emitted.
     out.push_str("\n/* Tauri Specta runtime */\n");
-
-    if needs_channel_mapping {
-        out.push_str(if jsdoc {
-            MAP_CHANNEL_IMPL_JS
-        } else {
-            MAP_CHANNEL_IMPL_TS
-        });
-        out.push('\n');
-    }
 
     if has_typed_error {
         out.push_str(typed_error_impl);
@@ -1829,8 +1814,8 @@ fn channel_nested_error(site: ChannelSite<'_>, signature_subject: &str) -> Error
 /// The JavaScript expression that adapts one command argument for the IPC.
 ///
 /// A `Channel` payload is decoded as messages arrive, so the transform is
-/// registered on the channel itself: `mapChannel` keeps the channel the caller
-/// passed (and the callback id Rust addresses) intact on released APIs too. Every other
+/// registered on the channel itself: `.deserialize(...)` keeps the channel the
+/// caller passed (and the callback id Rust addresses) intact. Every other
 /// argument is transformed before it is sent.
 fn invoke_argument(
     input: &str,
@@ -1850,7 +1835,7 @@ fn invoke_argument(
             semantic_types_runtime_types,
         )
         .map(|transform| jsdoc_transform(transform, "v", jsdoc))
-        .map(|transform| format!("mapChannel({input}, (v) => {transform})"))
+        .map(|transform| format!("{input}.deserialize((v) => {transform})"))
     } else {
         render_result_transform_for_phase(
             dt,
@@ -2037,8 +2022,6 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "tauriEvents",
     "typedError",
     "makeEvent",
-    "mapChannel",
-    "channelTransform",
 ];
 
 /// Names only the mocks runtime declares, and so only reserved on an export that
@@ -2196,57 +2179,6 @@ const MOCK_CALL_TYPES_JS: &str = r#"/**
  * those handlers stay installed.
  * @property {() => void} clear Drop the recorded calls. The handlers stay installed.
  */
-"#;
-
-// Keep the original channel and its IPC callback. The symbol shares the mapping
-// across generated modules without retaining channels in a global registry.
-const MAP_CHANNEL_IMPL_TS: &str = r#"const channelTransform = Symbol.for("tauri-specta.channelTransform");
-function mapChannel<T>(channel: Channel<T>, transform: (value: any) => T): Channel<T> {
-    const mapped: Channel<T> & {
-        [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T };
-    } = channel;
-    const existing = mapped[channelTransform];
-    if (existing) {
-        existing.transform = transform;
-        return channel;
-    }
-    const state = { handler: channel.onmessage, transform };
-    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
-    Object.defineProperty(channel, "onmessage", {
-        configurable: true,
-        get: () => state.handler,
-        set: (handler: (value: T) => void) => { state.handler = handler; },
-    });
-    Object.defineProperty(channel, channelTransform, { value: state });
-    return channel;
-}
-"#;
-
-const MAP_CHANNEL_IMPL_JS: &str = r#"const channelTransform = Symbol.for("tauri-specta.channelTransform");
-/**
- * @template T
- * @param {Channel<T>} channel
- * @param {(value: any) => T} transform
- * @returns {Channel<T>}
- */
-function mapChannel(channel, transform) {
-    /** @type {Channel<T> & { [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T } }} */
-    const mapped = channel;
-    const existing = mapped[channelTransform];
-    if (existing) {
-        existing.transform = transform;
-        return channel;
-    }
-    const state = { handler: channel.onmessage, transform };
-    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
-    Object.defineProperty(channel, "onmessage", {
-        configurable: true,
-        get: () => state.handler,
-        set: (/** @type {(value: T) => void} */ handler) => { state.handler = handler; },
-    });
-    Object.defineProperty(channel, channelTransform, { value: state });
-    return channel;
-}
 "#;
 
 const MOCK_COMMANDS_DOC: &str = r#"/**

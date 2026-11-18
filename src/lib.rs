@@ -289,15 +289,11 @@
 //! ```
 //!
 //! When a channel's payload contains a [semantic type](#semantic-frontend-types),
-//! the generated binding registers the payload transform on the channel using
-//! the published `onmessage` getter/setter API. The channel id Tauri addresses stays
-//! unchanged. Handlers can be replaced after registration, and repeated registration
-//! replaces rather than stacks transforms. A channel can only carry one deserializer.
-//! The mapping remains attached even when the channel is passed to
-//! a command whose payload has **no transform**. Use a fresh channel when switching
-//! between transformed and untransformed payloads, and do not share a channel
-//! concurrently between commands needing different transforms. Registration adds
-//! properties to the channel, so leave it extensible (do not freeze or seal it).
+//! the generated binding registers the payload transform on the channel with its
+//! `deserialize` method. It is applied to the channel you pass, so the channel id
+//! Tauri addresses is the one the binding sends. A channel can only carry one
+//! deserializer, so don't pass the same channel instance to commands whose payloads
+//! need different transforms. This needs `@tauri-apps/api` v2.13 or newer.
 //!
 //! ## Custom types
 //!
