@@ -4,7 +4,7 @@ description = "Pins Tauri Specta to a Tauri major when nothing else selects one"
 # Versioned independently of the other crates: it only needs a new release when the
 # Tauri requirement it carries changes. `tauri-specta` depends on the published
 # version, so the release workflow checks crates.io before publishing it.
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2024"
 license = "MIT"
