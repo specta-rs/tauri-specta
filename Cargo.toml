@@ -16,14 +16,20 @@ categories = ["web-programming", "asynchronous"]
 # `--no-deps` matters: RUSTDOCFLAGS applies to every crate rustdoc builds, and some
 # dependencies still gate removed nightly features behind `cfg(docsrs)`.
 [package.metadata."docs.rs"]
-all-features = true
+# Not `all-features`: `introspection` needs a Tauri build with
+# tauri-apps/tauri#15326, which docs.rs cannot get from crates.io yet.
+features = ["derive", "javascript", "typescript"]
 
 [features]
 # Tauri v2 is the default: this pins `tauri` to 2.x so an unconstrained consumer
 # does not resolve the v3 prerelease that the dependency range also admits. Disable
 # default features and depend on Tauri v3 yourself to use v3.
 default = ["v2"]
-v2 = ["dep:tauri-specta-pin", "dep:tauri-specta-macros"]
+v2 = ["dep:tauri-specta-pin"]
+# Read command types from Tauri's IPC introspection, so commands do not need
+# `#[specta::specta]`. Requires a Tauri build with tauri-apps/tauri#15326 (merged,
+# unreleased); it becomes part of the default set once Tauri ships it.
+introspection = ["dep:tauri-specta-macros"]
 derive = ["dep:tauri-specta-macros"]
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
@@ -87,7 +93,7 @@ specta-serde = { version = "0.0.15" }
 specta-util = { version = "0.0.15" }
 
 [patch.crates-io]
-# `main` here is Tauri's `dev` branch, its primary development branch. Pinned to
+# Tauri's primary branch is `dev`. Pinned to
 # the commit that contains #16374 (`ipc::Request`/`Response` Specta impls) and
 # #15326 (`CommandMetadata` introspection), both of which are unreleased. Swap for
 # the published minor once it ships.

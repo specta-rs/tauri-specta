@@ -88,8 +88,9 @@
 //! Function casing changes the generated query, mutation, and command accessor
 //! properties only. It does not change the Tauri command string or command
 //! arguments in the runtime IPC message. Argument renaming is configured per
-//! command; keep `#[tauri::command(rename_all = "...")]` and
-//! `#[specta(rename_all = "...")]` aligned when using it.
+//! command; with the `introspection` feature Tauri's `rename_all` is used directly,
+//! otherwise keep `#[tauri::command(rename_all = "...")]` and
+//! `#[specta(rename_all = "...")]` aligned.
 //!
 //! # Frameworks
 //!
@@ -112,7 +113,6 @@
 
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
-use heck::ToLowerCamelCase;
 use serde::Serialize;
 use specta::{Type, Types};
 use tauri::{Runtime, ipc::Invoke};
@@ -225,8 +225,8 @@ impl<R: Runtime> CommandSet<R> {
     /// This changes frontend accessor properties only. It does not change the
     /// underlying Tauri command string or rename command arguments. Argument
     /// renaming is a separate per-command IPC contract configured with matching
-    /// `#[tauri::command(rename_all = "...")]` and
-    /// `#[specta(rename_all = "...")]` attributes.
+    /// `#[tauri::command(rename_all = "...")]` attribute (and, without the
+    /// `introspection` feature, `#[specta(rename_all = "...")]`).
     ///
     /// ```rust
     /// use tauri_specta::{Casing, collect_commands};
@@ -353,14 +353,15 @@ impl<R: Runtime> CommandSet<R> {
                         .iter()
                         .enumerate()
                         .map(|(idx, arg)| {
-                            let arg = arg.name.to_lower_camel_case();
-                            format!("{arg}: Parameters<typeof {command}>[{idx}]")
+                            // Mutation inputs mirror the IPC payload, so use Tauri's key.
+                            let key = arg.name.as_ref();
+                            format!("{key}: Parameters<typeof {command}>[{idx}]")
                         })
                         .collect::<Vec<_>>();
                     let arg_names = function
                         .args
                         .iter()
-                        .map(|arg| arg.name.to_lower_camel_case())
+                        .map(|arg| arg.name.to_string())
                         .collect::<Vec<_>>();
 
                     let mutation_fn = if args.is_empty() {

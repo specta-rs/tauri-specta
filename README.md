@@ -26,6 +26,32 @@ Tauri Specta v2 also comes with support for generating types for events.
 
 Follow the documentation links above for help getting started.
 
+### Command discovery (opt-in)
+
+By default every command needs `#[tauri::command]` **and** `#[specta::specta]`. The
+`introspection` feature drops the second one: `collect_commands!` reads the command's
+arguments, result, docs and deprecation from Tauri's own metadata, including
+`rename`, `rename_all` and injected arguments.
+
+```toml
+tauri-specta = { version = "=2.0.0-rc.29", features = [
+    "derive",
+    "typescript",
+    "introspection",
+] }
+```
+
+It needs a Tauri build containing
+[tauri-apps/tauri#15326](https://github.com/tauri-apps/tauri/pull/15326), which is
+merged upstream but not yet released, so it is **opt-in** for now and will join the
+default features once Tauri ships it. Without the feature, and on the Tauri v3
+prerelease (which has no metadata API), commands keep using `#[specta::specta]`.
+Both paths generate identical bindings, which CI checks byte-for-byte.
+
+A `#[deprecated]` command is referenced by value to infer its signature; if your
+crate denies the `deprecated` lint, add `#[allow(deprecated)]` where you call
+`collect_commands!`.
+
 ### Tauri v3 prerelease
 
 The same Tauri Specta implementation supports either Tauri v2 or the tested v3
@@ -65,7 +91,7 @@ tauri-build = "=3.0.0-alpha.4"
 The Rust API is unchanged. The differences are naming the runtime and selecting it
 when building the app; `tauri::Wry` does not exist in v3. V3 commands still need
 `#[specta::specta]` because the published prerelease has no command introspection;
-with Tauri v2 `#[tauri::command]` alone is enough.
+on Tauri v2 that requirement disappears once the `introspection` feature is enabled.
 
 ```rust
 use specta_typescript::Typescript;

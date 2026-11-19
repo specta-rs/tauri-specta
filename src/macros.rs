@@ -3,7 +3,7 @@
 /// `collect_commands!` passes a generics-stripped path, so the recursion only has to walk
 /// `a::b::command` down to `command`. This is used to match a Tauri rename against the name
 /// Specta collected the function under.
-#[cfg(not(feature = "v2"))]
+#[cfg(not(feature = "introspection"))]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __tauri_command_ident {
@@ -22,7 +22,7 @@ macro_rules! __tauri_command_ident {
 /// `paste` constructs the final ident because `macro_rules!` can't rewrite the last segment
 /// of a path on its own. The module path is accumulated first and passed to a single `paste!`
 /// call, because a macro invocation can't appear as an interior path segment.
-#[cfg(not(feature = "v2"))]
+#[cfg(not(feature = "introspection"))]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __tauri_command_name {
@@ -106,7 +106,7 @@ macro_rules! __tauri_command_name {
 ///   the renamed IPC name while the frontend accessor keeps following the Rust
 ///   identifier and [`Builder::function_casing`](crate::Builder::function_casing).
 ///
-#[cfg(not(feature = "v2"))]
+#[cfg(not(feature = "introspection"))]
 #[macro_export]
 macro_rules! collect_commands {
     ($($b:ident $(:: $($p:ident)? $(<$($g:path),*>)? )* ),* $(,)?) => {

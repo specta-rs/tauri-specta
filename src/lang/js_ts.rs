@@ -269,7 +269,8 @@ fn runtime(
                     .iter()
                     .zip(&command.args)
                     .filter(|(_, arg)| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
-                    .map(|((name, ty), _)| format!("{name}: {ty}"))
+                    // `value` is the IPC payload object, so its keys are Tauri's keys.
+                    .map(|((_, ty), arg)| format!("{}: {ty}", arg.name))
                     .collect::<Vec<_>>()
                     .join("; ");
                 arguments = vec![("value".into(), format!("{{ {fields} }}"))];
@@ -303,8 +304,10 @@ fn runtime(
                 let fields = named_args
                     .iter()
                     .filter_map(|arg| {
-                        let name = arg.name.to_lower_camel_case();
-                        let input = format!("value.{name}");
+                        // `value` is the IPC payload object, so its keys are the keys
+                        // Tauri reads, not the camelCased TypeScript parameter names.
+                        let key = arg.name.as_ref();
+                        let input = format!("value.{key}");
                         invoke_argument(
                             &input,
                             &arg.ty,
@@ -315,7 +318,7 @@ fn runtime(
                         )
                         .map(|transform| {
                             needs_channel_mapping |= is_channel_type(&arg.ty, exporter.types);
-                            format!("{name}: {transform}")
+                            format!("{key}: {transform}")
                         })
                     })
                     .collect::<Vec<_>>();
@@ -337,9 +340,10 @@ fn runtime(
                         .args
                         .iter()
                         .map(|arg| {
-                            let name = arg.name.to_lower_camel_case();
+                            let param = arg.name.to_lower_camel_case();
+                            let key = arg.name.as_ref();
                             let value = invoke_argument(
-                                &name,
+                                &param,
                                 &arg.ty,
                                 &exporter,
                                 cfg,
@@ -349,7 +353,11 @@ fn runtime(
                             needs_channel_mapping |=
                                 value.is_some() && is_channel_type(&arg.ty, exporter.types);
 
-                            value.map_or(name.clone(), |value| format!("{name}: {value}"))
+                            match (value, key == param) {
+                                (None, true) => param,
+                                (None, false) => format!("{key}: {param}"),
+                                (Some(value), _) => format!("{key}: {value}"),
+                            }
                         })
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -1142,7 +1150,25 @@ fn mock_handler_signature(
 ) -> Result<(String, String), Error> {
     validate_mock_transforms(command, exporter, cfg, semantic_types_runtime_types)?;
 
-    let arguments = command_argument_types(command, exporter, cfg, semantic_types_runtime_types)?;
+    // A handler is called with the invoke payload, so its keys are the payload keys
+    // rather than the camelCased names the generated accessor uses.
+    let arguments = command
+        .args
+        .iter()
+        .map(|arg| {
+            Ok((
+                arg.name.to_string(),
+                render_reference_dt_for_phase(
+                    &arg.ty,
+                    Phase::Deserialize,
+                    Phase::Serialize,
+                    exporter,
+                    cfg,
+                    semantic_types_runtime_types,
+                )?,
+            ))
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
 
     let arguments = if arguments.is_empty() {
         "()".to_string()

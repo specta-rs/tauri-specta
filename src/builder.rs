@@ -401,8 +401,9 @@ impl<R: Runtime> Builder<R> {
     ///
     /// Command argument names are separate because they are part of Tauri's
     /// runtime IPC contract. To rename arguments, configure the command itself
-    /// and keep `#[tauri::command(rename_all = "...")]` aligned with
-    /// `#[specta(rename_all = "...")]`. This method never renames arguments.
+    /// and, without the `introspection` feature, keep `#[tauri::command(rename_all
+    /// = "...")]` aligned with `#[specta(rename_all = "...")]`. This method never
+    /// renames arguments.
     ///
     /// ```rust
     /// use tauri_specta::{Builder, Casing};

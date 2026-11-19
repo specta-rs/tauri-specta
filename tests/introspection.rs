@@ -1,9 +1,9 @@
 //! Commands collected through Tauri's IPC introspection (`#[tauri::command]` only).
 
-#![cfg(all(feature = "v2", feature = "typescript", feature = "derive"))]
+#![cfg(all(feature = "introspection", feature = "typescript"))]
 #![allow(missing_docs, dead_code, clippy::unwrap_used)]
 
-use std::{fs, path::Path};
+use std::fs;
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -79,6 +79,7 @@ fn export(builder: &Builder<MockRuntime>, scenario: &str) -> String {
     bindings
 }
 
+#[allow(deprecated)]
 fn all() -> Builder<MockRuntime> {
     Builder::new().commands(collect_commands![
         documented,
@@ -143,9 +144,16 @@ fn renames_keep_the_accessor_and_rename_the_ipc_name() {
         ),
         "{bindings}"
     );
-    // `rename_all` is applied by Tauri's metadata, which specta's macro never supported.
+    // The TypeScript parameter is camelCased but the payload key is Tauri's:
+    // `rename_all = "snake_case"` means the invoke object must say `my_value`.
     assert!(
         bindings.contains("renamedArguments: (myValue: number, another: string"),
+        "{bindings}"
+    );
+    assert!(
+        bindings.contains(
+            "__TAURI_INVOKE<number>(\"renamed_arguments\", { my_value: myValue, another }, options)"
+        ),
         "{bindings}"
     );
 }
@@ -178,24 +186,4 @@ fn plugin_prefix_applies_to_inferred_commands() {
         bindings.contains("__TAURI_INVOKE<Payload>(\"plugin:example|documented\""),
         "{bindings}"
     );
-}
-
-#[test]
-fn parity_fixture_still_exports() {
-    // The shared fixture keeps `#[specta::specta]` for v3, so Tauri's introspection and
-    // the legacy collector must agree on the same commands.
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/introspection-parity");
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).unwrap();
-
-    let builder = Builder::<MockRuntime>::new()
-        .commands(collect_commands![documented, async_command, no_arguments])
-        .events(tauri_specta::collect_events![]);
-    builder
-        .export(Typescript::default(), dir.join("bindings.ts"))
-        .unwrap();
-
-    let bindings = fs::read_to_string(dir.join("bindings.ts")).unwrap();
-    assert!(bindings.contains("documented"), "{bindings}");
-    let _ = fs::remove_dir_all(&dir);
 }

@@ -8,7 +8,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
     ConstParam, DeriveInput, GenericParam, Generics, Ident, LifetimeParam, LitStr, Path,
-    PathArguments, Token, TypeParam, WhereClause, parse_macro_input, parse_quote,
+    PathArguments, Token, TypeParam, WhereClause, ext::IdentExt, parse_macro_input, parse_quote,
     punctuated::Punctuated,
 };
 
@@ -16,13 +16,16 @@ use darling::FromDeriveInput;
 
 /// Collect commands and their types.
 ///
-/// This is a combination of Tauri's [`generate_handler`](tauri::generate_handler) and
-/// Tauri's command introspection, returning a [`Commands`](tauri_specta::Commands)
-/// struct that can be passed to [`Builder::commands`](tauri_specta::Builder::commands).
+/// This is a combination of Tauri's `generate_handler!` and Tauri's command
+/// introspection, returning `tauri_specta::Commands` for `Builder::commands`.
 ///
 /// Commands only need `#[tauri::command]`; `#[specta::specta]` is not required. The
 /// argument and result types come from the command's Rust signature, so anything the
 /// frontend sends must implement `specta::Type`.
+///
+/// A `#[deprecated]` command is referenced by value to infer its signature, which the
+/// `deprecated` lint reports at the call site. Add `#[allow(deprecated)]` where you call
+/// this macro if your crate denies that lint.
 #[proc_macro]
 pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let commands = parse_macro_input!(input with Punctuated::<Path, Token![,]>::parse_terminated);
@@ -35,7 +38,7 @@ pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStre
         let accessor = command
             .segments
             .last()
-            .map(|segment| segment.ident.to_string())
+            .map(|segment| segment.ident.unraw().to_string())
             .unwrap_or_default();
 
         handlers.push(quote!(#stripped));
@@ -53,6 +56,7 @@ pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStre
         ::tauri_specta::internal::command(
             ::tauri::generate_handler![#(#handlers),*],
             {
+                #[allow(unused_variables, unused_mut)]
                 fn export(
                     types: &mut ::specta::Types,
                 ) -> ::tauri_specta::CollectedCommands {

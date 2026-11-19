@@ -1,11 +1,13 @@
 use std::{borrow::Cow, collections::BTreeSet, fmt, sync::Arc};
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 use std::future::Future;
 
-#[cfg(feature = "v2")]
+#[cfg(not(feature = "introspection"))]
+use heck::ToLowerCamelCase;
+#[cfg(feature = "introspection")]
 use specta::Type;
-#[cfg(not(feature = "v2"))]
+#[cfg(not(feature = "introspection"))]
 use specta::datatype::Function;
 use specta::{
     Types,
@@ -14,7 +16,9 @@ use specta::{
 use tauri::{Runtime, ipc::Invoke};
 
 /// A command as seen by the binding exporters.
-#[doc(hidden)]
+///
+/// Produced by `collect_commands!` and exposed through
+/// [`BuilderConfiguration::commands`](crate::BuilderConfiguration::commands).
 #[derive(Debug, Clone)]
 pub struct Command {
     /// The command name Tauri's invoke handler accepts, after
@@ -33,7 +37,6 @@ pub struct Command {
 }
 
 /// A frontend-visible command argument.
-#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct CommandArg {
     /// The key Tauri reads this argument from, after `rename_all`.
@@ -111,7 +114,7 @@ pub(crate) fn duplicate_command_name(commands: &[Command]) -> Option<&str> {
 ///
 /// Panics if a renamed command doesn't correspond to exactly one collected function,
 /// rather than silently leaving the binding with a name the handler rejects.
-#[cfg(not(feature = "v2"))]
+#[cfg(not(feature = "introspection"))]
 #[allow(clippy::panic)]
 pub(crate) fn from_functions(
     functions: Vec<Function>,
@@ -125,9 +128,14 @@ pub(crate) fn from_functions(
             args: function
                 .args
                 .into_iter()
-                .map(|(name, ty)| CommandArg { name, ty })
+                .map(|(name, ty)| CommandArg {
+                    // Without Tauri's metadata the best available key is the Rust
+                    // parameter name under Tauri's default `camelCase` argument casing.
+                    name: Cow::Owned(name.to_lower_camel_case()),
+                    ty,
+                })
                 .collect(),
-            result: function.result,
+            result: function.result.and_then(top_level_unit_as_void),
             docs: normalize_specta_docs(function.docs),
             deprecated: function.deprecated,
         })
@@ -174,7 +182,7 @@ pub(crate) fn from_functions(
 ///
 /// Specta keeps the space; Tauri's command metadata strips one per line. Normalising
 /// here keeps bindings identical between the two collection paths.
-#[cfg(not(feature = "v2"))]
+#[cfg(not(feature = "introspection"))]
 fn normalize_specta_docs(docs: Cow<'static, str>) -> Cow<'static, str> {
     if !docs.contains(' ') && !docs.contains('\n') {
         return docs;
@@ -190,11 +198,13 @@ fn normalize_specta_docs(docs: Cow<'static, str>) -> Cow<'static, str> {
 
 /// A Tauri command whose frontend types are inferred from its Rust signature.
 ///
-/// Implemented for every function reference that Tauri's `#[tauri::command]` macro
-/// accepts, so `collect_commands!` no longer needs `#[specta::specta]` on each command.
-/// The marker parameter keeps the argument-count and result-kind implementations from
-/// overlapping.
-#[cfg(feature = "v2")]
+/// Implemented for function references that Tauri's `#[tauri::command]` macro accepts,
+/// so `collect_commands!` no longer needs `#[specta::specta]` on each command. Every
+/// argument the frontend sends, and the result, must implement `specta::Type`, and a
+/// command may take at most ten arguments (the same limit as Specta's own function
+/// collection). The marker parameter keeps the argument-count and result-kind
+/// implementations from overlapping.
+#[cfg(feature = "introspection")]
 #[doc(hidden)]
 pub trait CommandSignature<TMarker> {
     /// The command's argument tuple.
@@ -219,7 +229,7 @@ pub trait CommandSignature<TMarker> {
 }
 
 /// All of a command's arguments, as a tuple.
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 #[doc(hidden)]
 #[diagnostic::on_unimplemented(
     message = "one or more Tauri command arguments cannot be exported by specta",
@@ -232,7 +242,7 @@ pub trait CommandArguments<TMarker> {
 }
 
 /// A single command argument.
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 #[doc(hidden)]
 #[diagnostic::on_unimplemented(
     message = "`{Self}` cannot be exported as a Tauri command argument",
@@ -246,11 +256,11 @@ pub trait CommandArgument<TMarker> {
 }
 
 /// Marker for arguments the frontend sends.
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 #[doc(hidden)]
 pub enum SpectaArgumentMarker {}
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl<T: Type> CommandArgument<SpectaArgumentMarker> for T {
     fn to_datatype(types: &mut Types) -> Option<DataType> {
         Some(T::definition(types))
@@ -258,39 +268,39 @@ impl<T: Type> CommandArgument<SpectaArgumentMarker> for T {
 }
 
 /// Marker for arguments Tauri injects.
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 #[doc(hidden)]
 pub enum InjectedArgumentMarker {}
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl<T: Send + Sync + 'static> CommandArgument<InjectedArgumentMarker> for tauri::State<'_, T> {
     fn to_datatype(_: &mut Types) -> Option<DataType> {
         None
     }
 }
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::AppHandle<R> {
     fn to_datatype(_: &mut Types) -> Option<DataType> {
         None
     }
 }
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::Window<R> {
     fn to_datatype(_: &mut Types) -> Option<DataType> {
         None
     }
 }
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::Webview<R> {
     fn to_datatype(_: &mut Types) -> Option<DataType> {
         None
     }
 }
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::WebviewWindow<R> {
     fn to_datatype(_: &mut Types) -> Option<DataType> {
         None
@@ -298,7 +308,7 @@ impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::WebviewWindo
 }
 
 /// A command's declared result type.
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 #[doc(hidden)]
 #[diagnostic::on_unimplemented(
     message = "`{Self}` cannot be exported as a Tauri command result",
@@ -312,11 +322,11 @@ pub trait CommandResult<TMarker> {
 }
 
 /// Marker for a synchronous result.
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 #[doc(hidden)]
 pub enum SpectaResultMarker {}
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl<T: Type> CommandResult<SpectaResultMarker> for T {
     fn to_datatype(types: &mut Types) -> Option<DataType> {
         top_level_unit_as_void(T::definition(types))
@@ -324,11 +334,11 @@ impl<T: Type> CommandResult<SpectaResultMarker> for T {
 }
 
 /// Marker for an `async fn` result, whose value is the future's output.
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 #[doc(hidden)]
 pub enum FutureResultMarker {}
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl<F> CommandResult<FutureResultMarker> for F
 where
     F: Future,
@@ -343,7 +353,7 @@ where
 ///
 /// This exists separately from [`CommandResult`] so the diagnostic names the awaited
 /// type instead of the future, which is what the author actually has to fix.
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 #[doc(hidden)]
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is the awaited return type of an async command but cannot be exported by specta",
@@ -356,14 +366,13 @@ pub trait AsyncCommandResult {
     fn to_datatype(types: &mut Types) -> Option<DataType>;
 }
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl<T: Type> AsyncCommandResult for T {
     fn to_datatype(types: &mut Types) -> Option<DataType> {
         top_level_unit_as_void(T::definition(types))
     }
 }
 
-#[cfg(feature = "v2")]
 fn top_level_unit_as_void(dt: DataType) -> Option<DataType> {
     match &dt {
         DataType::Tuple(tuple) if tuple.elements.is_empty() => None,
@@ -371,7 +380,7 @@ fn top_level_unit_as_void(dt: DataType) -> Option<DataType> {
     }
 }
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 fn command_from_parts(
     metadata: tauri::ipc::CommandMetadata,
     accessor: Cow<'static, str>,
@@ -407,7 +416,7 @@ fn command_from_parts(
     }
 }
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 macro_rules! impl_command_signature {
     () => {
         impl CommandArguments<()> for () {
@@ -487,25 +496,25 @@ macro_rules! impl_command_signature {
     };
 }
 
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!();
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!(T1: M1);
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!(T1: M1, T2: M2);
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!(T1: M1, T2: M2, T3: M3);
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!(T1: M1, T2: M2, T3: M3, T4: M4);
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!(T1: M1, T2: M2, T3: M3, T4: M4, T5: M5);
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!(T1: M1, T2: M2, T3: M3, T4: M4, T5: M5, T6: M6);
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!(T1: M1, T2: M2, T3: M3, T4: M4, T5: M5, T6: M6, T7: M7);
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!(T1: M1, T2: M2, T3: M3, T4: M4, T5: M5, T6: M6, T7: M7, T8: M8);
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!(T1: M1, T2: M2, T3: M3, T4: M4, T5: M5, T6: M6, T7: M7, T8: M8, T9: M9);
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 impl_command_signature!(T1: M1, T2: M2, T3: M3, T4: M4, T5: M5, T6: M6, T7: M7, T8: M8, T9: M9, T10: M10);
