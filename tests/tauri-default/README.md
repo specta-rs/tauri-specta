@@ -6,7 +6,7 @@ highest-match rule gets wrong without help: the library accepts v2 and a v3
 prerelease, so the prerelease would otherwise win.
 
 `tauri-specta`'s default `v2` feature enables
-[`tauri-specta-v2-pin`](../../crates/tauri-specta-v2-pin), a code-less crate whose
+[`tauri-specta-pin`](../../crates/tauri-specta-pin), a code-less crate whose
 `tauri = "2"` edge constrains that shared package back to stable v2.
 
 The committed `Cargo.lock` is part of the test. CI runs:
