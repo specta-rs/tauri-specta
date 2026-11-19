@@ -8,9 +8,9 @@ import { mockIPC as __TAURI_MOCK_IPC } from "@tauri-apps/api/mocks";
 /** Commands */
 export const commands = {
 	/**
-	 *  Libraries that a generated `mockCommands` handler map collides with: `toString` and
-	 *  `valueOf` are `Object.prototype` members, so a lookup that doesn't check own
-	 *  properties finds an inherited function instead of reporting the command as unmocked.
+	 * Libraries that a generated `mockCommands` handler map collides with: `toString` and
+	 * `valueOf` are `Object.prototype` members, so a lookup that doesn't check own
+	 * properties finds an inherited function instead of reporting the command as unmocked.
 	 */
 	toString: (options?: InvokeOptions) => __TAURI_INVOKE<string>("to_string", undefined, options),
 	valueOf: (options?: InvokeOptions) => __TAURI_INVOKE<string>("value_of", undefined, options),

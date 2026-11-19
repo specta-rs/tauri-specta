@@ -6,11 +6,11 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
-	/**  A query command: reachable as `queries.listUsers()` on the frontend. */
+	/** A query command: reachable as `queries.listUsers()` on the frontend. */
 	listUsers: (options?: InvokeOptions) => __TAURI_INVOKE<User[]>("list_users", undefined, options),
 	/**
-	 *  A mutation command: reachable as `mutations.createUser()`. Its arguments are passed to
-	 *  `mutate` as one object.
+	 * A mutation command: reachable as `mutations.createUser()`. Its arguments are passed to
+	 * `mutate` as one object.
 	 */
 	createUser: (name: string, options?: InvokeOptions) => __TAURI_INVOKE<User>("create_user", { name }, options),
 };

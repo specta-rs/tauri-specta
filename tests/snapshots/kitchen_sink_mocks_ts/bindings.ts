@@ -7,7 +7,7 @@ import { mockIPC as __TAURI_MOCK_IPC } from "@tauri-apps/api/mocks";
 
 /** Commands */
 export const commands = {
-	/**  A command with a doc comment. */
+	/** A command with a doc comment. */
 	greet: (myName: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("greet", { myName }, options),
 	unitCommand: (options?: InvokeOptions) => __TAURI_INVOKE<void>("unit_command", undefined, options),
 	asyncCommand: (delayMs: number, options?: InvokeOptions) => __TAURI_INVOKE<number>("async_command", { delayMs }, options),

@@ -36,7 +36,6 @@ pub struct UserCreated {
 
 /// A query command: reachable as `queries.listUsers()` on the frontend.
 #[tauri::command]
-#[specta::specta]
 fn list_users(users: tauri::State<'_, Users>) -> Vec<User> {
     users.lock().clone()
 }
@@ -44,7 +43,6 @@ fn list_users(users: tauri::State<'_, Users>) -> Vec<User> {
 /// A mutation command: reachable as `mutations.createUser()`. Its arguments are passed to
 /// `mutate` as one object.
 #[tauri::command]
-#[specta::specta]
 fn create_user(app: tauri::AppHandle, users: tauri::State<'_, Users>, name: String) -> User {
     let user = {
         let mut users = users.lock();

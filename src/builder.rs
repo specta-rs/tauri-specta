@@ -1,11 +1,10 @@
 use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
 
-use crate::{Casing, Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta};
-use serde::Serialize;
-use specta::{
-    Type, Types,
-    datatype::{Function, Reference},
+use crate::{
+    Casing, Command, Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta,
 };
+use serde::Serialize;
+use specta::{Type, Types, datatype::Reference};
 #[cfg(any(feature = "javascript", feature = "typescript"))]
 use specta_typescript::semantic;
 use tauri::{Manager, Runtime, ipc::Invoke};
@@ -125,11 +124,7 @@ pub struct BuilderConfiguration {
     /// Plugin name used when generating bindings for plugin commands.
     pub plugin_name: Option<&'static str>,
     /// Commands registered on the builder.
-    pub commands: Vec<Function>,
-    /// Maps each renamed command's effective Tauri name back to the Rust identifier its
-    /// generated frontend accessor is derived from. Populated for commands that use
-    /// `#[tauri::command(rename = "...")]`.
-    pub command_accessor_names: BTreeMap<Cow<'static, str>, Cow<'static, str>>,
+    pub commands: Vec<Command>,
     /// Error handling mode used by generated bindings.
     pub error_handling: ErrorHandlingMode,
     /// Event names mapped to their type metadata.
@@ -159,10 +154,8 @@ impl BuilderConfiguration {
     ///
     /// This is the command's Rust identifier even when `#[tauri::command(rename = "...")]`
     /// changed the IPC name the bindings invoke.
-    pub fn command_accessor_name<'a>(&'a self, command: &'a Function) -> &'a str {
-        self.command_accessor_names
-            .get(command.name())
-            .map_or_else(|| command.name(), |name| name.as_ref())
+    pub fn command_accessor_name<'a>(&'a self, command: &'a Command) -> &'a str {
+        &command.accessor
     }
 }
 
@@ -215,7 +208,6 @@ impl<R: Runtime> Builder<R> {
     /// use tauri_specta::{Builder, collect_commands};
     ///
     /// #[tauri::command]
-    /// #[specta::specta]
     /// fn hello_world(my_name: String) -> String {
     ///     format!("Hello, {my_name}! You've been greeted from Rust!")
     /// }
@@ -225,8 +217,7 @@ impl<R: Runtime> Builder<R> {
     #[allow(clippy::panic)]
     pub fn commands(mut self, commands: Commands<R>) -> Self {
         let collected = (commands.1)(&mut self.cfg.types);
-        self.cfg.commands = collected.functions;
-        self.cfg.command_accessor_names = collected.accessor_names;
+        self.cfg.commands = collected.commands;
         if let Some(name) = crate::commands::duplicate_command_name(&self.cfg.commands) {
             panic!(
                 "Command '{name}' is registered multiple times. Remove the duplicate registration."
@@ -410,8 +401,9 @@ impl<R: Runtime> Builder<R> {
     ///
     /// Command argument names are separate because they are part of Tauri's
     /// runtime IPC contract. To rename arguments, configure the command itself
-    /// and keep `#[tauri::command(rename_all = "...")]` aligned with
-    /// `#[specta(rename_all = "...")]`. This method never renames arguments.
+    /// and, without the `introspection` feature, keep `#[tauri::command(rename_all
+    /// = "...")]` aligned with `#[specta(rename_all = "...")]`. This method never
+    /// renames arguments.
     ///
     /// ```rust
     /// use tauri_specta::{Builder, Casing};

@@ -13,7 +13,7 @@ rand = "0.10.3"
 serde = "1"
 specta = { workspace = true }
 tauri = { version = "2", default-features = false }
-tauri-specta = { path = "../../../", features = ["derive", "typescript"] }
+tauri-specta = { path = "../../../", features = ["derive", "typescript", "introspection"] }
 
 [dev-dependencies]
 specta-typescript = { workspace = true }

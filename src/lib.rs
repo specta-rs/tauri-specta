@@ -24,6 +24,10 @@
 //! - `v2` *(enabled by default)* - Pins Tauri to stable v2. Without it, Cargo's
 //!   highest-match rule can select the v3 prerelease admitted by the dependency
 //!   range. Disable default features to use Tauri v3.
+//! - `introspection` - Reads command types from Tauri's IPC introspection, so
+//!   commands need only `#[tauri::command]`. Requires a Tauri build containing
+//!   tauri-apps/tauri#15326, which has merged but not been released at the time of
+//!   writing, so it is opt-in for now and becomes default once Tauri ships it.
 //! - `derive` - Enables the `Event` derive macro. This is only required if your using events.
 //! - `javascript` - Enables the JSDoc exporter.
 //! - `typescript` - Enables the Typescript exporter.
@@ -66,6 +70,26 @@
 //! containing only one of them. Adding a v3 dependency without disabling default
 //! features keeps the v2 pin, and resolution fails instead of mixing the two.
 
+//!
+//! ### Command discovery
+//!
+//! With the opt-in `introspection` feature, `collect_commands!` reads each command's
+//! arguments, result, docs and deprecation from Tauri's own command metadata. A
+//! command then only needs `#[tauri::command]`; `#[specta::specta]` is not required,
+//! and Tauri's `rename`/`rename_all` and injected arguments are handled directly.
+//!
+//! ```toml
+//! tauri-specta = { version = "=2.0.0-rc.29", features = [
+//!     "derive",
+//!     "typescript",
+//!     "introspection",
+//! ] }
+//! ```
+//!
+//! It needs a Tauri build containing tauri-apps/tauri#15326 (merged upstream,
+//! unreleased), which is why it is not in the default feature set yet. Without it,
+//! every command also needs `#[specta::specta]` and the published Tauri v3
+//! prerelease is supported. Both collection paths generate identical bindings.
 //!
 //! ### Using Tauri v3 in an application
 //!
@@ -159,8 +183,7 @@
 //! use specta_typescript::Typescript;
 //! use tauri_specta::{collect_commands, Builder};
 //!
-//! #[tauri::command]
-//! #[specta::specta] // < You must annotate your commands
+//! #[tauri::command] // < That is all a command needs
 //! fn hello_world(my_name: String) -> String {
 //!     format!("Hello, {my_name}! You've been greeted from Rust!")
 //! }
@@ -245,7 +268,6 @@
 //! use tauri::ipc::Channel;
 //!
 //! #[tauri::command]
-//! #[specta::specta]
 //! fn download(url: String, on_progress: Channel<u32>) {
 //!     for chunk in [10, 20, 100] {
 //!         let _ = on_progress.send(chunk);
@@ -281,7 +303,6 @@
 //! }
 //!
 //! #[tauri::command]
-//! #[specta::specta]
 //! fn download(request: DownloadRequest, webview: tauri::Webview<tauri::Wry>) {
 //!     let on_progress: Channel<u32> = request.on_progress.channel_on(webview);
 //!     // ...
@@ -525,8 +546,9 @@
 //!   `commands.someName` to `commands.some_name`. It does not change the Rust
 //!   command name or the command string sent in the runtime IPC message.
 //! - Argument renaming changes the IPC payload contract and is configured per
-//!   command. Keep `#[tauri::command(rename_all = "...")]` and
-//!   `#[specta(rename_all = "...")]` aligned when renaming arguments.
+//!   command. With the `introspection` feature Tauri's `rename_all` is used
+//!   directly; otherwise keep `#[tauri::command(rename_all = "...")]` and
+//!   `#[specta(rename_all = "...")]` aligned.
 //!
 //! [`Builder::function_casing`] does not rename command arguments. See the
 //! [command-versus-argument explanation](https://github.com/specta-rs/tauri-specta/issues/164#issuecomment-4976416006)
@@ -546,6 +568,10 @@
     html_favicon_url = "https://github.com/specta-rs/tauri-specta/raw/main/.github/logo.png"
 )]
 
+// Lets the `collect_commands!` proc macro's absolute `::tauri_specta` paths resolve
+// when it is expanded inside this crate's own tests.
+extern crate self as tauri_specta;
+
 mod builder;
 mod casing;
 mod commands;
@@ -558,9 +584,18 @@ pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
 pub use casing::Casing;
 #[doc(hidden)]
 pub use commands::CollectedCommands;
-pub use commands::Commands;
+pub use commands::{Command, CommandArg, Commands};
 pub use event::{Event, Events, TypedEvent};
 pub use lang::LanguageExt;
+
+/// Collect commands and their types.
+///
+/// With the `introspection` feature this is a proc macro backed by Tauri's command
+/// introspection: commands only need `#[tauri::command]`. Without it (the default
+/// until Tauri releases tauri-apps/tauri#15326, and for the Tauri v3 prerelease) the
+/// `macro_rules!` version is used and every command also needs `#[specta::specta]`.
+#[cfg(feature = "introspection")]
+pub use tauri_specta_macros::collect_commands;
 
 /// Implements the [`Event`](trait@crate::Event) trait for a struct.
 ///
@@ -574,7 +609,7 @@ pub(crate) use event::EventRegistry;
 
 // The pin crate has no API. Its value is the `tauri = "2"` dependency edge it puts
 // into the graph, so it is intentionally never named by this crate's code.
-#[cfg(feature = "v2")]
+#[cfg(feature = "introspection")]
 use tauri_specta_pin as _;
 #[doc(hidden)]
 pub mod internal {
@@ -582,24 +617,28 @@ pub mod internal {
     //! Nothing in this module has to conform to semver so it should not be used outside of this crate.
     //! It has to be public so the macro's can access it.
 
-    use std::{any::TypeId, collections::BTreeMap, sync::Arc};
+    #[cfg(feature = "introspection")]
+    use std::borrow::Cow;
+    use std::{any::TypeId, sync::Arc};
 
-    use specta::{
-        Types,
-        datatype::{self, DataType},
-    };
+    #[cfg(not(feature = "introspection"))]
+    use specta::datatype;
+    use specta::{Types, datatype::DataType};
     use tauri::{Runtime, ipc::Invoke};
 
-    use crate::commands::{CollectedCommands, apply_command_renames};
+    #[cfg(not(feature = "introspection"))]
+    use crate::commands::from_functions;
 
     use super::*;
 
     /// Re-exported so `collect_commands!` can build the `__tauri_command_name_*` idents
     /// without requiring users to depend on `paste` themselves.
+    #[cfg(not(feature = "introspection"))]
     #[doc(hidden)]
     pub use paste::paste as _tauri_specta_paste;
 
     /// called by `collect_commands` to construct `Commands`
+    #[cfg(not(feature = "introspection"))]
     pub fn command<R: Runtime, F, T>(
         f: F,
         types: T,
@@ -610,16 +649,37 @@ pub mod internal {
         T: Fn(&mut Types) -> Vec<datatype::Function> + Send + Sync + 'static,
     {
         let renames = renames.to_vec();
-        let types = move |registry: &mut Types| {
-            let mut collected = CollectedCommands {
-                functions: types(registry),
-                accessor_names: BTreeMap::new(),
-            };
-            apply_command_renames(&mut collected, &renames);
-            collected
-        };
+        let types = move |registry: &mut Types| from_functions(types(registry), &renames);
 
         Commands(Arc::new(f), Arc::new(types))
+    }
+
+    /// Called by `collect_commands!` with Tauri introspection: the collector already
+    /// produced [`CollectedCommands`], so nothing needs renaming here.
+    #[cfg(feature = "introspection")]
+    pub fn command<R: Runtime, F, T>(f: F, types: T) -> Commands<R>
+    where
+        F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
+        T: Fn(&mut Types) -> CollectedCommands + Send + Sync + 'static,
+    {
+        Commands(Arc::new(f), Arc::new(types))
+    }
+
+    /// Called by `collect_commands!` once per command. Returns the command's binding
+    /// metadata, including the Rust identifier used for its frontend accessor.
+    #[cfg(feature = "introspection")]
+    pub fn infer_command<F, M>(
+        f: F,
+        metadata: tauri::ipc::CommandMetadata,
+        accessor: &'static str,
+        types: &mut Types,
+    ) -> Command
+    where
+        F: crate::commands::CommandSignature<M>,
+        F::Args: crate::commands::CommandArguments<F::ArgMarkers>,
+        F::Result: crate::commands::CommandResult<F::ResultMarker>,
+    {
+        f.into_command(metadata, Cow::Borrowed(accessor), types)
     }
 
     /// called by `collect_events` to register events to an `Events`

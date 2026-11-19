@@ -8,7 +8,7 @@ import { mockIPC as __TAURI_MOCK_IPC } from "@tauri-apps/api/mocks";
 /** Commands */
 export const commands = {
 	/**
-	 *  A command with a doc comment.
+	 * A command with a doc comment.
 	 * @param {string} myName
 	 * @param {InvokeOptions} [options]
 	 * @returns {Promise<string>}
