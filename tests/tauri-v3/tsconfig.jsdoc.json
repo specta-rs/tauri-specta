@@ -4,5 +4,5 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": ["target/bindings/bindings.js", "target/bindings/semantic.js"]
+  "include": ["target/bindings/bindings.js", "target/bindings/semantic.js", "tauri-api.d.ts"]
 }

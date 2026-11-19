@@ -8,5 +8,5 @@
     "noEmit": true,
     "types": []
   },
-  "include": ["target/bindings/*.ts"]
+  "include": ["target/bindings/*.ts", "tauri-api.d.ts"]
 }

@@ -11,7 +11,7 @@ export const commands = {
 	 * @param {InvokeOptions} [options]
 	 * @returns {Promise<void>}
 	 */
-	streamUrls: (channel, options) => __TAURI_INVOKE("stream_urls", { channel: mapChannel(channel, (v) => ({...v,url:new URL(v.url)})) }, options),
+	streamUrls: (channel, options) => __TAURI_INVOKE("stream_urls", { channel: channel.deserialize((v) => ({...v,url:new URL(v.url)})) }, options),
 	/**
 	 * @param {Channel<PlainPayload>} channel
 	 * @param {InvokeOptions} [options]
@@ -120,32 +120,6 @@ export const tauriEvents = {
 	*/
 
 /* Tauri Specta runtime */
-const channelTransform = Symbol.for("tauri-specta.channelTransform");
-/**
- * @template T
- * @param {Channel<T>} channel
- * @param {(value: any) => T} transform
- * @returns {Channel<T>}
- */
-function mapChannel(channel, transform) {
-    /** @type {Channel<T> & { [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T } }} */
-    const mapped = channel;
-    const existing = mapped[channelTransform];
-    if (existing) {
-        existing.transform = transform;
-        return channel;
-    }
-    const state = { handler: channel.onmessage, transform };
-    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
-    Object.defineProperty(channel, "onmessage", {
-        configurable: true,
-        get: () => state.handler,
-        set: (/** @type {(value: T) => void} */ handler) => { state.handler = handler; },
-    });
-    Object.defineProperty(channel, channelTransform, { value: state });
-    return channel;
-}
-
 /**
  * @template T
  * @param {string} name

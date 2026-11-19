@@ -6,7 +6,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
-	streamUrls: (channel: Channel<Payload>, options?: InvokeOptions) => __TAURI_INVOKE<void>("stream_urls", { channel: mapChannel(channel, (v) => ({...v,url:new URL(v.url)})) }, options),
+	streamUrls: (channel: Channel<Payload>, options?: InvokeOptions) => __TAURI_INVOKE<void>("stream_urls", { channel: channel.deserialize((v) => ({...v,url:new URL(v.url)})) }, options),
 	plainUrls: (channel: Channel<PlainPayload>, options?: InvokeOptions) => __TAURI_INVOKE<void>("plain_urls", { channel }, options),
 };
 
@@ -58,27 +58,6 @@ export type PlainPayload = {
 export type SemanticUrl = URL;
 
 /* Tauri Specta runtime */
-const channelTransform = Symbol.for("tauri-specta.channelTransform");
-function mapChannel<T>(channel: Channel<T>, transform: (value: any) => T): Channel<T> {
-    const mapped: Channel<T> & {
-        [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T };
-    } = channel;
-    const existing = mapped[channelTransform];
-    if (existing) {
-        existing.transform = transform;
-        return channel;
-    }
-    const state = { handler: channel.onmessage, transform };
-    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
-    Object.defineProperty(channel, "onmessage", {
-        configurable: true,
-        get: () => state.handler,
-        set: (handler: (value: T) => void) => { state.handler = handler; },
-    });
-    Object.defineProperty(channel, channelTransform, { value: state });
-    return channel;
-}
-
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
 type EventEmitTo<T> = [T] extends [null] ? (target: __TAURI_EVENT.EventTarget | string) => Promise<void> : (target: __TAURI_EVENT.EventTarget | string, payload: T) => Promise<void>;
