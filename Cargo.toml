@@ -16,7 +16,8 @@ categories = ["web-programming", "asynchronous"]
 # `--no-deps` matters: RUSTDOCFLAGS applies to every crate rustdoc builds, and some
 # dependencies still gate removed nightly features behind `cfg(docsrs)`.
 [package.metadata."docs.rs"]
-all-features = true
+# `all-features` would add nothing here; the API is the same in every combination.
+features = ["derive", "javascript", "typescript"]
 
 [features]
 # Tauri v2 is the default: this pins `tauri` to 2.x so an unconstrained consumer
@@ -24,7 +25,7 @@ all-features = true
 # default features and depend on Tauri v3 yourself to use v3.
 default = ["v2"]
 v2 = ["dep:tauri-specta-pin"]
-derive = ["dep:tauri-specta-macros"]
+derive = []
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
 
@@ -33,9 +34,9 @@ workspace = true
 
 [dependencies]
 # Public
-specta = { workspace = true, features = ["function"] }
+specta.workspace = true
 specta-typescript = { workspace = true, optional = true }
-tauri-specta-macros = { version = "=2.0.0-rc.29", optional = true, path = "./macros" }
+tauri-specta-macros = { version = "=2.0.0-rc.29", path = "./macros" }
 tauri-specta-pin = { version = "0.1.0", optional = true, path = "./crates/tauri-specta-pin" }
 serde = "1"
 serde_json = "1"
@@ -44,7 +45,6 @@ tauri = { workspace = true, features = ["specta"] }
 
 # Private
 heck = "0.5"
-paste = "1"
 specta-serde = { workspace = true }
 specta-util = { workspace = true }
 
@@ -87,5 +87,10 @@ specta-serde = { version = "0.0.15" }
 specta-util = { version = "0.0.15" }
 
 [patch.crates-io]
-# Waiting on: https://github.com/tauri-apps/tauri/pull/16374
-tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "a4f7b3a62a06ec9267d9461c4f6738d432d26634" }
+# Tauri's primary branch is `dev`. Pinned to the commit that contains #16374
+# (`ipc::Request`/`Response` Specta impls) and #15326 (command introspection), both
+# of which are unreleased. Tauri Specta cannot be released until Tauri ships them in
+# a minor; swap these for the published version then.
+tauri = { git = "https://github.com/tauri-apps/tauri", rev = "61a3537e040f1f5feb59a3892f061cef545da2c8" }
+tauri-macros = { git = "https://github.com/tauri-apps/tauri", rev = "61a3537e040f1f5feb59a3892f061cef545da2c8" }
+tauri-codegen = { git = "https://github.com/tauri-apps/tauri", rev = "61a3537e040f1f5feb59a3892f061cef545da2c8" }

@@ -15,35 +15,58 @@ pub struct Progress {
 }
 
 #[tauri::command(rename = "greet-v3")]
-#[specta::specta]
 pub fn greet(name: String, state: tauri::State<'_, u32>) -> String {
     format!("Hello, {name}: {}", *state)
 }
 
 #[tauri::command]
-#[specta::specta]
 async fn double(value: u32) -> u32 {
     value * 2
 }
 
 #[tauri::command]
-#[specta::specta]
 fn fail() -> Result<String, String> {
     Err("failed".into())
 }
 
 #[tauri::command]
-#[specta::specta]
 fn stream(on_progress: tauri::ipc::Channel<u32>) {
     let _ = on_progress.send(42);
 }
 
 #[tauri::command]
-#[specta::specta]
 pub fn handle<R: Runtime>(_app: tauri::AppHandle<R>) {}
 
+/// A documented command.
+///
+/// Its docs must render identically for both collectors.
+#[tauri::command]
+fn documented(value: u32) -> u32 {
+    value
+}
+
+#[tauri::command]
+#[deprecated(since = "1.0.0", note = "use documented")]
+fn deprecated_command() -> String {
+    String::new()
+}
+
+/// An explicit unit result is not sent to the frontend.
+#[tauri::command]
+fn explicit_unit() {}
+
+#[allow(deprecated)]
 pub fn commands() -> Commands<MockRuntime> {
-    collect_commands![greet, double, fail, stream, handle::<MockRuntime>]
+    collect_commands![
+        greet,
+        double,
+        fail,
+        stream,
+        handle::<MockRuntime>,
+        documented,
+        deprecated_command,
+        explicit_unit
+    ]
 }
 
 pub fn builder() -> Builder<MockRuntime> {

@@ -6,31 +6,26 @@ use tauri::test::MockRuntime;
 use tauri_specta::{Builder, LanguageExt, collect_commands};
 
 #[tauri::command]
-#[specta::specta]
 fn ipc(request: tauri::ipc::Request<'_>) -> tauri::ipc::Response {
     let _ = request;
     tauri::ipc::Response::new(Vec::<u8>::new())
 }
 
 #[tauri::command]
-#[specta::specta]
 fn fallible_ipc() -> Result<tauri::ipc::Response, String> {
     Ok(tauri::ipc::Response::new("null".to_string()))
 }
 
 #[tauri::command]
-#[specta::specta]
 fn mixed(todo: String, request: tauri::ipc::Request<'_>) -> String {
     let _ = request;
     todo
 }
 
 #[tauri::command]
-#[specta::specta]
 fn no_args() {}
 
 #[tauri::command]
-#[specta::specta]
 fn option_names(options: String, invoke_options: String) {
     let _ = (options, invoke_options);
 }
