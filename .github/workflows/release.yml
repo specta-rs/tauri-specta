@@ -44,14 +44,15 @@ jobs:
         run: rustup update --no-self-update stable && rustup default stable
       - run: rustc --version && cargo --version
 
-      # `tauri-specta`, `tauri-specta-macros`, `tauri-specta-v2-pin` and
-      # `tauri-specta-query` are versioned in lockstep, so a single tag releases
-      # all four.
+      # `tauri-specta`, `tauri-specta-macros` and `tauri-specta-query` are
+      # versioned in lockstep, so a single tag releases those three.
+      # `tauri-specta-pin` is versioned independently: it only needs a release when
+      # the Tauri requirement it carries changes.
       - name: The tag must match the crate versions
         run: |
           set -euo pipefail
           metadata="$(cargo metadata --no-deps --format-version 1)"
-          for crate in tauri-specta tauri-specta-macros tauri-specta-v2-pin tauri-specta-query; do
+          for crate in tauri-specta tauri-specta-macros tauri-specta-query; do
             version="$(jq -r --arg crate "$crate" \
               '.packages[] | select(.name == $crate) | .version' <<< "$metadata")"
             if [ "v$version" != "$GITHUB_REF_NAME" ]; then
@@ -97,19 +98,26 @@ jobs:
       # Publish in dependency order. `cargo publish` polls the index until each
       # crate is visible, so the dependents resolve the crate published before
       # them: `tauri-specta` depends on `tauri-specta-macros` and
-      # `tauri-specta-v2-pin`, and `tauri-specta-query` depends on
-      # `tauri-specta`.
+      # `tauri-specta-pin`, and `tauri-specta-query` depends on `tauri-specta`.
       - name: Publish tauri-specta-macros
         run: cargo publish -p tauri-specta-macros
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
-      - name: Publish tauri-specta-v2-pin
-        # crates.io only lets you configure a trusted publisher on a crate that
-        # already exists, so the *first* release of a new crate must be published
-        # manually with an API token before tagging. After that, this step works
-        # through the OIDC token from the step above.
-        run: cargo publish -p tauri-specta-v2-pin
+      # The pin is versioned independently, so most releases leave it untouched.
+      # Publishing an existing version fails, so check the index first and only
+      # release it when its manifest version is new.
+      - name: Publish tauri-specta-pin if its version is new
+        run: |
+          set -euo pipefail
+          version="$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "tauri-specta-pin") | .version')"
+          if curl --fail --silent --show-error --output /dev/null \
+            "https://crates.io/api/v1/crates/tauri-specta-pin/$version"; then
+            echo "tauri-specta-pin $version is already published; skipping"
+          else
+            cargo publish -p tauri-specta-pin
+          fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 

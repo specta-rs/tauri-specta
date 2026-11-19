@@ -1,14 +1,15 @@
 [package]
-name = "tauri-specta-v2-pin"
-description = "Pins Tauri Specta's Tauri dependency to v2 for unconstrained consumers"
-# Versioned in lockstep with `tauri-specta`, `tauri-specta-macros` and
-# `tauri-specta-query`; the `release` workflow requires all four to match the `v*` tag.
-version = "2.0.0-rc.29"
+name = "tauri-specta-pin"
+description = "Pins Tauri Specta to a Tauri major when nothing else selects one"
+# Versioned independently of the other crates: it only needs a new release when the
+# Tauri requirement it carries changes. `tauri-specta` depends on the published
+# version, so the release workflow checks crates.io before publishing it.
+version = "0.1.1"
 authors = ["Oscar Beaumont <oscar@otbeaumont.me>"]
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/specta-rs/tauri-specta"
-documentation = "https://docs.rs/tauri-specta-v2-pin/latest/tauri_specta_v2_pin"
+documentation = "https://docs.rs/tauri-specta-pin/latest/tauri_specta_pin"
 keywords = ["tauri", "specta", "version"]
 categories = ["development-tools"]
 
@@ -21,6 +22,9 @@ categories = ["development-tools"]
 # Cargo rejects two names for the *same* package inside one manifest, so this edge
 # cannot live in `tauri-specta` itself. A third crate can hold it: it participates
 # in normal dependency resolution, so it constrains the one `tauri` package.
+#
+# A future Tauri major gets its own pin crate (or a new major of this one) rather
+# than a second `tauri` edge in `tauri-specta`.
 tauri = { version = "2", default-features = false }
 
 [lints]

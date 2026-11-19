@@ -575,7 +575,7 @@ pub(crate) use event::EventRegistry;
 // The pin crate has no API. Its value is the `tauri = "2"` dependency edge it puts
 // into the graph, so it is intentionally never named by this crate's code.
 #[cfg(feature = "v2")]
-use tauri_specta_v2_pin as _;
+use tauri_specta_pin as _;
 #[doc(hidden)]
 pub mod internal {
     //! Internal logic for Tauri Specta.
