@@ -7,11 +7,76 @@ use heck::ToKebabCase;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-    ConstParam, DeriveInput, GenericParam, Generics, Ident, LifetimeParam, LitStr, TypeParam,
-    WhereClause, parse_macro_input, parse_quote,
+    ConstParam, DeriveInput, GenericParam, Generics, Ident, LifetimeParam, LitStr, Path,
+    PathArguments, Token, TypeParam, WhereClause, parse_macro_input, parse_quote,
+    punctuated::Punctuated,
 };
 
 use darling::FromDeriveInput;
+
+/// Collect commands and their types.
+///
+/// This is a combination of Tauri's [`generate_handler`](tauri::generate_handler) and
+/// Tauri's command introspection, returning a [`Commands`](tauri_specta::Commands)
+/// struct that can be passed to [`Builder::commands`](tauri_specta::Builder::commands).
+///
+/// Commands only need `#[tauri::command]`; `#[specta::specta]` is not required. The
+/// argument and result types come from the command's Rust signature, so anything the
+/// frontend sends must implement `specta::Type`.
+#[proc_macro]
+pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let commands = parse_macro_input!(input with Punctuated::<Path, Token![,]>::parse_terminated);
+
+    let mut handlers = Vec::new();
+    let mut inferences = Vec::new();
+
+    for command in &commands {
+        let stripped = strip_path_generics(command);
+        let accessor = command
+            .segments
+            .last()
+            .map(|segment| segment.ident.to_string())
+            .unwrap_or_default();
+
+        handlers.push(quote!(#stripped));
+        inferences.push(quote! {
+            collected.commands.push(::tauri_specta::internal::infer_command(
+                #command,
+                ::tauri::command_metadata!(#stripped),
+                #accessor,
+                types,
+            ));
+        });
+    }
+
+    quote! {
+        ::tauri_specta::internal::command(
+            ::tauri::generate_handler![#(#handlers),*],
+            {
+                fn export(
+                    types: &mut ::specta::Types,
+                ) -> ::tauri_specta::CollectedCommands {
+                    let mut collected = ::tauri_specta::CollectedCommands::default();
+                    #(#inferences)*
+                    collected
+                }
+
+                export
+            },
+        )
+    }
+    .into()
+}
+
+/// Remove `::<...>` so the path can be passed to Tauri's handler and metadata macros,
+/// neither of which accepts generics.
+fn strip_path_generics(path: &Path) -> Path {
+    let mut path = path.clone();
+    for segment in &mut path.segments {
+        segment.arguments = PathArguments::None;
+    }
+    path
+}
 
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(tauri_specta), supports(struct_any, enum_any))]

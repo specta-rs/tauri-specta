@@ -63,7 +63,9 @@ tauri-build = "=3.0.0-alpha.4"
 ```
 
 The Rust API is unchanged. The differences are naming the runtime and selecting it
-when building the app; `tauri::Wry` does not exist in v3.
+when building the app; `tauri::Wry` does not exist in v3. V3 commands still need
+`#[specta::specta]` because the published prerelease has no command introspection;
+with Tauri v2 `#[tauri::command]` alone is enough.
 
 ```rust
 use specta_typescript::Typescript;

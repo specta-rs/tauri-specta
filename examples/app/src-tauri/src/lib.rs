@@ -21,7 +21,6 @@ pub struct Greeted {
 
 /// A command takes arguments and returns anything implementing [`specta::Type`].
 #[tauri::command]
-#[specta::specta]
 fn greet(app: tauri::AppHandle, name: String) -> String {
     Greeted { name: name.clone() }.emit(&app).ok();
 
@@ -45,7 +44,6 @@ pub enum GreetError {
 }
 
 #[tauri::command]
-#[specta::specta]
 fn greet_strictly(name: String) -> Result<String, GreetError> {
     if name.trim().is_empty() {
         return Err(GreetError::EmptyName);
@@ -56,7 +54,6 @@ fn greet_strictly(name: String) -> Result<String, GreetError> {
 
 /// A command can stream values back to the frontend with a `Channel`.
 #[tauri::command]
-#[specta::specta]
 async fn count_to(number: u32, channel: tauri::ipc::Channel<u32>) {
     for current in 1..=number {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -68,7 +65,6 @@ async fn count_to(number: u32, channel: tauri::ipc::Channel<u32>) {
 
 /// Exercise the raw IPC request and response Specta types from Tauri PR #16374.
 #[tauri::command]
-#[specta::specta]
 fn raw_ipc_echo(request: tauri::ipc::Request<'_>) -> tauri::ipc::Response {
     match request.body() {
         tauri::ipc::InvokeBody::Raw(bytes) => tauri::ipc::Response::new(bytes.clone()),
@@ -78,7 +74,6 @@ fn raw_ipc_echo(request: tauri::ipc::Request<'_>) -> tauri::ipc::Response {
 
 /// A named argument and an IPC request share the same JSON payload.
 #[tauri::command]
-#[specta::specta]
 fn raw_ipc_named(todo: String, request: tauri::ipc::Request<'_>) -> Result<String, String> {
     if request
         .headers()

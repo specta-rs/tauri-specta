@@ -9,7 +9,8 @@
 //!
 //! # Backend setup
 //!
-//! Annotate commands with both `#[tauri::command]` and `#[specta::specta]`, then
+//! On Tauri v2 annotate commands with `#[tauri::command]` (the published v3
+//! prerelease also needs `#[specta::specta]`), then
 //! pass separate command collections to [`CommandSet::new`]. The string returned
 //! by [`CommandSet::build`] must be supplied to the TypeScript exporter with
 //! `Typescript::with_raw`.
@@ -20,13 +21,11 @@
 //! use tauri_specta_query::{CommandSet, TanstackQueryFramework};
 //!
 //! #[tauri::command]
-//! #[specta::specta]
 //! fn get_user(id: u32) -> String {
 //!     format!("user-{id}")
 //! }
 //!
 //! #[tauri::command]
-//! #[specta::specta]
 //! fn rename_user(id: u32, name: String) {
 //!     // Update the user in your application state.
 //! }
@@ -115,9 +114,9 @@ use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
 use heck::ToLowerCamelCase;
 use serde::Serialize;
-use specta::{Type, Types, datatype};
+use specta::{Type, Types};
 use tauri::{Runtime, ipc::Invoke};
-use tauri_specta::{Casing, CollectedCommands, Commands, Events};
+use tauri_specta::{Casing, CollectedCommands, Command, Commands, Events};
 
 /// A collection of query commands, mutation commands, and their shared bindings.
 ///
@@ -125,9 +124,8 @@ use tauri_specta::{Casing, CollectedCommands, Commands, Events};
 /// bindings, and finish it with [`CommandSet::build`].
 pub struct CommandSet<R: Runtime> {
     handler: Arc<dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static>,
-    queries: Vec<datatype::Function>,
-    mutations: Vec<datatype::Function>,
-    accessor_names: BTreeMap<Cow<'static, str>, Cow<'static, str>>,
+    queries: Vec<Command>,
+    mutations: Vec<Command>,
     types: Types,
     events: Events,
     constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
@@ -135,11 +133,9 @@ pub struct CommandSet<R: Runtime> {
 }
 
 impl<R: Runtime> CommandSet<R> {
-    /// The name a function's generated accessor is derived from, before casing.
-    fn accessor_name<'a>(&'a self, function: &'a datatype::Function) -> &'a str {
-        self.accessor_names
-            .get(function.name())
-            .map_or_else(|| function.name(), |name| name.as_ref())
+    /// The name a command's generated accessor is derived from, before casing.
+    fn accessor_name<'a>(&'a self, command: &'a Command) -> &'a str {
+        &command.accessor
     }
 
     /// Creates a command set from query commands and mutation commands.
@@ -155,8 +151,8 @@ impl<R: Runtime> CommandSet<R> {
         let query_collected = query_types(&mut types);
         let mutation_collected = mutation_types(&mut types);
 
-        let mut accessor_names = query_collected.accessor_names;
-        accessor_names.extend(mutation_collected.accessor_names);
+        let query_commands = query_collected.commands;
+        let mutation_commands = mutation_collected.commands;
 
         Self {
             handler: Arc::new(move |i| {
@@ -166,9 +162,8 @@ impl<R: Runtime> CommandSet<R> {
                     acl: i.acl.clone(),
                 }) || (mutation_invoke)(i)
             }),
-            queries: query_collected.functions,
-            mutations: mutation_collected.functions,
-            accessor_names,
+            queries: query_commands,
+            mutations: mutation_commands,
             types,
             events: Default::default(),
             constants: Default::default(),
@@ -264,9 +259,6 @@ impl<R: Runtime> CommandSet<R> {
         let mut constants = self.constants.clone();
         constants.extend(other.constants.clone());
 
-        let mut accessor_names = self.accessor_names.clone();
-        accessor_names.extend(other.accessor_names.clone());
-
         Self {
             handler: Arc::new(move |i| {
                 (handler)(Invoke {
@@ -282,7 +274,6 @@ impl<R: Runtime> CommandSet<R> {
                 .chain(&other.mutations)
                 .cloned()
                 .collect(),
-            accessor_names,
             types,
             events: self.events.clone().merge(other.events.clone()),
             constants,
@@ -361,15 +352,15 @@ impl<R: Runtime> CommandSet<R> {
                         .args
                         .iter()
                         .enumerate()
-                        .map(|(idx, (arg, _))| {
-                            let arg = arg.to_lower_camel_case();
+                        .map(|(idx, arg)| {
+                            let arg = arg.name.to_lower_camel_case();
                             format!("{arg}: Parameters<typeof {command}>[{idx}]")
                         })
                         .collect::<Vec<_>>();
                     let arg_names = function
                         .args
                         .iter()
-                        .map(|(arg, _)| arg.to_lower_camel_case())
+                        .map(|arg| arg.name.to_lower_camel_case())
                         .collect::<Vec<_>>();
 
                     let mutation_fn = if args.is_empty() {
@@ -430,7 +421,6 @@ impl<R: Runtime> CommandSet<R> {
         let mut commands = self.queries;
         commands.extend(self.mutations);
         let types = self.types;
-        let accessor_names = self.accessor_names;
 
         let mut builder = tauri_specta::Builder::<R>::new()
             .commands(Commands(
@@ -438,8 +428,7 @@ impl<R: Runtime> CommandSet<R> {
                 Arc::new(move |tys| {
                     tys.extend(&types);
                     CollectedCommands {
-                        functions: commands.clone(),
-                        accessor_names: accessor_names.clone(),
+                        commands: commands.clone(),
                     }
                 }),
             ))

@@ -7,7 +7,7 @@ import { mockIPC as __TAURI_MOCK_IPC } from "@tauri-apps/api/mocks";
 
 /** Commands */
 export const commands = {
-	/**  A command with a doc comment. */
+	/** A command with a doc comment. */
 	greet: (myName: string, options?: InvokeOptions) => __TAURI_INVOKE<string>("greet", { myName }, options),
 	plainError: (options?: InvokeOptions) => typedError<string, PlainError>(__TAURI_INVOKE("plain_error", undefined, options)),
 	nullableResult: (options?: InvokeOptions) => typedError<string | null, PlainError>(__TAURI_INVOKE("nullable_result", undefined, options)),

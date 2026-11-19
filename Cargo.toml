@@ -23,7 +23,7 @@ all-features = true
 # does not resolve the v3 prerelease that the dependency range also admits. Disable
 # default features and depend on Tauri v3 yourself to use v3.
 default = ["v2"]
-v2 = ["dep:tauri-specta-pin"]
+v2 = ["dep:tauri-specta-pin", "dep:tauri-specta-macros"]
 derive = ["dep:tauri-specta-macros"]
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
@@ -87,5 +87,10 @@ specta-serde = { version = "0.0.15" }
 specta-util = { version = "0.0.15" }
 
 [patch.crates-io]
-# Waiting on: https://github.com/tauri-apps/tauri/pull/16374
-tauri = { git = "https://github.com/oscartbeaumont/tauri", rev = "a4f7b3a62a06ec9267d9461c4f6738d432d26634" }
+# `main` here is Tauri's `dev` branch, its primary development branch. Pinned to
+# the commit that contains #16374 (`ipc::Request`/`Response` Specta impls) and
+# #15326 (`CommandMetadata` introspection), both of which are unreleased. Swap for
+# the published minor once it ships.
+tauri = { git = "https://github.com/tauri-apps/tauri", rev = "9d4d3caac3ff8f98347cefb227404792ac6ad7da" }
+tauri-macros = { git = "https://github.com/tauri-apps/tauri", rev = "9d4d3caac3ff8f98347cefb227404792ac6ad7da" }
+tauri-codegen = { git = "https://github.com/tauri-apps/tauri", rev = "9d4d3caac3ff8f98347cefb227404792ac6ad7da" }

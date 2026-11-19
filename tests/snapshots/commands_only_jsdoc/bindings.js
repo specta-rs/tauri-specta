@@ -7,7 +7,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	/**
-	 *  A command with a doc comment.
+	 * A command with a doc comment.
 	 * @param {string} myName
 	 * @param {InvokeOptions} [options]
 	 * @returns {Promise<string>}

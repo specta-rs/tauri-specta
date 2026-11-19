@@ -8,8 +8,7 @@ use heck::ToLowerCamelCase;
 use specta::{
     Format, Type, Types,
     datatype::{
-        DataType, Field, Fields, Function, NamedDataType, NamedReferenceType, Primitive, Reference,
-        Struct,
+        DataType, Field, Fields, NamedDataType, NamedReferenceType, Primitive, Reference, Struct,
     },
 };
 use specta_serde::Phase;
@@ -99,9 +98,9 @@ fn runtime(
     let has_user_events = !cfg.events.is_empty();
     let is_raw_request_used = cfg.commands.iter().any(|command| {
         command
-            .args()
+            .args
             .iter()
-            .any(|(_, dt)| is_ipc_type(dt, exporter.types, "TAURI_REQUEST"))
+            .any(|arg| is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
     });
     // `mockCommands` is not only a command stub: the `mockIPC` it installs is also what
     // enables Tauri's event mock, so it has something to do even when there are no
@@ -155,12 +154,12 @@ fn runtime(
                 return Err(Error::framework(
                     format!(
                         "Commands '{first}' and '{}' would both export as '{accessor}'. Rename one of them so the generated bindings don't conflict.",
-                        command.name()
+                        command.name.as_ref()
                     ),
                     "",
                 ));
             }
-            seen.insert(accessor, command.name());
+            seen.insert(accessor, command.name.as_ref());
         }
     }
 
@@ -173,17 +172,18 @@ fn runtime(
     let is_channel_used = cfg.commands.iter().any(|command| {
         // Check if any argument is a Channel
         command
-            .args()
+            .args
             .iter()
-            .any(|(_, dt)| is_channel_type(dt, exporter.types))
+            .any(|arg| is_channel_type(&arg.ty, exporter.types))
             // Check if result contains a Channel
-            || command.result().is_some_and(|dt| is_channel_type(dt, exporter.types))
+            || command.result.as_ref().is_some_and(|dt| is_channel_type(dt, exporter.types))
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling != ErrorHandlingMode::Throw
         && cfg.commands.iter().any(|command| {
             command
-                .result()
+                .result
+                .as_ref()
                 .and_then(|dt| extract_std_result(dt, exporter.types))
                 .is_some()
         });
@@ -239,34 +239,36 @@ fn runtime(
         let mut s = Struct::named();
         for command in &cfg.commands {
             let raw_request = command
-                .args()
+                .args
                 .iter()
-                .any(|(_, dt)| is_ipc_type(dt, exporter.types, "TAURI_REQUEST"));
+                .any(|arg| is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"));
             if raw_request && cfg.mocks {
                 return Err(Error::framework(
-                    command.name().to_string(),
+                    command.name.as_ref().to_string(),
                     "raw IPC request commands are not supported by generated mocks",
                 ));
             }
-            let command_name_escaped =
-                serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
-                    .map_err(|err| {
-                        Error::framework("failed to serialize a command name for bindings", err)
-                    })?;
+            let command_name_escaped = serde_json::to_string(&resolve_tauri_command_name(
+                cfg.plugin_name,
+                command.name.as_ref(),
+            ))
+            .map_err(|err| {
+                Error::framework("failed to serialize a command name for bindings", err)
+            })?;
 
             let mut arguments =
                 command_argument_types(command, &exporter, cfg, semantic_types_runtime_types)?;
             let named_args = command
-                .args()
+                .args
                 .iter()
-                .filter(|(_, dt)| !is_ipc_type(dt, exporter.types, "TAURI_REQUEST"))
+                .filter(|arg| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
                 .collect::<Vec<_>>();
             let mixed_request = raw_request && !named_args.is_empty();
             if mixed_request {
                 let fields = arguments
                     .iter()
-                    .zip(command.args())
-                    .filter(|(_, (_, dt))| !is_ipc_type(dt, exporter.types, "TAURI_REQUEST"))
+                    .zip(&command.args)
+                    .filter(|(_, arg)| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
                     .map(|((name, ty), _)| format!("{name}: {ty}"))
                     .collect::<Vec<_>>()
                     .join("; ");
@@ -300,19 +302,19 @@ fn runtime(
             let arguments_invoke_obj = if mixed_request {
                 let fields = named_args
                     .iter()
-                    .filter_map(|(name, dt)| {
-                        let name = name.to_lower_camel_case();
+                    .filter_map(|arg| {
+                        let name = arg.name.to_lower_camel_case();
                         let input = format!("value.{name}");
                         invoke_argument(
                             &input,
-                            dt,
+                            &arg.ty,
                             &exporter,
                             cfg,
                             semantic_types_runtime_types,
                             jsdoc,
                         )
                         .map(|transform| {
-                            needs_channel_mapping |= is_channel_type(dt, exporter.types);
+                            needs_channel_mapping |= is_channel_type(&arg.ty, exporter.types);
                             format!("{name}: {transform}")
                         })
                     })
@@ -326,26 +328,26 @@ fn runtime(
             } else if raw_request {
                 let name = &arguments[0].0;
                 format!(", Array.isArray({name}) ? new Uint8Array({name}) : {name}, {options_name}")
-            } else if command.args().is_empty() {
+            } else if command.args.is_empty() {
                 format!(", undefined, {options_name}")
             } else {
                 format!(
                     ", {{ {} }}, {options_name}",
                     command
-                        .args()
+                        .args
                         .iter()
-                        .map(|(name, dt)| {
-                            let name = name.to_lower_camel_case();
+                        .map(|arg| {
+                            let name = arg.name.to_lower_camel_case();
                             let value = invoke_argument(
                                 &name,
-                                dt,
+                                &arg.ty,
                                 &exporter,
                                 cfg,
                                 semantic_types_runtime_types,
                                 jsdoc,
                             );
                             needs_channel_mapping |=
-                                value.is_some() && is_channel_type(dt, exporter.types);
+                                value.is_some() && is_channel_type(&arg.ty, exporter.types);
 
                             value.map_or(name.clone(), |value| format!("{name}: {value}"))
                         })
@@ -357,7 +359,7 @@ fn runtime(
             let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
 
             let body = if cfg.error_handling != ErrorHandlingMode::Throw
-                && let Some(result) = command.result()
+                && let Some(result) = command.result.as_ref()
                 && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
             {
                 let semantic_err_type = apply_semantic_type_for_phase(
@@ -375,7 +377,7 @@ fn runtime(
                         }))
                 {
                     return Err(Error::framework(
-                        command.name().to_string(),
+                        command.name.as_ref().to_string(),
                         "DataError mode requires a non-nullable command error type because null marks a successful result",
                     ));
                 }
@@ -472,9 +474,10 @@ fn runtime(
             } else {
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
                 let output_dt = command
-                    .result()
+                    .result
+                    .as_ref()
                     .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
-                    .or(command.result());
+                    .or(command.result.as_ref());
 
                 if !jsdoc {
                     let output_semantic_type = output_dt.is_some_and(|dt| {
@@ -488,7 +491,7 @@ fn runtime(
                         )
                     });
                     invoke_ts.push('<');
-                    invoke_ts.push_str(&match command.result() {
+                    invoke_ts.push_str(&match command.result.as_ref() {
                         Some(dt) => Cow::Owned(render_reference_dt_for_phase(
                             extract_std_result(dt, exporter.types)
                                 .map(|(ok, _)| ok)
@@ -559,7 +562,7 @@ fn runtime(
                     }
 
                     let returns = if cfg.error_handling != ErrorHandlingMode::Throw
-                        && let Some(result) = command.result()
+                        && let Some(result) = command.result.as_ref()
                         && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
                     {
                         let ok_semantic_type = has_semantic_type_for_phase(
@@ -606,9 +609,10 @@ fn runtime(
                         result_type(cfg.error_handling, &ok, &err)
                     } else {
                         let output_dt = command
-                            .result()
+                            .result
+                            .as_ref()
                             .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
-                            .or(command.result());
+                            .or(command.result.as_ref());
                         let output_semantic_type = output_dt.is_some_and(|dt| {
                             has_semantic_type_for_phase(
                                 dt,
@@ -1102,19 +1106,19 @@ fn mock_handlers_declaration(
 /// so anything else describing the same command — mock handlers, for instance — is
 /// written in exactly these terms.
 fn command_argument_types(
-    command: &Function,
+    command: &crate::Command,
     exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
 ) -> Result<Vec<(String, String)>, Error> {
     command
-        .args()
+        .args
         .iter()
-        .map(|(name, dt)| {
+        .map(|arg| {
             Ok((
-                name.to_lower_camel_case(),
+                arg.name.to_lower_camel_case(),
                 render_reference_dt_for_phase(
-                    dt,
+                    &arg.ty,
                     Phase::Deserialize,
                     Phase::Serialize,
                     exporter,
@@ -1131,7 +1135,7 @@ fn command_argument_types(
 /// This mirrors how `commands` types the same command, so a handler is written in the
 /// same terms as the call it stands in for, rather than in terms of the IPC payload.
 fn mock_handler_signature(
-    command: &Function,
+    command: &crate::Command,
     exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
@@ -1156,9 +1160,10 @@ fn mock_handler_signature(
     // A handler returns the command's success value: for a `Result`, that is the `Ok`
     // side, since a mock fails a command by throwing rather than by returning `Err`.
     let result = match command
-        .result()
+        .result
+        .as_ref()
         .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
-        .or(command.result())
+        .or(command.result.as_ref())
     {
         Some(dt) => {
             let result_semantic_type = has_semantic_type_for_phase(
@@ -1197,7 +1202,7 @@ fn mock_handler_signature(
 /// lie, and the transform's output type can't be recovered from the rule. Fail the export
 /// rather than emit a binding that lies, like the other export-time validations do.
 fn validate_mock_transforms(
-    command: &Function,
+    command: &crate::Command,
     exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
@@ -1216,7 +1221,7 @@ fn validate_mock_transforms(
             return Err(Error::framework(
                 format!(
                     "`Builder::mocks` can't type a mock for command '{}': {subject} is reshaped by a semantic type transform, so the handler wouldn't receive or return the type it declares. Export the mocks without `Builder::semantic_types`, or drop `Builder::mocks`.",
-                    command.name()
+                    command.name.as_ref()
                 ),
                 "",
             ));
@@ -1225,17 +1230,21 @@ fn validate_mock_transforms(
         Ok(())
     };
 
-    for (name, dt) in command.args() {
+    for arg in &command.args {
         // A channel's payload is transformed as messages arrive, so either way the handler
         // sees the `Channel<T>` it declares.
-        if channel_generic_type(dt, exporter.types).is_some() {
+        if channel_generic_type(&arg.ty, exporter.types).is_some() {
             continue;
         }
 
-        reject(dt, Phase::Serialize, &format!("argument '{name}'"))?;
+        reject(
+            &arg.ty,
+            Phase::Serialize,
+            &format!("argument '{}'", arg.name),
+        )?;
     }
 
-    if let Some(result) = command.result() {
+    if let Some(result) = command.result.as_ref() {
         let (ok, err) = extract_std_result(result, exporter.types)
             .map_or((result, None), |(ok, err)| (ok, Some(err)));
 
@@ -1300,11 +1309,11 @@ fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String,
         // assert against the same name it uses for `commands`.
         let accessor_literal = serde_json::to_string(&accessor)
             .map_err(|err| Error::framework("failed to serialize a command accessor", err))?;
-        let command_name =
-            serde_json::to_string(&resolve_tauri_command_name(cfg.plugin_name, command.name()))
-                .map_err(|err| {
-                    Error::framework("failed to serialize a command name for bindings", err)
-                })?;
+        let command_name = serde_json::to_string(&resolve_tauri_command_name(
+            cfg.plugin_name,
+            command.name.as_ref(),
+        ))
+        .map_err(|err| Error::framework("failed to serialize a command name for bindings", err))?;
         out.push_str(&format!(
             "            case {command_name}: calls.push({{ command: {accessor_literal}, args }}); return mockCommandHandler({access}, {command_name}, args);\n"
         ));
@@ -1440,10 +1449,10 @@ fn extract_std_result<'a>(
 fn hide_unused_std_result_type(cfg: &BuilderConfiguration, mut types: Types) -> Types {
     let is_std_result_used_after_command_result_flattening = cfg.commands.iter().any(|command| {
         command
-            .args()
+            .args
             .iter()
-            .any(|(_, dt)| datatype_contains_std_result(dt, &types))
-            || command.result().is_some_and(|dt| {
+            .any(|arg| datatype_contains_std_result(&arg.ty, &types))
+            || command.result.as_ref().is_some_and(|dt| {
                 if let Some((ok, err)) = extract_std_result(dt, &types) {
                     datatype_contains_std_result(ok, &types)
                         || datatype_contains_std_result(err, &types)
@@ -1759,18 +1768,22 @@ fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Resu
     }
 
     for command in cfg.commands.iter() {
-        for (name, dt) in command.args() {
+        for arg in &command.args {
             validate_channel_signature_datatype(
-                dt,
+                &arg.ty,
                 types,
-                &format!("argument '{name}' of command '{}'", command.name()),
+                &format!(
+                    "argument '{}' of command '{}'",
+                    arg.name,
+                    command.name.as_ref()
+                ),
             )?;
         }
-        if let Some(dt) = command.result() {
+        if let Some(dt) = command.result.as_ref() {
             validate_channel_signature_datatype(
                 dt,
                 types,
-                &format!("the result of command '{}'", command.name()),
+                &format!("the result of command '{}'", command.name.as_ref()),
             )?;
         }
     }

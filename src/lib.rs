@@ -67,6 +67,16 @@
 //! features keeps the v2 pin, and resolution fails instead of mixing the two.
 
 //!
+//! ### Command discovery
+//!
+//! With Tauri v2, `collect_commands!` reads each command's arguments, result, docs and
+//! deprecation from Tauri's own command metadata. A command only needs
+//! `#[tauri::command]`; `#[specta::specta]` is no longer required, and Tauri's
+//! `rename`/`rename_all` and injected arguments are handled directly.
+//!
+//! The published Tauri v3 prerelease has no such metadata API, so the v3 path still
+//! uses `#[specta::specta]`. The generated bindings are identical either way.
+//!
 //! ### Using Tauri v3 in an application
 //!
 //! `build.rs` is unchanged:
@@ -159,8 +169,7 @@
 //! use specta_typescript::Typescript;
 //! use tauri_specta::{collect_commands, Builder};
 //!
-//! #[tauri::command]
-//! #[specta::specta] // < You must annotate your commands
+//! #[tauri::command] // < That is all a command needs
 //! fn hello_world(my_name: String) -> String {
 //!     format!("Hello, {my_name}! You've been greeted from Rust!")
 //! }
@@ -245,7 +254,6 @@
 //! use tauri::ipc::Channel;
 //!
 //! #[tauri::command]
-//! #[specta::specta]
 //! fn download(url: String, on_progress: Channel<u32>) {
 //!     for chunk in [10, 20, 100] {
 //!         let _ = on_progress.send(chunk);
@@ -281,7 +289,6 @@
 //! }
 //!
 //! #[tauri::command]
-//! #[specta::specta]
 //! fn download(request: DownloadRequest, webview: tauri::Webview<tauri::Wry>) {
 //!     let on_progress: Channel<u32> = request.on_progress.channel_on(webview);
 //!     // ...
@@ -546,6 +553,10 @@
     html_favicon_url = "https://github.com/specta-rs/tauri-specta/raw/main/.github/logo.png"
 )]
 
+// Lets the `collect_commands!` proc macro's absolute `::tauri_specta` paths resolve
+// when it is expanded inside this crate's own tests.
+extern crate self as tauri_specta;
+
 mod builder;
 mod casing;
 mod commands;
@@ -557,10 +568,18 @@ mod name;
 pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
 pub use casing::Casing;
 #[doc(hidden)]
-pub use commands::CollectedCommands;
-pub use commands::Commands;
+pub use commands::{CollectedCommands, Command, CommandArg, Commands};
 pub use event::{Event, Events, TypedEvent};
 pub use lang::LanguageExt;
+
+/// Collect commands and their types.
+///
+/// With the default `v2` feature this is a proc macro backed by Tauri's command
+/// introspection: commands only need `#[tauri::command]`. Without it (Tauri v3, whose
+/// published prerelease has no introspection API) the `collect_commands!` in
+/// [`crate::macros`] is used instead and every command also needs `#[specta::specta]`.
+#[cfg(feature = "v2")]
+pub use tauri_specta_macros::collect_commands;
 
 /// Implements the [`Event`](trait@crate::Event) trait for a struct.
 ///
@@ -582,24 +601,28 @@ pub mod internal {
     //! Nothing in this module has to conform to semver so it should not be used outside of this crate.
     //! It has to be public so the macro's can access it.
 
-    use std::{any::TypeId, collections::BTreeMap, sync::Arc};
+    #[cfg(feature = "v2")]
+    use std::borrow::Cow;
+    use std::{any::TypeId, sync::Arc};
 
-    use specta::{
-        Types,
-        datatype::{self, DataType},
-    };
+    #[cfg(not(feature = "v2"))]
+    use specta::datatype;
+    use specta::{Types, datatype::DataType};
     use tauri::{Runtime, ipc::Invoke};
 
-    use crate::commands::{CollectedCommands, apply_command_renames};
+    #[cfg(not(feature = "v2"))]
+    use crate::commands::from_functions;
 
     use super::*;
 
     /// Re-exported so `collect_commands!` can build the `__tauri_command_name_*` idents
     /// without requiring users to depend on `paste` themselves.
+    #[cfg(not(feature = "v2"))]
     #[doc(hidden)]
     pub use paste::paste as _tauri_specta_paste;
 
     /// called by `collect_commands` to construct `Commands`
+    #[cfg(not(feature = "v2"))]
     pub fn command<R: Runtime, F, T>(
         f: F,
         types: T,
@@ -610,16 +633,38 @@ pub mod internal {
         T: Fn(&mut Types) -> Vec<datatype::Function> + Send + Sync + 'static,
     {
         let renames = renames.to_vec();
-        let types = move |registry: &mut Types| {
-            let mut collected = CollectedCommands {
-                functions: types(registry),
-                accessor_names: BTreeMap::new(),
-            };
-            apply_command_renames(&mut collected, &renames);
-            collected
-        };
+        let types = move |registry: &mut Types| from_functions(types(registry), &renames);
 
         Commands(Arc::new(f), Arc::new(types))
+    }
+
+    /// Called by `collect_commands!` with Tauri introspection: the collector already
+    /// produced [`CollectedCommands`], so nothing needs renaming here.
+    #[cfg(feature = "v2")]
+    pub fn command<R: Runtime, F, T>(f: F, types: T) -> Commands<R>
+    where
+        F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
+        T: Fn(&mut Types) -> CollectedCommands + Send + Sync + 'static,
+    {
+        Commands(Arc::new(f), Arc::new(types))
+    }
+
+    /// Called by `collect_commands!` once per command. Returns the command's Specta
+    /// metadata plus the `(Tauri name, Rust identifier)` pair used to name its
+    /// frontend accessor.
+    #[cfg(feature = "v2")]
+    pub fn infer_command<F, M>(
+        f: F,
+        metadata: tauri::ipc::CommandMetadata,
+        accessor: &'static str,
+        types: &mut Types,
+    ) -> Command
+    where
+        F: crate::commands::CommandSignature<M>,
+        F::Args: crate::commands::CommandArguments<F::ArgMarkers>,
+        F::Result: crate::commands::CommandResult<F::ResultMarker>,
+    {
+        f.into_command(metadata, Cow::Borrowed(accessor), types)
     }
 
     /// called by `collect_events` to register events to an `Events`

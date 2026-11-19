@@ -6,7 +6,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
-	/**  Adds two numbers, returning the result. */
+	/** Adds two numbers, returning the result. */
 	addNumbers: (a: number, b: number, options?: InvokeOptions) => __TAURI_INVOKE<number>("plugin:specta-example|add_numbers", { a, b }, options),
 };
 
