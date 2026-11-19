@@ -16,5 +16,8 @@ cargo check --locked --manifest-path tests/tauri-default/Cargo.toml
 python3 tests/assert_tauri_version.py tests/tauri-default/Cargo.toml 2
 ```
 
-The v3 fixture runs the mirror assertion for alpha.6. Each fixture resolves
-exactly one `tauri` package, because both majors declare `links = "Tauri"`.
+The fixture patches Tauri to the `dev` commit that contains the command
+introspection API, because that is unreleased. Remove the `[patch.crates-io]` block
+once Tauri ships it. The v3 fixture runs the mirror assertion for alpha.6. Each
+fixture resolves exactly one `tauri` package, because both majors declare
+`links = "Tauri"`.

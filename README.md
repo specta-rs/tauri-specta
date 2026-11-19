@@ -28,17 +28,9 @@ Follow the documentation links above for help getting started.
 
 ### Command discovery
 
-Commands only need `#[tauri::command]` when the `introspection` feature is enabled:
-`collect_commands!` reads the command's arguments, result, docs and deprecation from
-Tauri's own metadata, including `rename`, `rename_all` and injected arguments.
-
-```toml
-tauri-specta = { version = "=2.0.0-rc.29", features = [
-    "derive",
-    "typescript",
-    "introspection",
-] }
-```
+Commands only need `#[tauri::command]`: `collect_commands!` reads the command's
+arguments, result, docs and deprecation from Tauri's own metadata, including
+`rename`, `rename_all` and injected arguments.
 
 ```rust
 #[tauri::command]
@@ -47,24 +39,12 @@ fn hello_world(my_name: String) -> String {
 }
 ```
 
-It needs a Tauri build containing
+This needs a Tauri build containing
 [tauri-apps/tauri#15326](https://github.com/tauri-apps/tauri/pull/15326), which is
-merged upstream but not yet released, so it is **opt-in** until Tauri ships it and
-will then join the default features. Without it — including on the Tauri v3
-prerelease, which has no metadata API — add `#[specta::specta]` to every command:
-
-```rust
-#[tauri::command]
-#[specta::specta]
-fn hello_world(my_name: String) -> String {
-    format!("Hello, {my_name}! You've been greeted from Rust!")
-}
-```
-
-Both paths generate identical bindings, which CI checks byte-for-byte. A
-`#[deprecated]` command is referenced by value to infer its signature; if your crate
-denies the `deprecated` lint, add `#[allow(deprecated)]` where you call
-`collect_commands!`.
+merged upstream but not yet released; Tauri Specta cannot be released until Tauri
+ships it. A `#[deprecated]` command is referenced by value to infer its signature;
+if your crate denies the `deprecated` lint, add `#[allow(deprecated)]` where you
+call `collect_commands!`.
 
 ### Tauri v3 prerelease
 
@@ -83,11 +63,7 @@ the Tauri v3 dependency yourself.
 # Default (recommended): Tauri v2.
 [dependencies]
 tauri = "2"
-tauri-specta = { version = "=2.0.0-rc.29", features = [
-    "derive",
-    "typescript",
-    "introspection",
-] }
+tauri-specta = { version = "=2.0.0-rc.29", features = ["derive", "typescript"] }
 ```
 
 ```toml
@@ -107,16 +83,16 @@ tauri-build = "=3.0.0-alpha.4"
 ```
 
 The Rust API is unchanged. The differences are naming the runtime and selecting it
-when building the app; `tauri::Wry` does not exist in v3. V3 commands still need
-`#[specta::specta]` because the published prerelease has no command introspection;
-on Tauri v2 that requirement disappears once the `introspection` feature is enabled.
+when building the app; `tauri::Wry` does not exist in v3. **Tauri v3 is temporarily
+uncollectable**: the published `3.0.0-alpha.6` does not expose the command metadata
+that `collect_commands!` needs, so a v3 build containing tauri-apps/tauri#15326 is
+required.
 
 ```rust
 use specta_typescript::Typescript;
 use tauri_specta::{Builder, collect_commands};
 
 #[tauri::command]
-#[specta::specta]
 fn hello_world(my_name: String) -> String {
     format!("Hello, {my_name}! You've been greeted from Rust!")
 }

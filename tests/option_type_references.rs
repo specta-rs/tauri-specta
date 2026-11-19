@@ -18,31 +18,26 @@ struct InlineThing {
 }
 
 #[tauri::command]
-#[specta::specta]
 fn bare(thing: Thing) -> Thing {
     thing
 }
 
 #[tauri::command]
-#[specta::specta]
 fn optional(thing: Option<Thing>) -> Option<Thing> {
     thing
 }
 
 #[tauri::command]
-#[specta::specta]
 fn optional_inline(thing: Option<InlineThing>) -> Option<InlineThing> {
     thing
 }
 
 #[tauri::command]
-#[specta::specta]
 fn listed(thing: Vec<Thing>) -> Vec<Thing> {
     thing
 }
 
 #[tauri::command]
-#[specta::specta]
 fn resulted() -> Result<Option<Thing>, String> {
     unimplemented!()
 }
