@@ -39,9 +39,10 @@ macro_rules! __tauri_command_name {
 
 /// Collect commands and their types.
 ///
-/// This is the fallback used when Tauri's command introspection is unavailable (the
-/// Tauri v3 prerelease). On Tauri v2 the `collect_commands!` proc macro reads the
-/// command metadata instead, so `#[specta::specta]` is not needed there.
+/// This is the fallback used when the `introspection` feature is off (the default
+/// until Tauri releases tauri-apps/tauri#15326, and required for the Tauri v3
+/// prerelease). With the feature on, `collect_commands!` is a proc macro that reads
+/// Tauri's command metadata, so commands need only `#[tauri::command]`.
 ///
 /// This is a combination of Tauri's [`generate_handler`](tauri::generate_handler) and Specta's [`collect_functions`](specta::function),
 /// returning a [`Commands`](crate::Commands) struct that can be passed to [`Builder::commands`](crate::Builder::commands).

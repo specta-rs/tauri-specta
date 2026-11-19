@@ -9,10 +9,11 @@
 //!
 //! # Backend setup
 //!
-//! On Tauri v2 annotate commands with `#[tauri::command]` (the published v3
-//! prerelease also needs `#[specta::specta]`), then
-//! pass separate command collections to [`CommandSet::new`]. The string returned
-//! by [`CommandSet::build`] must be supplied to the TypeScript exporter with
+//! Annotate commands with `#[tauri::command]` and pass separate command collections
+//! to [`CommandSet::new`]. Enable `tauri-specta`'s `introspection` feature so
+//! commands need nothing else; without it (and on the published Tauri v3
+//! prerelease) add `#[specta::specta]` to every command. The string returned by
+//! [`CommandSet::build`] must be supplied to the TypeScript exporter with
 //! `Typescript::with_raw`.
 //!
 //! ```rust,no_run

@@ -14,8 +14,19 @@
 //!
 //! ```sh
 //! cargo add tauri@2.0 specta@=2.0.0-rc.28 specta-typescript@0.0.15
-//! cargo add tauri-specta@=2.0.0-rc.28 --features derive,typescript,javascript # `javascript` for JSDoc, `typescript` for Typescript
+//! # `javascript` for JSDoc, `typescript` for Typescript, `introspection` so commands
+//! # only need `#[tauri::command]` (see "Command discovery").
+//! cargo add tauri-specta@=2.0.0-rc.28 --features derive,typescript,javascript,introspection
 //! ```
+//!
+//! <section class="warning">
+//!
+//! `introspection` needs a Tauri build containing
+//! [tauri-apps/tauri#15326](https://github.com/tauri-apps/tauri/pull/15326). That is
+//! merged upstream but not part of a release yet. On a released Tauri 2.x, leave the
+//! feature out and add `#[specta::specta]` to every command.
+//!
+//! </section>
 //!
 //! ## Features
 //!
@@ -24,13 +35,55 @@
 //! - `v2` *(enabled by default)* - Pins Tauri to stable v2. Without it, Cargo's
 //!   highest-match rule can select the v3 prerelease admitted by the dependency
 //!   range. Disable default features to use Tauri v3.
-//! - `introspection` - Reads command types from Tauri's IPC introspection, so
-//!   commands need only `#[tauri::command]`. Requires a Tauri build containing
-//!   tauri-apps/tauri#15326, which has merged but not been released at the time of
-//!   writing, so it is opt-in for now and becomes default once Tauri ships it.
+//! - `introspection` *(recommended once Tauri releases it)* - Reads command types
+//!   from Tauri's IPC introspection, so commands need only `#[tauri::command]`.
+//!   Requires a Tauri build containing tauri-apps/tauri#15326, which is merged but
+//!   unreleased, so it is opt-in for now and becomes default once Tauri ships it.
 //! - `derive` - Enables the `Event` derive macro. This is only required if your using events.
 //! - `javascript` - Enables the JSDoc exporter.
 //! - `typescript` - Enables the Typescript exporter.
+//!
+//! ## Command discovery
+//!
+//! With the `introspection` feature, `collect_commands!` reads each command's
+//! arguments, result, docs and deprecation from Tauri's own command metadata. A
+//! command then only needs `#[tauri::command]`; `#[specta::specta]` is not required,
+//! and Tauri's `rename`/`rename_all` and injected arguments are handled directly.
+//!
+//! ```rust,no_run
+//! use tauri_specta::{Builder, collect_commands};
+//!
+//! #[tauri::command]
+//! fn hello_world(my_name: String) -> String {
+//!     format!("Hello, {my_name}!")
+//! }
+//!
+//! let builder = Builder::<tauri::Wry>::new().commands(collect_commands![hello_world]);
+//! ```
+//!
+//! It needs a Tauri build containing
+//! [tauri-apps/tauri#15326](https://github.com/tauri-apps/tauri/pull/15326), which is
+//! merged upstream but unreleased, so it is not in the default feature set yet.
+//!
+//! Without it — including on the published Tauri v3 prerelease — add
+//! `#[specta::specta]` to every command:
+//!
+//! ```rust,no_run
+//! use tauri_specta::{Builder, collect_commands};
+//!
+//! #[tauri::command]
+//! #[specta::specta]
+//! fn hello_world(my_name: String) -> String {
+//!     format!("Hello, {my_name}!")
+//! }
+//!
+//! let builder = Builder::<tauri::Wry>::new().commands(collect_commands![hello_world]);
+//! ```
+//!
+//! Both collection paths generate identical bindings, which CI checks byte-for-byte.
+//! A `#[deprecated]` command is referenced by value to infer its signature; if your
+//! crate denies the `deprecated` lint, add `#[allow(deprecated)]` where you call
+//! `collect_commands!`.
 //!
 //! ## Tauri versions
 //!
@@ -69,27 +122,6 @@
 //! Both Tauri versions declare `links = "Tauri"`, so Cargo builds a graph
 //! containing only one of them. Adding a v3 dependency without disabling default
 //! features keeps the v2 pin, and resolution fails instead of mixing the two.
-
-//!
-//! ### Command discovery
-//!
-//! With the opt-in `introspection` feature, `collect_commands!` reads each command's
-//! arguments, result, docs and deprecation from Tauri's own command metadata. A
-//! command then only needs `#[tauri::command]`; `#[specta::specta]` is not required,
-//! and Tauri's `rename`/`rename_all` and injected arguments are handled directly.
-//!
-//! ```toml
-//! tauri-specta = { version = "=2.0.0-rc.29", features = [
-//!     "derive",
-//!     "typescript",
-//!     "introspection",
-//! ] }
-//! ```
-//!
-//! It needs a Tauri build containing tauri-apps/tauri#15326 (merged upstream,
-//! unreleased), which is why it is not in the default feature set yet. Without it,
-//! every command also needs `#[specta::specta]` and the published Tauri v3
-//! prerelease is supported. Both collection paths generate identical bindings.
 //!
 //! ### Using Tauri v3 in an application
 //!
@@ -171,7 +203,9 @@
 //!
 //! ## Setup
 //!
-//! The follow is a minimal example of how to setup Tauri Specta with Typescript.
+//! The following is a minimal example of how to setup Tauri Specta with Typescript.
+//! It assumes `introspection`, so commands need only `#[tauri::command]`; see
+//! [Command discovery](#command-discovery) if you cannot enable it yet.
 //!
 //! ```rust,no_run
 //! #![cfg_attr(
