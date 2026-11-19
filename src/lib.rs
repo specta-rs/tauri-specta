@@ -238,8 +238,8 @@
 //! ## Channels
 //!
 //! A [`tauri::ipc::Channel`] streams values from a command to the frontend. A
-//! channel is only valid as a direct argument or return value of a command, and
-//! the generated binding types it as `Channel<T>`.
+//! channel is only valid as a direct argument of a command, and the generated
+//! binding types it as `Channel<T>`.
 //!
 //! ```rust,no_run
 //! use tauri::ipc::Channel;
@@ -263,11 +263,13 @@
 //! await commands.download("https://example.com/file.zip", onProgress);
 //! ```
 //!
-//! A channel cannot be nested inside a struct, enum, or event payload. Only a
-//! top-level command argument or return value is turned into a channel, so a
-//! channel in a nested position is invalid. To send a channel alongside other
-//! data, put a [`tauri::ipc::JavaScriptChannelId`] in the payload and call
-//! `channel_on` to get a `Channel`:
+//! A channel cannot be nested inside a struct, enum, or event payload, and it
+//! cannot be a command result: Tauri delivers messages through the callback of a
+//! channel the frontend created, so a channel created on the Rust side has
+//! nowhere to send and the caller would receive the `__CHANNEL__:<id>` string.
+//! To send a channel alongside other data, put a
+//! [`tauri::ipc::JavaScriptChannelId`] in the payload and call `channel_on` to
+//! get a `Channel`:
 //!
 //! ```rust,ignore
 //! use tauri::ipc::{Channel, JavaScriptChannelId};

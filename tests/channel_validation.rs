@@ -95,6 +95,18 @@ fn channel_arg(channel: tauri::ipc::Channel<u32>) {
 
 #[tauri::command]
 #[specta::specta]
+fn channel_result() -> tauri::ipc::Channel<u32> {
+    unimplemented!()
+}
+
+#[tauri::command]
+#[specta::specta]
+fn channel_in_result_wrapper() -> Result<tauri::ipc::Channel<u32>, String> {
+    unimplemented!()
+}
+
+#[tauri::command]
+#[specta::specta]
 fn payload_channel_arg(channel: tauri::ipc::Channel<ChannelPayload>) {
     let _ = channel;
 }
@@ -265,6 +277,44 @@ fn top_level_channel_argument_stays_untouched_without_a_semantic_payload() {
     assert!(
         !bindings.contains(".deserialize("),
         "the channel should not be touched when its payload is already the wire shape:\n{bindings}"
+    );
+}
+
+#[test]
+fn channel_as_a_command_result_is_rejected() {
+    let err = export(
+        &Builder::<MockRuntime>::new().commands(collect_commands![channel_result]),
+        "channel_result",
+    )
+    .expect_err("a Rust-created channel has no frontend callback to send to");
+
+    assert!(err.contains("channel_result"), "unexpected error: {err}");
+    assert!(
+        err.contains("can only be a direct command argument"),
+        "unexpected error: {err}"
+    );
+    // The error has to explain why, and what to do instead.
+    assert!(
+        err.contains("__CHANNEL__") && err.contains("Declare the channel as a command argument"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn channel_inside_a_result_is_rejected_as_a_result() {
+    let err = export(
+        &Builder::<MockRuntime>::new().commands(collect_commands![channel_in_result_wrapper]),
+        "channel_in_result_wrapper",
+    )
+    .expect_err("wrapping the channel in a `Result` doesn't give it a frontend callback");
+
+    assert!(
+        err.contains("can only be a direct command argument"),
+        "the channel should be rejected as a result rather than told to move to the top level: {err}"
+    );
+    assert!(
+        !err.contains("is nested inside"),
+        "moving the channel to the top level is not a fix for a result: {err}"
     );
 }
 

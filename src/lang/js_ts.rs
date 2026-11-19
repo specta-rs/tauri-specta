@@ -169,14 +169,13 @@ fn runtime(
     // exporters because it is part of the shared runtime path.
     validate_channel_placement(cfg, exporter.types)?;
 
+    // A channel can only be a whole command argument, so that is the only place the
+    // `Channel` import can come from.
     let is_channel_used = cfg.commands.iter().any(|command| {
-        // Check if any argument is a Channel
         command
             .args()
             .iter()
             .any(|(_, dt)| is_channel_type(dt, exporter.types))
-            // Check if result contains a Channel
-            || command.result().is_some_and(|dt| is_channel_type(dt, exporter.types))
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling != ErrorHandlingMode::Throw
@@ -1732,7 +1731,7 @@ fn fields_nested_channel<'a>(
     }
 }
 
-/// Reject `Channel`s that aren't the whole command argument or result.
+/// Reject `Channel`s that aren't a whole command argument.
 fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Result<(), Error> {
     // Covers events, `Builder::typ`, and command results that are named types: a channel
     // anywhere in a definition renders as an undefined reference name.
@@ -1749,6 +1748,7 @@ fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Resu
                 dt,
                 types,
                 &format!("argument '{name}' of command '{}'", command.name()),
+                ChannelPosition::Argument,
             )?;
         }
         if let Some(dt) = command.result() {
@@ -1756,6 +1756,7 @@ fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Resu
                 dt,
                 types,
                 &format!("the result of command '{}'", command.name()),
+                ChannelPosition::Result,
             )?;
         }
     }
@@ -1767,20 +1768,35 @@ fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Resu
             &DataType::Reference(reference.clone()),
             types,
             &format!("event '{name}'"),
+            ChannelPosition::Argument,
         )?;
     }
 
     Ok(())
 }
 
+/// Where a command signature uses a `Channel`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ChannelPosition {
+    /// A whole command argument, the only supported position.
+    Argument,
+    /// The command result or an event payload.
+    Result,
+}
+
 fn validate_channel_signature_datatype(
     dt: &DataType,
     types: &Types,
     subject: &str,
+    position: ChannelPosition,
 ) -> Result<(), Error> {
-    // A channel is allowed as the whole argument or result, but its payload is plain
-    // serialized data so a channel can't hide in there either.
+    // An argument channel's payload is plain serialized data, so a channel can't hide
+    // in there either.
     if let Some(payload) = channel_generic_type(dt, types) {
+        if position == ChannelPosition::Result {
+            return Err(channel_result_error(subject));
+        }
+
         let mut visited = BTreeSet::new();
         if let Some(site) = find_nested_channel(payload, types, None, &mut visited) {
             return Err(channel_nested_error(site, subject));
@@ -1790,9 +1806,23 @@ fn validate_channel_signature_datatype(
 
     let mut visited = BTreeSet::new();
     match find_nested_channel(dt, types, None, &mut visited) {
+        // A `Result<Channel<_>, _>` result would otherwise be told to move the channel
+        // to a top level that is just as unusable.
+        Some(ChannelSite::Signature) if position == ChannelPosition::Result => {
+            Err(channel_result_error(subject))
+        }
         Some(site) => Err(channel_nested_error(site, subject)),
         None => Ok(()),
     }
+}
+
+fn channel_result_error(subject: &str) -> Error {
+    Error::framework(
+        format!(
+            "`tauri::ipc::Channel` is used as {subject}, but a channel can only be a direct command argument. Tauri sends messages through the callback of a channel created on the frontend, so a channel created on the Rust side has no callback to send to and the caller would receive the `__CHANNEL__:<id>` string. Declare the channel as a command argument and send from the command instead."
+        ),
+        "",
+    )
 }
 
 fn channel_nested_error(site: ChannelSite<'_>, signature_subject: &str) -> Error {
@@ -1805,7 +1835,7 @@ fn channel_nested_error(site: ChannelSite<'_>, signature_subject: &str) -> Error
 
     Error::framework(
         format!(
-            "`tauri::ipc::Channel` is nested inside {subject}. A channel must be a direct command argument (or the whole command result), so move it to the top level. To send a channel id inside a payload, use `tauri::ipc::JavaScriptChannelId` and resolve it with `channel_on` instead."
+            "`tauri::ipc::Channel` is nested inside {subject}. A channel must be a direct command argument, so move it to the top level. To send a channel id inside a payload, use `tauri::ipc::JavaScriptChannelId` and resolve it with `channel_on` instead."
         ),
         "",
     )
