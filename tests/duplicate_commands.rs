@@ -10,11 +10,9 @@ use tauri::test::MockRuntime;
 use tauri_specta::{Builder, collect_commands};
 
 #[tauri::command]
-#[specta::specta]
 fn my_command() {}
 
 #[tauri::command]
-#[specta::specta]
 fn other_command() {}
 
 // Note: two commands with the same name in different modules of one crate can't
@@ -24,7 +22,6 @@ fn other_command() {}
 
 #[allow(non_snake_case)]
 #[tauri::command]
-#[specta::specta]
 fn myCommand() {}
 
 fn export(builder: &Builder<MockRuntime>) -> Result<(), specta_typescript::Error> {

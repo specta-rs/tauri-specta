@@ -10,7 +10,6 @@ use tauri::test::MockRuntime;
 use tauri_specta::{Builder, Casing, Event, collect_commands, collect_events};
 
 #[tauri::command]
-#[specta::specta]
 fn hello_world(my_name: String) -> String {
     format!("Hello, {my_name}!")
 }

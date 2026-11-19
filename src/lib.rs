@@ -14,17 +14,16 @@
 //!
 //! ```sh
 //! cargo add tauri@2.0 specta@=2.0.0-rc.28 specta-typescript@0.0.15
-//! # `javascript` for JSDoc, `typescript` for Typescript, `introspection` so commands
-//! # only need `#[tauri::command]` (see "Command discovery").
-//! cargo add tauri-specta@=2.0.0-rc.28 --features derive,typescript,javascript,introspection
+//! # `javascript` for JSDoc, `typescript` for Typescript
+//! cargo add tauri-specta@=2.0.0-rc.28 --features derive,typescript,javascript
 //! ```
 //!
 //! <section class="warning">
 //!
-//! `introspection` needs a Tauri build containing
-//! [tauri-apps/tauri#15326](https://github.com/tauri-apps/tauri/pull/15326). That is
-//! merged upstream but not part of a release yet. On a released Tauri 2.x, leave the
-//! feature out and add `#[specta::specta]` to every command.
+//! Commands are typed from Tauri's command metadata, which needs a Tauri build
+//! containing [tauri-apps/tauri#15326](https://github.com/tauri-apps/tauri/pull/15326).
+//! That is merged upstream but not part of a release yet, so Tauri Specta cannot be
+//! released until Tauri ships it. Pin Tauri from `dev` in the meantime.
 //!
 //! </section>
 //!
@@ -35,20 +34,15 @@
 //! - `v2` *(enabled by default)* - Pins Tauri to stable v2. Without it, Cargo's
 //!   highest-match rule can select the v3 prerelease admitted by the dependency
 //!   range. Disable default features to use Tauri v3.
-//! - `introspection` *(recommended once Tauri releases it)* - Reads command types
-//!   from Tauri's IPC introspection, so commands need only `#[tauri::command]`.
-//!   Requires a Tauri build containing tauri-apps/tauri#15326, which is merged but
-//!   unreleased, so it is opt-in for now and becomes default once Tauri ships it.
 //! - `derive` - Enables the `Event` derive macro. This is only required if your using events.
 //! - `javascript` - Enables the JSDoc exporter.
 //! - `typescript` - Enables the Typescript exporter.
 //!
 //! ## Command discovery
 //!
-//! With the `introspection` feature, `collect_commands!` reads each command's
-//! arguments, result, docs and deprecation from Tauri's own command metadata. A
-//! command then only needs `#[tauri::command]`; `#[specta::specta]` is not required,
-//! and Tauri's `rename`/`rename_all` and injected arguments are handled directly.
+//! `collect_commands!` reads each command's arguments, result, docs and deprecation
+//! from Tauri's own command metadata. A command only needs `#[tauri::command]`;
+//! Tauri's `rename`/`rename_all` and injected arguments are handled directly.
 //!
 //! ```rust,no_run
 //! use tauri_specta::{Builder, collect_commands};
@@ -61,26 +55,6 @@
 //! let builder = Builder::<tauri::Wry>::new().commands(collect_commands![hello_world]);
 //! ```
 //!
-//! It needs a Tauri build containing
-//! [tauri-apps/tauri#15326](https://github.com/tauri-apps/tauri/pull/15326), which is
-//! merged upstream but unreleased, so it is not in the default feature set yet.
-//!
-//! Without it — including on the published Tauri v3 prerelease — add
-//! `#[specta::specta]` to every command:
-//!
-//! ```rust,no_run
-//! use tauri_specta::{Builder, collect_commands};
-//!
-//! #[tauri::command]
-//! #[specta::specta]
-//! fn hello_world(my_name: String) -> String {
-//!     format!("Hello, {my_name}!")
-//! }
-//!
-//! let builder = Builder::<tauri::Wry>::new().commands(collect_commands![hello_world]);
-//! ```
-//!
-//! Both collection paths generate identical bindings, which CI checks byte-for-byte.
 //! A `#[deprecated]` command is referenced by value to infer its signature; if your
 //! crate denies the `deprecated` lint, add `#[allow(deprecated)]` where you call
 //! `collect_commands!`.
@@ -133,15 +107,17 @@
 //! }
 //! ```
 //!
-//! Tauri Specta's API is the same, but name the runtime explicitly and select it
-//! when building the app. `tauri::Wry` does not exist in v3:
+//! **Tauri v3 is temporarily uncollectable**: the published `3.0.0-alpha.6` does not
+//! expose the command metadata that `collect_commands!` needs. A Tauri v3 build
+//! containing tauri-apps/tauri#15326 is required. The rest of the API is unchanged;
+//! name the runtime explicitly and select it when building the app, since
+//! `tauri::Wry` does not exist in v3:
 //!
 //! ```rust,ignore
 //! use specta_typescript::Typescript;
 //! use tauri_specta::{Builder, collect_commands, collect_events};
 //!
 //! #[tauri::command]
-//! #[specta::specta]
 //! fn hello_world(my_name: String) -> String {
 //!     format!("Hello, {my_name}! You've been greeted from Rust!")
 //! }
@@ -204,8 +180,6 @@
 //! ## Setup
 //!
 //! The following is a minimal example of how to setup Tauri Specta with Typescript.
-//! It assumes `introspection`, so commands need only `#[tauri::command]`; see
-//! [Command discovery](#command-discovery) if you cannot enable it yet.
 //!
 //! ```rust,no_run
 //! #![cfg_attr(
@@ -580,9 +554,7 @@
 //!   `commands.someName` to `commands.some_name`. It does not change the Rust
 //!   command name or the command string sent in the runtime IPC message.
 //! - Argument renaming changes the IPC payload contract and is configured per
-//!   command. With the `introspection` feature Tauri's `rename_all` is used
-//!   directly; otherwise keep `#[tauri::command(rename_all = "...")]` and
-//!   `#[specta(rename_all = "...")]` aligned.
+//!   command. Tauri's `rename_all` is applied by the generated bindings.
 //!
 //! [`Builder::function_casing`] does not rename command arguments. See the
 //! [command-versus-argument explanation](https://github.com/specta-rs/tauri-specta/issues/164#issuecomment-4976416006)
@@ -624,11 +596,9 @@ pub use lang::LanguageExt;
 
 /// Collect commands and their types.
 ///
-/// With the `introspection` feature this is a proc macro backed by Tauri's command
-/// introspection: commands only need `#[tauri::command]`. Without it (the default
-/// until Tauri releases tauri-apps/tauri#15326, and for the Tauri v3 prerelease) the
-/// `macro_rules!` version is used and every command also needs `#[specta::specta]`.
-#[cfg(feature = "introspection")]
+/// Commands only need `#[tauri::command]`: this reads their arguments, result, docs
+/// and deprecation from Tauri's command metadata. It needs a Tauri build containing
+/// tauri-apps/tauri#15326, which is not in a release yet.
 pub use tauri_specta_macros::collect_commands;
 
 /// Implements the [`Event`](trait@crate::Event) trait for a struct.
@@ -643,7 +613,7 @@ pub(crate) use event::EventRegistry;
 
 // The pin crate has no API. Its value is the `tauri = "2"` dependency edge it puts
 // into the graph, so it is intentionally never named by this crate's code.
-#[cfg(feature = "introspection")]
+#[cfg(feature = "v2")]
 use tauri_specta_pin as _;
 #[doc(hidden)]
 pub mod internal {
@@ -651,46 +621,14 @@ pub mod internal {
     //! Nothing in this module has to conform to semver so it should not be used outside of this crate.
     //! It has to be public so the macro's can access it.
 
-    #[cfg(feature = "introspection")]
-    use std::borrow::Cow;
-    use std::{any::TypeId, sync::Arc};
+    use std::{any::TypeId, borrow::Cow, sync::Arc};
 
-    #[cfg(not(feature = "introspection"))]
-    use specta::datatype;
     use specta::{Types, datatype::DataType};
     use tauri::{Runtime, ipc::Invoke};
 
-    #[cfg(not(feature = "introspection"))]
-    use crate::commands::from_functions;
-
     use super::*;
 
-    /// Re-exported so `collect_commands!` can build the `__tauri_command_name_*` idents
-    /// without requiring users to depend on `paste` themselves.
-    #[cfg(not(feature = "introspection"))]
-    #[doc(hidden)]
-    pub use paste::paste as _tauri_specta_paste;
-
-    /// called by `collect_commands` to construct `Commands`
-    #[cfg(not(feature = "introspection"))]
-    pub fn command<R: Runtime, F, T>(
-        f: F,
-        types: T,
-        renames: &[(&'static str, &'static str)],
-    ) -> Commands<R>
-    where
-        F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
-        T: Fn(&mut Types) -> Vec<datatype::Function> + Send + Sync + 'static,
-    {
-        let renames = renames.to_vec();
-        let types = move |registry: &mut Types| from_functions(types(registry), &renames);
-
-        Commands(Arc::new(f), Arc::new(types))
-    }
-
-    /// Called by `collect_commands!` with Tauri introspection: the collector already
-    /// produced [`CollectedCommands`], so nothing needs renaming here.
-    #[cfg(feature = "introspection")]
+    /// Called by `collect_commands!` to construct `Commands`.
     pub fn command<R: Runtime, F, T>(f: F, types: T) -> Commands<R>
     where
         F: Fn(Invoke<R>) -> bool + Send + Sync + 'static,
@@ -701,7 +639,6 @@ pub mod internal {
 
     /// Called by `collect_commands!` once per command. Returns the command's binding
     /// metadata, including the Rust identifier used for its frontend accessor.
-    #[cfg(feature = "introspection")]
     pub fn infer_command<F, M>(
         f: F,
         metadata: tauri::ipc::CommandMetadata,

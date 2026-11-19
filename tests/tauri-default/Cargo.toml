@@ -15,3 +15,11 @@ tauri-specta-query = { path = "../../crates/tauri-specta-query" }
 specta = { version = "=2.0.0-rc.28", features = ["derive"] }
 specta-typescript = "0.0.15"
 serde = { version = "1", features = ["derive"] }
+
+# Temporary: Tauri Specta reads Tauri's command metadata, which is merged on `dev`
+# but unreleased. Remove this patch once Tauri ships it (and bump the tauri
+# requirement), which also restores the "released crates.io Tauri" guarantee here.
+[patch.crates-io]
+tauri = { git = "https://github.com/tauri-apps/tauri", rev = "61a3537e040f1f5feb59a3892f061cef545da2c8" }
+tauri-macros = { git = "https://github.com/tauri-apps/tauri", rev = "61a3537e040f1f5feb59a3892f061cef545da2c8" }
+tauri-codegen = { git = "https://github.com/tauri-apps/tauri", rev = "61a3537e040f1f5feb59a3892f061cef545da2c8" }
