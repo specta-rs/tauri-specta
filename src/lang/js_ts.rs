@@ -1610,8 +1610,12 @@ fn is_ipc_type(dt: &DataType, types: &Types, name: &str) -> bool {
 
 fn hide_ipc_standins(mut types: Types) -> Types {
     types.iter_mut(|ndt| {
-        if matches!(ndt.name.as_ref(), "TAURI_REQUEST" | "TAURI_RESPONSE")
-            && ndt.module_path.starts_with("tauri::")
+        // `TAURI_CHANNEL` keeps `TSend` in the named reference's generics, so hiding
+        // only its body still lets `Channel<T>` be rendered from the use site.
+        if matches!(
+            ndt.name.as_ref(),
+            "TAURI_CHANNEL" | "TAURI_REQUEST" | "TAURI_RESPONSE"
+        ) && ndt.module_path.starts_with("tauri::")
         {
             ndt.ty = None;
         }
