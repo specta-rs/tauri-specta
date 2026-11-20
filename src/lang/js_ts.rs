@@ -127,6 +127,11 @@ fn runtime(
         .as_ref()
         .unwrap_or(exporter.types);
 
+    // Reserved from a rough estimate so the large blocks appended below (the rendered
+    // commands, events and user types) don't repeatedly copy everything written so far.
+    // The always-emitted runtime -- imports, `tauriEvents` and `makeEvent` -- is about 4 KB on
+    // its own; each command adds its accessor, and a JSDoc export adds the signature again in
+    // `@param`/`@returns` documentation.
     let mut out = String::new();
     let mut needs_channel_mapping = false;
 
@@ -1603,27 +1608,31 @@ fn runtime_scope_name(
 struct SpectaFormat {
     disable_serde_phases: bool,
     semantic_types: Option<semantic::Configuration>,
-    remapper: Remapper,
+    /// `None` unless bigints are cast to `number`. Remapping without rules just walks the
+    /// type graph, so leaving it out keeps the default export from paying for it.
+    remapper: Option<Remapper>,
 }
 
 impl SpectaFormat {
     fn new(cfg: &BuilderConfiguration) -> Self {
-        let mut remapper = Remapper::new();
+        let mut remapper = None;
 
         if cfg.dangerously_cast_bigints_to_number {
             // Creating a virtual `Types` here is a bad pattern but given we know Specta doesn't use it, it's safe.
             let number = <specta_typescript::Number as Type>::definition(&mut Types::default());
-            remapper = remapper
-                .rule(DataType::Primitive(Primitive::usize), number.clone())
-                .rule(DataType::Primitive(Primitive::isize), number.clone())
-                .rule(DataType::Primitive(Primitive::u64), number.clone())
-                .rule(DataType::Primitive(Primitive::i64), number.clone())
-                .rule(DataType::Primitive(Primitive::u128), number.clone())
-                .rule(DataType::Primitive(Primitive::i128), number.clone())
-                .rule(
-                    <specta_typescript::BigInt as Type>::definition(&mut Types::default()),
-                    number,
-                );
+            remapper = Some(
+                Remapper::new()
+                    .rule(DataType::Primitive(Primitive::usize), number.clone())
+                    .rule(DataType::Primitive(Primitive::isize), number.clone())
+                    .rule(DataType::Primitive(Primitive::u64), number.clone())
+                    .rule(DataType::Primitive(Primitive::i64), number.clone())
+                    .rule(DataType::Primitive(Primitive::u128), number.clone())
+                    .rule(DataType::Primitive(Primitive::i128), number.clone())
+                    .rule(
+                        <specta_typescript::BigInt as Type>::definition(&mut Types::default()),
+                        number,
+                    ),
+            );
         }
 
         Self {
@@ -1642,12 +1651,15 @@ impl Format for SpectaFormat {
             specta_serde::PhasesFormat.map_types(types)
         }?;
 
-        Ok(match &self.semantic_types {
-            Some(semantic_types) => Cow::Owned(
-                self.remapper
-                    .remap_types(semantic_types.apply_types(&types).into_owned()),
-            ),
-            None => Cow::Owned(self.remapper.remap_types(types.into_owned())),
+        Ok(match (&self.semantic_types, &self.remapper) {
+            (Some(semantic_types), Some(remapper)) => {
+                Cow::Owned(remapper.remap_types(semantic_types.apply_types(&types).into_owned()))
+            }
+            (Some(semantic_types), None) => {
+                Cow::Owned(semantic_types.apply_types(&types).into_owned())
+            }
+            (None, Some(remapper)) => Cow::Owned(remapper.remap_types(types.into_owned())),
+            (None, None) => types,
         })
     }
 
@@ -1662,7 +1674,10 @@ impl Format for SpectaFormat {
             specta_serde::PhasesFormat.map_type(types, dt)?
         };
 
-        Ok(Cow::Owned(self.remapper.remap_dt(dt.into_owned())))
+        Ok(match &self.remapper {
+            Some(remapper) => Cow::Owned(remapper.remap_dt(dt.into_owned())),
+            None => dt,
+        })
     }
 }
 
