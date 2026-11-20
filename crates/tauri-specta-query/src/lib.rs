@@ -286,7 +286,18 @@ impl<R: Runtime> CommandSet<R> {
     #[must_use]
     pub fn build(self, framework: TanstackQueryFramework) -> (String, tauri_specta::Builder<R>) {
         let output = {
-            let mut output = format!("/** Tanstack Query */\n{}\n", framework.import());
+            let mut output = String::from("/** Tanstack Query */\n");
+            let imports = match (self.queries.is_empty(), self.mutations.is_empty()) {
+                (false, false) => Some("mutationOptions, queryOptions"),
+                (false, true) => Some("queryOptions"),
+                (true, false) => Some("mutationOptions"),
+                (true, true) => None,
+            };
+            if let (Some(package), Some(imports)) = (framework.package(), imports) {
+                output.push_str(&format!("import {{ {imports} }} from '{package}';\n"));
+            } else {
+                output.push('\n');
+            }
 
             if !self.queries.is_empty() {
                 output.push_str("\nexport const queries = {");
@@ -485,18 +496,14 @@ pub enum TanstackQueryFramework {
 }
 
 impl TanstackQueryFramework {
-    fn import(self) -> &'static str {
+    fn package(self) -> Option<&'static str> {
         match self {
-            Self::React => "import { mutationOptions, queryOptions } from '@tanstack/react-query';",
-            Self::Solid => "import { mutationOptions, queryOptions } from '@tanstack/solid-query';",
-            Self::Vue => "import { mutationOptions, queryOptions } from '@tanstack/vue-query';",
-            Self::Angular => {
-                "import { mutationOptions, queryOptions } from '@tanstack/angular-query-experimental';"
-            }
-            Self::Svelte => "",
-            Self::Preact => {
-                "import { mutationOptions, queryOptions } from '@tanstack/preact-query';"
-            }
+            Self::React => Some("@tanstack/react-query"),
+            Self::Solid => Some("@tanstack/solid-query"),
+            Self::Vue => Some("@tanstack/vue-query"),
+            Self::Angular => Some("@tanstack/angular-query-experimental"),
+            Self::Svelte => None,
+            Self::Preact => Some("@tanstack/preact-query"),
         }
     }
 
@@ -580,6 +587,24 @@ mod tests {
         assert!(output.contains(r#"queryFn: () => commands["get-user"](...args)"#));
         assert!(output.contains(r#""rename-user": () => mutationOptions"#));
         assert!(output.contains(r#"commands["rename-user"](input.userId, input.displayName)"#));
+    }
+
+    #[test]
+    fn only_imports_option_helpers_that_are_used() {
+        let framework = TanstackQueryFramework::React;
+        let (query_only, _) =
+            CommandSet::<MockRuntime>::new(collect_commands![get_user], collect_commands![])
+                .build(framework);
+        assert!(query_only.contains("import { queryOptions } from '@tanstack/react-query';"));
+
+        let (mutation_only, _) =
+            CommandSet::<MockRuntime>::new(collect_commands![], collect_commands![rename_user])
+                .build(framework);
+        assert!(mutation_only.contains("import { mutationOptions } from '@tanstack/react-query';"));
+
+        let (empty, _) = CommandSet::<MockRuntime>::new(collect_commands![], collect_commands![])
+            .build(framework);
+        assert!(!empty.contains("import "));
     }
 
     #[test]
