@@ -459,9 +459,13 @@ fn runtime(
                 };
 
                 let mut invoke_ts = "typedError".to_string();
-                if !jsdoc {
-                    invoke_ts.push('<');
-                    invoke_ts.push_str(&render_reference_dt_for_phase(
+                // DataError uses null in both arms, which can leak into both
+                // type arguments through contextual inference in JavaScript.
+                let specialize_jsdoc = jsdoc
+                    && cfg.error_handling == ErrorHandlingMode::DataError
+                    && cfg.typed_error_impl.is_empty();
+                if !jsdoc || specialize_jsdoc {
+                    let ok = render_reference_dt_for_phase(
                         dt_ok,
                         if ok_semantic_type {
                             Phase::Deserialize
@@ -472,9 +476,8 @@ fn runtime(
                         &exporter,
                         cfg,
                         semantic_types_runtime_types,
-                    )?);
-                    invoke_ts.push_str(", ");
-                    invoke_ts.push_str(&render_reference_dt_for_phase(
+                    )?;
+                    let err = render_reference_dt_for_phase(
                         dt_err,
                         if err_semantic_type {
                             Phase::Deserialize
@@ -485,8 +488,12 @@ fn runtime(
                         &exporter,
                         cfg,
                         semantic_types_runtime_types,
-                    )?);
-                    invoke_ts.push('>');
+                    )?;
+                    invoke_ts = if specialize_jsdoc {
+                        format!("/** @type {{typeof typedError<{ok}, {err}>}} */ (typedError)")
+                    } else {
+                        format!("typedError<{ok}, {err}>")
+                    };
                 }
                 invoke_ts.push_str("(__TAURI_INVOKE");
                 invoke_ts.push_str(&invoke_args);
@@ -2787,6 +2794,7 @@ mod tests {
 
         let js_path = output_dir.join("bindings.js");
         builder
+            .clone()
             .export(JSDoc::default(), &js_path)
             .expect("failed to export JSDoc bindings");
         let js = fs::read_to_string(js_path).expect("failed to read JSDoc bindings");
@@ -2796,6 +2804,19 @@ mod tests {
         assert!(
             js.contains("@returns {Promise<{ data: T; error: null } | { data: null; error: E }>}")
         );
+
+        // A user-supplied JavaScript helper need not declare generic type parameters.
+        let custom = r#"async function typedError(result) {
+    return result.then((data) => ({ data, error: null }), (error) => ({ data: null, error }));
+}"#;
+        let custom_js_path = output_dir.join("custom.js");
+        builder
+            .typed_error_impl(custom)
+            .export(JSDoc::default(), &custom_js_path)
+            .expect("failed to export JSDoc with custom typedError");
+        let custom_js = fs::read_to_string(custom_js_path).expect("failed to read custom bindings");
+        assert!(custom_js.contains(custom));
+        assert!(custom_js.contains("=> typedError(__TAURI_INVOKE("));
 
         fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
     }

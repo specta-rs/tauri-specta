@@ -63,17 +63,17 @@ export const commands = {
 	 * @param {InvokeOptions} [options]
 	 * @returns {Promise<{ data: string; error: null } | { data: null; error: PlainError }>}
 	 */
-	plainError: (options) => typedError(__TAURI_INVOKE("plain_error", undefined, options)),
+	plainError: (options) => /** @type {typeof typedError<string, PlainError>} */ (typedError)(__TAURI_INVOKE("plain_error", undefined, options)),
 	/**
 	 * @param {InvokeOptions} [options]
 	 * @returns {Promise<{ data: Profile_Serialize; error: null } | { data: null; error: TaggedError }>}
 	 */
-	taggedError: (options) => typedError(__TAURI_INVOKE("tagged_error", undefined, options)),
+	taggedError: (options) => /** @type {typeof typedError<Profile_Serialize, TaggedError>} */ (typedError)(__TAURI_INVOKE("tagged_error", undefined, options)),
 	/**
 	 * @param {InvokeOptions} [options]
 	 * @returns {Promise<{ data: string | null; error: null } | { data: null; error: PlainError }>}
 	 */
-	nullableResult: (options) => typedError(__TAURI_INVOKE("nullable_result", undefined, options)),
+	nullableResult: (options) => /** @type {typeof typedError<string | null, PlainError>} */ (typedError)(__TAURI_INVOKE("nullable_result", undefined, options)),
 	/**
 	 * @param {InvokeOptions} [options]
 	 * @returns {Promise<string | null>}

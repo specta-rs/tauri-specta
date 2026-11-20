@@ -4,7 +4,7 @@
   // the mocks runtime, `tauri-events.js` for the event accessors). `allowJs`/`checkJs`
   // are what makes the emitter's `@type` comments matter at all.
   //
-  // The `Files` layout and `DataError` fixture still have unrelated diagnostics.
+  // The `Files` layout still has unrelated module diagnostics, so it stays out.
   "compilerOptions": {
     "strict": true,
     "allowJs": true,
@@ -18,6 +18,7 @@
     "types": []
   },
   "include": [
+    "../snapshots/error_data_error_jsdoc/bindings.js",
     "../snapshots/error_result_jsdoc/bindings.js",
     "../snapshots/semantic_channels_jsdoc/bindings.js",
     "event-phases.js",
