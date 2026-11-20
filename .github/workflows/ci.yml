@@ -96,6 +96,11 @@ jobs:
         run: pnpm run test:mocks
 
   tauri-v3:
+    # Skipped while Tauri v3 is uncollectable: `collect_commands!` reads Tauri's command
+    # metadata (#15326), and no published v3 prerelease exposes it. Re-enable this job,
+    # and `binding-parity` with it, once a v3 build carries that API. The fixture and its
+    # docs stay in place for that follow-up; see tests/tauri-v3/README.md.
+    if: ${{ false }}
     name: Tauri v3 (${{ matrix.os }}, ${{ matrix.toolchain }})
     strategy:
       matrix:
@@ -164,6 +169,8 @@ jobs:
         run: pnpm test
 
   binding-parity:
+    # Skipped automatically while `tauri-v3` is skipped. It compares v2 and v3 exports,
+    # so it has nothing to check until v3 can be collected again.
     name: Identical v2/v3 bindings (all desktop platforms)
     needs: [build, tauri-v3]
     runs-on: ubuntu-latest
