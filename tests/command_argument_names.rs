@@ -39,6 +39,23 @@ fn raw_argument(_1st: Payload, request: tauri::ipc::Request<'_>) {
     let _ = (_1st, request);
 }
 
+#[allow(non_snake_case)]
+#[tauri::command]
+fn duplicate_payload_key(my_name: String, myName: String) {
+    let _ = (my_name, myName);
+}
+
+#[allow(non_snake_case)]
+#[tauri::command]
+fn non_payload_key_collision(
+    my_request: tauri::ipc::Request<'_>,
+    myRequest: String,
+    my_state: tauri::State<'_, ()>,
+    myState: String,
+) {
+    let _ = (my_request, myRequest, my_state, myState);
+}
+
 #[test]
 fn locals_are_valid_and_distinct_without_renaming_ipc_keys() {
     let builder = Builder::<MockRuntime>::new()
@@ -101,5 +118,48 @@ fn transforms_use_safe_locals_and_original_payload_keys() {
         );
         assert!(out.contains(r#"{ ...value, "1st":"#), "{out}");
         assert!(out.contains(r#"value["1st"]"#), "{out}");
+    }
+}
+
+#[test]
+fn rejects_duplicate_payload_keys() {
+    let builder = Builder::<MockRuntime>::new().commands(collect_commands![duplicate_payload_key]);
+    let dir = std::path::Path::new("target/tests/command-argument-names");
+
+    for (builder, stem) in [
+        (builder.clone(), "duplicate-payload"),
+        (builder.mocks(), "duplicate-payload-mocks"),
+    ] {
+        let results = [
+            builder.export(Typescript::default(), dir.join(format!("{stem}.ts"))),
+            builder.export(JSDoc::default(), dir.join(format!("{stem}.js"))),
+        ];
+        for result in results {
+            let error = result
+                .expect_err("duplicate wire keys must not generate bindings")
+                .to_string();
+            assert!(
+                error.contains("Command 'duplicate_payload_key' uses the IPC payload key 'myName' more than once"),
+                "{error}"
+            );
+        }
+    }
+}
+
+#[test]
+fn ignores_non_payload_arguments_when_checking_keys() {
+    let builder =
+        Builder::<MockRuntime>::new().commands(collect_commands![non_payload_key_collision]);
+    let dir = std::path::Path::new("target/tests/command-argument-names");
+    let ts = dir.join("non-payload.ts");
+    let js = dir.join("non-payload.js");
+    builder.export(Typescript::default(), &ts).unwrap();
+    builder.export(JSDoc::default(), &js).unwrap();
+    for path in [ts, js] {
+        let out = std::fs::read_to_string(path).unwrap();
+        assert!(
+            out.contains("{ myRequest: string; myState: string }"),
+            "{out}"
+        );
     }
 }

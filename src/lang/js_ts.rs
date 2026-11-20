@@ -238,10 +238,26 @@ fn runtime(
     if enabled_commands {
         let mut s = Struct::named();
         for command in &cfg.commands {
-            let raw_request = command
+            let named_args = command
                 .args
                 .iter()
-                .any(|arg| is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"));
+                .filter(|arg| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
+                .collect::<Vec<_>>();
+            let raw_request = named_args.len() != command.args.len();
+            // A payload object cannot carry two independent values under the same key.
+            // Check Tauri's normalized keys, not the generated parameter names.
+            let mut seen_keys = BTreeSet::new();
+            for arg in &named_args {
+                if !seen_keys.insert(arg.name.as_ref()) {
+                    return Err(Error::framework(
+                        format!(
+                            "Command '{}' uses the IPC payload key '{}' more than once. Rename one of the parameters or change `rename_all` so their keys are distinct.",
+                            command.name, arg.name
+                        ),
+                        "",
+                    ));
+                }
+            }
             if raw_request && cfg.mocks {
                 return Err(Error::framework(
                     command.name.as_ref().to_string(),
@@ -280,11 +296,6 @@ fn runtime(
                 semantic_types_runtime_types,
                 &mut used_names,
             )?;
-            let named_args = command
-                .args
-                .iter()
-                .filter(|arg| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
-                .collect::<Vec<_>>();
             let mixed_request = raw_request && !named_args.is_empty();
             if mixed_request {
                 let fields = arguments
