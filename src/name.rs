@@ -13,6 +13,17 @@ pub(crate) fn resolve_tauri_event_name<'a>(
 ) -> Cow<'a, str> {
     resolve_tauri_name(plugin_name, name, TauriNameType::Event)
 }
+
+/// Whether Tauri accepts `name` as an event name.
+///
+/// Tauri's event system only accepts alphanumeric characters, `-`, `/`, `:` and
+/// `_`. Anything else is rejected when the event is first used: `emit` returns
+/// an error and `listen`/`once` panic, both far from the configuration that
+/// produced the name.
+pub(crate) fn is_valid_tauri_event_name(name: &str) -> bool {
+    name.chars()
+        .all(|c| c.is_alphanumeric() || matches!(c, '-' | '/' | ':' | '_'))
+}
 enum TauriNameType {
     Event,
     Command,
@@ -61,5 +72,25 @@ mod tests {
             resolve_tauri_event_name(Some("my_plugin"), "my_event"),
             "plugin:my_plugin:my_event"
         );
+    }
+
+    #[test]
+    fn tauri_event_names() {
+        for name in [
+            "my-event",
+            "plugin:kitchen-sink:message-event",
+            "tauri://resize",
+            "events/one_two",
+            "café",
+        ] {
+            assert!(is_valid_tauri_event_name(name), "{name}");
+        }
+
+        for name in ["my event", "my.event", "r#type", "event?"] {
+            assert!(!is_valid_tauri_event_name(name), "{name}");
+        }
+
+        // Tauri's rule is a per-character check, so an empty name passes it.
+        assert!(is_valid_tauri_event_name(""));
     }
 }

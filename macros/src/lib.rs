@@ -32,6 +32,10 @@ pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     // Keep collector locals separate from unqualified command paths at the call site.
     let types = Ident::new("types", Span::mixed_site());
     let collected = Ident::new("collected", Span::mixed_site());
+    // Reused across every command so the per-argument datatypes do not need a fresh
+    // allocation each time.
+    let arg_types = Ident::new("arg_types", Span::mixed_site());
+    let count = commands.len();
     let mut handlers = Vec::new();
     let mut inferences = Vec::new();
 
@@ -54,6 +58,7 @@ pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStre
                 ::tauri::command_metadata!(#stripped),
                 #accessor,
                 #types,
+                &mut #arg_types,
             )
         };
         inferences.push(quote! {
@@ -66,7 +71,12 @@ pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             ::tauri::generate_handler![#(#handlers),*],
             |#[allow(unused_variables)] #types: &mut ::specta::Types| {
                 #[allow(unused_mut)]
-                let mut #collected = ::tauri_specta::CollectedCommands::default();
+                let mut #collected =
+                    ::tauri_specta::CollectedCommands::with_capacity(#count);
+                #[allow(unused_mut, unused_variables)]
+                let mut #arg_types: ::std::vec::Vec<
+                    ::core::option::Option<::specta::datatype::DataType>,
+                > = ::std::vec::Vec::new();
                 #(#inferences)*
                 #collected
             },
@@ -83,6 +93,14 @@ fn strip_path_generics(path: &Path) -> Path {
         segment.arguments = PathArguments::None;
     }
     path
+}
+
+/// The characters Tauri allows in an event name.
+///
+/// Tauri validates the name in `EventName::new` before emitting or listening, using
+/// `char::is_alphanumeric` plus `-`, `/`, `:` and `_`.
+fn is_valid_event_name_character(character: char) -> bool {
+    character.is_alphanumeric() || matches!(character, '-' | '/' | ':' | '_')
 }
 
 #[derive(Debug, FromDeriveInput)]
@@ -111,8 +129,24 @@ pub fn derive_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let name_str_value = match opts.event_name {
         Some(name_from_attr) => name_from_attr,
-        None => ident.to_string().to_kebab_case(),
+        None => ident.unraw().to_string().to_kebab_case(),
     };
+
+    // Tauri rejects an event name containing anything other than alphanumeric
+    // characters, `-`, `/`, `:` and `_` when the event is emitted or listened to, so a
+    // name that can never cross the IPC boundary should fail here instead of at runtime.
+    if let Some(character) = name_str_value
+        .chars()
+        .find(|character| !is_valid_event_name_character(*character))
+    {
+        let message = format!(
+            "event name {name_str_value:?} contains {character:?}, which Tauri does not allow in an event name. Use only alphanumeric characters, `-`, `/`, `:` and `_`."
+        );
+        return syn::Error::new(ident.span(), message)
+            .to_compile_error()
+            .into();
+    }
+
     let name_lit = LitStr::new(&name_str_value, ident.span());
 
     if !generics.params.is_empty() {
