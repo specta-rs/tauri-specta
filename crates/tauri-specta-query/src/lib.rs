@@ -360,7 +360,7 @@ impl<R: Runtime> CommandSet<R> {
                         .enumerate()
                         .map(|(idx, arg)| {
                             // Mutation inputs mirror the IPC payload, so use Tauri's key.
-                            let key = arg.name.as_ref();
+                            let key = render_property_name(&arg.name);
                             format!("{key}: Parameters<typeof {command}>[{idx}]")
                         })
                         .collect::<Vec<_>>();
@@ -378,7 +378,7 @@ impl<R: Runtime> CommandSet<R> {
                             args.join("; "),
                             arg_names
                                 .iter()
-                                .map(|arg| format!("input.{arg}"))
+                                .map(|arg| render_member_access("input", arg))
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         )
@@ -542,6 +542,11 @@ mod tests {
         let _ = (user_id, display_name);
     }
 
+    #[tauri::command]
+    fn set_rank(_1st: String) {
+        let _ = _1st;
+    }
+
     fn export(casing: Casing) -> String {
         let (query_bindings, builder) = CommandSet::<MockRuntime>::new(
             collect_commands![get_user],
@@ -587,6 +592,20 @@ mod tests {
         assert!(output.contains(r#"queryFn: () => commands["get-user"](...args)"#));
         assert!(output.contains(r#""rename-user": () => mutationOptions"#));
         assert!(output.contains(r#"commands["rename-user"](input.userId, input.displayName)"#));
+    }
+
+    #[test]
+    fn mutation_quotes_ipc_keys_that_are_not_identifiers() {
+        let (bindings, _) =
+            CommandSet::<MockRuntime>::new(collect_commands![], collect_commands![set_rank])
+                .build(TanstackQueryFramework::React);
+
+        assert!(
+            bindings.contains(
+                r#"(input: { "1st": Parameters<typeof commands.setRank>[0] }) => commands.setRank(input["1st"])"#
+            ),
+            "{bindings}"
+        );
     }
 
     #[test]
