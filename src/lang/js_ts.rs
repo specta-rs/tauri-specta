@@ -2121,6 +2121,10 @@ fn render_result_transform_for_phase(
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
 ) -> Option<String> {
+    // Only a semantic rule can produce a transform, and the phase selection below exists
+    // to feed that rule lookup -- so without semantic types there is nothing to render.
+    cfg.semantic_types.as_ref()?;
+
     // Keep named references so Specta can match registered semantic rules before
     // descending into the type's fields.
     let dt = specta_serde::select_phase_datatype(dt, semantic_types_runtime_types, phase);
