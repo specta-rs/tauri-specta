@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::BTreeSet, fmt, sync::Arc};
+use std::{borrow::Cow, collections::HashSet, fmt, sync::Arc};
 
 use std::future::Future;
 
@@ -106,7 +106,7 @@ impl<R: Runtime> Clone for Commands<R> {
 /// Collisions between *differently* named commands are a separate, export-time check,
 /// because the accessor they share depends on the final `function_casing`.
 pub(crate) fn duplicate_command_name(commands: &[Command]) -> Option<&str> {
-    let mut seen = BTreeSet::new();
+    let mut seen = HashSet::with_capacity(commands.len());
     for command in commands {
         if !seen.insert(command.name.as_ref()) {
             return Some(command.name.as_ref());
