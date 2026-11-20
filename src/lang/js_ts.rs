@@ -276,13 +276,7 @@ fn runtime(
                     "raw IPC request commands are not supported by generated mocks",
                 ));
             }
-            let command_name_escaped = serde_json::to_string(&resolve_tauri_command_name(
-                cfg.plugin_name,
-                command.name.as_ref(),
-            ))
-            .map_err(|err| {
-                Error::framework("failed to serialize a command name for bindings", err)
-            })?;
+            let command_name = resolve_tauri_command_name(cfg.plugin_name, command.name.as_ref());
 
             let result = command
                 .result
@@ -315,8 +309,8 @@ fn runtime(
                     .zip(&command.args)
                     .filter(|(_, arg)| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
                     // `value` is the IPC payload object, so its keys are Tauri's keys.
-                    .map(|((_, ty), arg)| Ok(format!("{}: {ty}", js_object_key(&arg.name)?)))
-                    .collect::<Result<Vec<_>, Error>>()?
+                    .map(|((_, ty), arg)| format!("{}: {ty}", js_object_key(&arg.name)))
+                    .collect::<Vec<_>>()
                     .join("; ");
                 arguments = vec![("value".into(), format!("{{ {fields} }}"))];
             } else if raw_request {
@@ -349,7 +343,7 @@ fn runtime(
                 let mut fields = Vec::new();
                 for arg in named_args {
                     // Read the original IPC key, not a generated parameter name.
-                    let input = js_member_access("value", &arg.name)?;
+                    let input = js_member_access("value", &arg.name);
                     if let Some(transform) = invoke_argument(
                         &input,
                         &arg.ty,
@@ -359,7 +353,7 @@ fn runtime(
                         jsdoc,
                     ) {
                         needs_channel_mapping |= is_channel_type(&arg.ty, exporter.types);
-                        fields.push(format!("{}: {transform}", js_object_key(&arg.name)?));
+                        fields.push(format!("{}: {transform}", js_object_key(&arg.name)));
                     }
                 }
                 let value = if fields.is_empty() {
@@ -397,7 +391,7 @@ fn runtime(
                                 None if key == param => param.clone(),
                                 value => format!(
                                     "{}: {}",
-                                    js_object_key(key)?,
+                                    js_object_key(key),
                                     value.as_deref().unwrap_or(param)
                                 ),
                             })
@@ -407,7 +401,15 @@ fn runtime(
                 )
             };
 
-            let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
+            let invoke_args = {
+                let mut invoke_args =
+                    String::with_capacity(command_name.len() + arguments_invoke_obj.len() + 4);
+                invoke_args.push('(');
+                write_js_string_literal(&mut invoke_args, &command_name);
+                invoke_args.push_str(&arguments_invoke_obj);
+                invoke_args.push(')');
+                invoke_args
+            };
 
             let body = if let Some((dt_ok, dt_err)) = typed_result {
                 let semantic_err_type = apply_semantic_type_for_phase(
@@ -712,10 +714,7 @@ fn runtime(
                     "",
                 ));
             }
-            let event_name_escaped =
-                serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name)).map_err(
-                    |err| Error::framework("failed to serialize an event name for bindings", err),
-                )?;
+            let event_name = resolve_tauri_event_name(cfg.plugin_name, name);
 
             let event_dt = DataType::Reference(r.clone());
             let listen_ty = render_reference_dt_for_phase(
@@ -743,7 +742,7 @@ fn runtime(
                 field_ts.push('>');
             }
             field_ts.push('(');
-            field_ts.push_str(&event_name_escaped);
+            write_js_string_literal(&mut field_ts, &event_name);
             let serialize_transform = render_result_transform_for_phase(
                 &event_dt,
                 Phase::Serialize,
@@ -1057,26 +1056,77 @@ const BUILTIN_EVENTS: &[BuiltinEvent] = &[
     },
 ];
 
+/// Append `value` to `out` as a JavaScript string literal.
+///
+/// The result is what `serde_json::to_string` produces for the same string: only `"`, `\`
+/// and control characters are escaped, and non-ASCII text is written verbatim. Command and
+/// event names are plain ASCII, so this is almost always a pair of quotes around the
+/// original bytes.
+fn write_js_string_literal(out: &mut String, value: &str) {
+    out.push('"');
+
+    // Every byte that needs escaping is ASCII, so slicing on its index stays on a char
+    // boundary.
+    let mut start = 0;
+    for (index, byte) in value.bytes().enumerate() {
+        let escaped = match byte {
+            0x08 => 'b',
+            b'\t' => 't',
+            b'\n' => 'n',
+            0x0c => 'f',
+            b'\r' => 'r',
+            b'"' => '"',
+            b'\\' => '\\',
+            byte if byte < 0x20 => {
+                out.push_str(&value[start..index]);
+                out.push('\\');
+                out.push('u');
+                out.push('0');
+                out.push('0');
+                out.push(char::from_digit(u32::from(byte >> 4), 16).unwrap_or('0'));
+                out.push(char::from_digit(u32::from(byte & 0xf), 16).unwrap_or('0'));
+                start = index + 1;
+                continue;
+            }
+            _ => continue,
+        };
+
+        out.push_str(&value[start..index]);
+        out.push('\\');
+        out.push(escaped);
+        start = index + 1;
+    }
+
+    out.push_str(&value[start..]);
+    out.push('"');
+}
+
 /// An accessor or IPC payload key as it should appear in an object literal or type.
 ///
 /// Accessors are usually plain identifiers, but [`Casing::KebabCase`](crate::Casing)
 /// produces keys like `hello-world`, which have to be quoted. This is the same rule
 /// `specta_typescript` applies to struct field names.
-fn js_object_key(accessor: &str) -> Result<String, Error> {
+fn js_object_key(accessor: &str) -> Cow<'_, str> {
     if is_js_identifier(accessor) {
-        Ok(accessor.to_string())
+        Cow::Borrowed(accessor)
     } else {
-        serde_json::to_string(accessor)
-            .map_err(|err| Error::framework("failed to serialize a JavaScript property key", err))
+        let mut key = String::with_capacity(accessor.len() + 2);
+        write_js_string_literal(&mut key, accessor);
+        Cow::Owned(key)
     }
 }
 
 /// A read of `object`'s [`js_object_key`] property named `accessor`.
-fn js_member_access(object: &str, accessor: &str) -> Result<String, Error> {
+fn js_member_access<'a>(object: &str, accessor: &'a str) -> Cow<'a, str> {
     if is_js_identifier(accessor) {
-        Ok(format!("{object}.{accessor}"))
+        Cow::Owned(format!("{object}.{accessor}"))
     } else {
-        Ok(format!("{object}[{}]", js_object_key(accessor)?))
+        let mut access = String::with_capacity(object.len() + accessor.len() + 4);
+        access.push_str(object);
+        access.push('[');
+        write_js_string_literal(&mut access, accessor);
+        access.push(']');
+        Cow::Owned(access)
     }
 }
 
@@ -1104,10 +1154,8 @@ fn mock_handlers_declaration(
     let mut handlers = Vec::new();
 
     for command in cfg.commands.iter() {
-        let key = js_object_key(
-            &cfg.function_casing
-                .apply(cfg.command_accessor_name(command)),
-        )?;
+        let accessor = cfg.function_casing.apply(cfg.command_accessor_name(command));
+        let key = js_object_key(&accessor);
         let (arguments, result) =
             mock_handler_signature(command, exporter, cfg, semantic_types_runtime_types)?;
         handlers.push(format!(
@@ -1277,8 +1325,8 @@ fn mock_handler_signature(
             "(args: {{ {} }})",
             arguments
                 .iter()
-                .map(|(name, dt)| Ok(format!("{}: {dt}", js_object_key(name)?)))
-                .collect::<Result<Vec<_>, Error>>()?
+                .map(|(name, dt)| format!("{}: {dt}", js_object_key(name)))
+                .collect::<Vec<_>>()
                 .join("; ")
         )
     };
@@ -1432,19 +1480,19 @@ fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String,
             .function_casing
             .apply(cfg.command_accessor_name(command))
             .into_owned();
-        let access = js_member_access("mockHandlers", &accessor)?;
+        let access = js_member_access("mockHandlers", &accessor);
         // The recorded name is the accessor, not the Tauri command name, so a test can
         // assert against the same name it uses for `commands`.
-        let accessor_literal = serde_json::to_string(&accessor)
-            .map_err(|err| Error::framework("failed to serialize a command accessor", err))?;
-        let command_name = serde_json::to_string(&resolve_tauri_command_name(
-            cfg.plugin_name,
-            command.name.as_ref(),
-        ))
-        .map_err(|err| Error::framework("failed to serialize a command name for bindings", err))?;
-        out.push_str(&format!(
-            "            case {command_name}: calls.push({{ command: {accessor_literal}, args }}); return mockCommandHandler({access}, {command_name}, args);\n"
-        ));
+        let command_name = resolve_tauri_command_name(cfg.plugin_name, command.name.as_ref());
+        out.push_str("            case ");
+        write_js_string_literal(&mut out, &command_name);
+        out.push_str(": calls.push({ command: ");
+        write_js_string_literal(&mut out, accessor);
+        out.push_str(", args }); return mockCommandHandler(");
+        out.push_str(&access);
+        out.push_str(", ");
+        write_js_string_literal(&mut out, &command_name);
+        out.push_str(", args);\n");
     }
 
     // Record before dispatching, so a call that fails is still part of the history. A
@@ -2539,6 +2587,7 @@ mod tests {
     };
     use specta_typescript::{JSDoc, Layout, Typescript, define, semantic};
 
+    use super::write_js_string_literal;
     use crate::{Builder, ErrorHandlingMode, collect_commands};
 
     #[tauri::command]
@@ -3186,5 +3235,41 @@ mod tests {
             .expect("failed to export TypeScript bindings");
         let ts = fs::read_to_string(&result_path).expect("failed to read TypeScript bindings");
         assert!(ts.contains("BigInt(v.error)"), "{ts}");
+    }
+
+    /// The bindings used to quote these strings with serde_json, so the hand-written
+    /// escaper has to agree with it for every string, not only the ASCII identifiers that
+    /// are almost always what gets quoted.
+    #[test]
+    fn javascript_string_literals_match_serde_json() {
+        let cases = [
+            "",
+            "greet",
+            "plugin:my-plugin|greet",
+            "hello-world",
+            "with space",
+            "quote\"inside",
+            "back\\slash",
+            "new\nline",
+            "tab\there",
+            "carriage\rreturn",
+            "backspace\u{8}here",
+            "form\u{c}feed",
+            "nul\0byte",
+            "control\u{1f}",
+            "delete\u{7f}",
+            "unicode: h\u{e9}llo \u{2713} \u{65e5}\u{672c}\u{8a9e}",
+            "emoji \u{1f389}\"quoted\"",
+        ];
+
+        for case in cases {
+            let mut out = String::new();
+            write_js_string_literal(&mut out, case);
+            assert_eq!(
+                out,
+                serde_json::to_string(case).expect("failed to serialize a test string"),
+                "escaping {case:?}"
+            );
+        }
     }
 }
