@@ -15,7 +15,7 @@
 //! ```sh
 //! cargo add tauri@2.0 specta@=2.0.0-rc.28 specta-typescript@0.0.15
 //! # `javascript` for JSDoc, `typescript` for Typescript
-//! cargo add tauri-specta@=2.0.0-rc.28 --features derive,typescript,javascript
+//! cargo add tauri-specta@=2.0.0-rc.29 --features derive,typescript,javascript
 //! ```
 //!
 //! <section class="warning">

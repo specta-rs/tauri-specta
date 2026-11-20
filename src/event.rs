@@ -11,7 +11,7 @@ use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
 use crate::name::resolve_tauri_event_name;
 
-/// A wrapper around the output of the `collect_commands` macro.
+/// A wrapper around the output of the `collect_events` macro.
 ///
 /// This acts to seal the implementation details of the macro.
 #[derive(Clone, Default)]
