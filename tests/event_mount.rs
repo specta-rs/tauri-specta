@@ -95,3 +95,57 @@ fn application_and_plugin_namespaces_also_conflict() {
     assert!(message.contains("'shared'"), "{message}");
     assert!(message.contains("plugin:sample:shared"), "{message}");
 }
+
+#[derive(Clone, Serialize, Type, Event)]
+#[tauri_specta(event_name = "name-collision")]
+struct NameCollision(u32);
+
+#[derive(Clone, Serialize, Type, Event)]
+#[tauri_specta(event_name = "name-collision")]
+struct NameCollisionOther(String);
+
+#[test]
+fn rejects_two_event_types_that_share_a_tauri_name() {
+    let app = tauri::test::mock_app();
+    let first = Builder::new().events(collect_events![NameCollision]);
+    let second = Builder::new().events(collect_events![NameCollisionOther]);
+    let delivered = count_deliveries(&app, "name-collision");
+
+    first.mount_events(&app);
+    NameCollision(1).emit(&app).unwrap();
+
+    // Both types resolve to the same Tauri event name in the same namespace, so a
+    // listener typed for one would receive the other's payload.
+    let conflict = catch_unwind(AssertUnwindSafe(|| second.mount_events(&app)))
+        .expect_err("two event types must not share one Tauri event name");
+    let message = panic_message(conflict.as_ref());
+    assert!(message.contains("'name-collision'"), "{message}");
+
+    // The rejected batch must not mount any of its types, and the first type still works.
+    let missing = catch_unwind(AssertUnwindSafe(|| {
+        NameCollisionOther(String::new()).emit(&app)
+    }))
+    .expect_err("the rejected batch must not mount its event types");
+    assert!(panic_message(missing.as_ref()).contains("Event name-collision not found in registry"));
+    NameCollision(2).emit(&app).unwrap();
+    assert_eq!(delivered.load(Ordering::Relaxed), 2);
+}
+
+#[test]
+fn the_same_name_may_be_used_in_a_different_namespace() {
+    let app = tauri::test::mock_app();
+    Builder::new()
+        .events(collect_events![NameCollision])
+        .mount_events(&app);
+
+    // A distinct event type with the same name is fine under a plugin namespace: the
+    // resolved Tauri names differ, so neither type can deliver to the other's listeners.
+    let plugin = Builder::new()
+        .plugin_name("sample")
+        .events(collect_events![NameCollisionOther]);
+    plugin.mount_events(&app);
+
+    let delivered = count_deliveries(&app, "plugin:sample:name-collision");
+    NameCollisionOther(String::new()).emit(&app).unwrap();
+    assert_eq!(delivered.load(Ordering::Relaxed), 1);
+}

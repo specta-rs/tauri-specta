@@ -33,6 +33,11 @@ impl Events {
 #[derive(Default)]
 pub(crate) struct EventRegistryMeta {
     pub plugin_name: Option<&'static str>,
+    /// The event's own name, before the plugin namespace is added.
+    ///
+    /// Mounting needs it to prove that no two event types resolve to the same Tauri
+    /// event name.
+    pub name: &'static str,
 }
 
 /// A struct for managing events that is put into Tauri's state.

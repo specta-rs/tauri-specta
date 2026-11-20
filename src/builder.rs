@@ -518,6 +518,11 @@ impl<R: Runtime> Builder<R> {
     /// Use a distinct Rust event type for each plugin or application namespace.
     /// Mounting the same event type again in the same namespace is allowed.
     ///
+    /// Panics if a different event type already mounted on this app resolves to the same
+    /// Tauri event name. Both types would emit under that name, so listeners typed for one
+    /// would receive the other's payload. Give one of the types a different
+    /// `#[tauri_specta(event_name = "...")]`.
+    ///
     /// # Example
     ///
     /// ```rust,no_run
@@ -553,8 +558,27 @@ impl<R: Runtime> Builder<R> {
             );
         }
 
-        for (tid, _) in self.cfg.events.values() {
-            map.insert(*tid, EventRegistryMeta { plugin_name });
+        // The registry is keyed by Rust type, so two types with the same name are distinct
+        // entries. They still resolve to one Tauri event name, which would deliver either
+        // type's payload to listeners typed for the other.
+        if let Some(name) = self.cfg.events.iter().find_map(|(&name, (tid, _))| {
+            let resolved = resolve_tauri_event_name(plugin_name, name);
+            map.iter()
+                .any(|(mounted, meta)| {
+                    mounted != tid
+                        && resolve_tauri_event_name(meta.plugin_name, meta.name) == resolved
+                })
+                .then_some(resolved)
+        }) {
+            // Match the namespace rejection: nothing from the batch is mounted.
+            drop(map);
+            panic!(
+                "Event '{name}' is already mounted by a different Rust event type. Both types would emit and listen on the same Tauri event name, so give one of them a different name."
+            );
+        }
+
+        for (&name, (tid, _)) in &self.cfg.events {
+            map.insert(*tid, EventRegistryMeta { plugin_name, name });
         }
     }
 
