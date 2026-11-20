@@ -6,6 +6,8 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 export const events = {
 	/** @type {ReturnType<typeof makeEvent<EmptyEvent>>} */
 	emptyEvent: makeEvent("empty-event"),
+	/** @type {ReturnType<typeof makeEvent<PhaseSpecificRename_Serialize, PhaseSpecificRename_Deserialize>>} */
+	phaseSpecificRename: makeEvent("phase-specific-rename"),
 	/** @type {ReturnType<typeof makeEvent<StructEvent>>} */
 	structEvent: makeEvent("struct-event"),
 };
@@ -98,6 +100,20 @@ export const tauriEvents = {
 /**
 	* @typedef {null} EmptyEvent
 	*
+	* @typedef {PhaseSpecificRename_Serialize | PhaseSpecificRename_Deserialize} PhaseSpecificRename
+	* @property {PhaseSpecificRename_Serialize} Serialize
+	* @property {PhaseSpecificRename_Deserialize} Deserialize
+	*
+	* @typedef {{
+	*		deserialized_value: string,
+	*	}} PhaseSpecificRename_Deserialize
+	* @property {string} deserialized_value
+	*
+	* @typedef {{
+	*		serialized_value: string,
+	*	}} PhaseSpecificRename_Serialize
+	* @property {string} serialized_value
+	*
 	* @typedef {{
 	*		eventId: number,
 	*		payload: string,
@@ -108,45 +124,46 @@ export const tauriEvents = {
 
 /* Tauri Specta runtime */
 /**
- * @template T
+ * @template TListen
+ * @template [TEmit=TListen]
  * @param {string} name
- * @param {(payload: T) => unknown} [serialize]
- * @param {(payload: any) => T} [deserialize]
+ * @param {(payload: TEmit) => unknown} [serialize]
+ * @param {(payload: any) => TListen} [deserialize]
  */
 function makeEvent(name, serialize, deserialize) {
     /**
-     * @param {__TAURI_EVENT.EventCallback<T>} cb
+     * @param {__TAURI_EVENT.EventCallback<TListen>} cb
      * @returns {(event: __TAURI_EVENT.Event<any>) => void}
      */
     const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
-    /** @param {T} payload */
+    /** @param {TEmit} payload */
     const mapPayload = (payload) => serialize ? serialize(payload) : payload;
 
     const base = {
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
         listen: (cb) => __TAURI_EVENT.listen(name, mapEvent(cb)),
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
         once: (cb) => __TAURI_EVENT.once(name, mapEvent(cb)),
-        /** @param {T} payload */
+        /** @param {TEmit} payload */
         emit: (payload) => __TAURI_EVENT.emit(name, mapPayload(payload)),
         /**
          * @param {__TAURI_EVENT.EventTarget | string} to
-         * @param {T} payload
+         * @param {TEmit} payload
          */
         emitTo: (to, payload) => __TAURI_EVENT.emitTo(to, name, mapPayload(payload)),
     };
 
     /** @param {import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window} target */
     const fn = (target) => ({
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
         listen: (cb) => target.listen(name, mapEvent(cb)),
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
         once: (cb) => target.once(name, mapEvent(cb)),
-        /** @param {T} payload */
+        /** @param {TEmit} payload */
         emit: (payload) => target.emit(name, mapPayload(payload)),
         /**
          * @param {__TAURI_EVENT.EventTarget | string} to
-         * @param {T} payload
+         * @param {TEmit} payload
          */
         emitTo: (to, payload) => target.emitTo(to, name, mapPayload(payload)),
     });

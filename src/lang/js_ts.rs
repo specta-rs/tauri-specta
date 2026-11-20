@@ -238,10 +238,26 @@ fn runtime(
     if enabled_commands {
         let mut s = Struct::named();
         for command in &cfg.commands {
-            let raw_request = command
+            let named_args = command
                 .args
                 .iter()
-                .any(|arg| is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"));
+                .filter(|arg| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
+                .collect::<Vec<_>>();
+            let raw_request = named_args.len() != command.args.len();
+            // A payload object cannot carry two independent values under the same key.
+            // Check Tauri's normalized keys, not the generated parameter names.
+            let mut seen_keys = BTreeSet::new();
+            for arg in &named_args {
+                if !seen_keys.insert(arg.name.as_ref()) {
+                    return Err(Error::framework(
+                        format!(
+                            "Command '{}' uses the IPC payload key '{}' more than once. Rename one of the parameters or change `rename_all` so their keys are distinct.",
+                            command.name, arg.name
+                        ),
+                        "",
+                    ));
+                }
+            }
             if raw_request && cfg.mocks {
                 return Err(Error::framework(
                     command.name.as_ref().to_string(),
@@ -256,13 +272,30 @@ fn runtime(
                 Error::framework("failed to serialize a command name for bindings", err)
             })?;
 
-            let mut arguments =
-                command_argument_types(command, &exporter, cfg, semantic_types_runtime_types)?;
-            let named_args = command
-                .args
-                .iter()
-                .filter(|arg| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
-                .collect::<Vec<_>>();
+            let result = command
+                .result
+                .as_ref()
+                .and_then(|dt| extract_std_result(dt, exporter.types));
+            let typed_result = result.filter(|_| cfg.error_handling != ErrorHandlingMode::Throw);
+            let mut used_names = BTreeSet::from(["__TAURI_INVOKE".to_string()]);
+            if typed_result.is_some() {
+                used_names.insert("typedError".into());
+            }
+            if cfg.semantic_types.is_some()
+                && command
+                    .args
+                    .iter()
+                    .any(|arg| is_channel_type(&arg.ty, exporter.types))
+            {
+                used_names.insert("mapChannel".into());
+            }
+            let mut arguments = command_arguments(
+                command,
+                &exporter,
+                cfg,
+                semantic_types_runtime_types,
+                &mut used_names,
+            )?;
             let mixed_request = raw_request && !named_args.is_empty();
             if mixed_request {
                 let fields = arguments
@@ -270,8 +303,8 @@ fn runtime(
                     .zip(&command.args)
                     .filter(|(_, arg)| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
                     // `value` is the IPC payload object, so its keys are Tauri's keys.
-                    .map(|((_, ty), arg)| format!("{}: {ty}", arg.name))
-                    .collect::<Vec<_>>()
+                    .map(|((_, ty), arg)| Ok(format!("{}: {ty}", js_object_key(&arg.name)?)))
+                    .collect::<Result<Vec<_>, Error>>()?
                     .join("; ");
                 arguments = vec![("value".into(), format!("{{ {fields} }}"))];
             } else if raw_request {
@@ -301,27 +334,22 @@ fn runtime(
                 .join(", ");
 
             let arguments_invoke_obj = if mixed_request {
-                let fields = named_args
-                    .iter()
-                    .filter_map(|arg| {
-                        // `value` is the IPC payload object, so its keys are the keys
-                        // Tauri reads, not the camelCased TypeScript parameter names.
-                        let key = arg.name.as_ref();
-                        let input = format!("value.{key}");
-                        invoke_argument(
-                            &input,
-                            &arg.ty,
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                            jsdoc,
-                        )
-                        .map(|transform| {
-                            needs_channel_mapping |= is_channel_type(&arg.ty, exporter.types);
-                            format!("{key}: {transform}")
-                        })
-                    })
-                    .collect::<Vec<_>>();
+                let mut fields = Vec::new();
+                for arg in named_args {
+                    // Read the original IPC key, not a generated parameter name.
+                    let input = js_member_access("value", &arg.name)?;
+                    if let Some(transform) = invoke_argument(
+                        &input,
+                        &arg.ty,
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                        jsdoc,
+                    ) {
+                        needs_channel_mapping |= is_channel_type(&arg.ty, exporter.types);
+                        fields.push(format!("{}: {transform}", js_object_key(&arg.name)?));
+                    }
+                }
                 let value = if fields.is_empty() {
                     "value".to_string()
                 } else {
@@ -339,11 +367,11 @@ fn runtime(
                     command
                         .args
                         .iter()
-                        .map(|arg| {
-                            let param = arg.name.to_lower_camel_case();
+                        .zip(&arguments)
+                        .map(|(arg, (param, _))| {
                             let key = arg.name.as_ref();
                             let value = invoke_argument(
-                                &param,
+                                param,
                                 &arg.ty,
                                 &exporter,
                                 cfg,
@@ -353,23 +381,23 @@ fn runtime(
                             needs_channel_mapping |=
                                 value.is_some() && is_channel_type(&arg.ty, exporter.types);
 
-                            match (value, key == param) {
-                                (None, true) => param,
-                                (None, false) => format!("{key}: {param}"),
-                                (Some(value), _) => format!("{key}: {value}"),
-                            }
+                            Ok(match value {
+                                None if key == param => param.clone(),
+                                value => format!(
+                                    "{}: {}",
+                                    js_object_key(key)?,
+                                    value.as_deref().unwrap_or(param)
+                                ),
+                            })
                         })
-                        .collect::<Vec<_>>()
+                        .collect::<Result<Vec<_>, Error>>()?
                         .join(", ")
                 )
             };
 
             let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
 
-            let body = if cfg.error_handling != ErrorHandlingMode::Throw
-                && let Some(result) = command.result.as_ref()
-                && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
-            {
+            let body = if let Some((dt_ok, dt_err)) = typed_result {
                 let semantic_err_type = apply_semantic_type_for_phase(
                     dt_err,
                     Phase::Deserialize,
@@ -415,29 +443,29 @@ fn runtime(
                     semantic_types_runtime_types,
                 )
                 .map(|transform| jsdoc_transform(transform, "v.data", jsdoc));
-                // `ResultUnknown` declares the error as `unknown`, so the transform must
-                // accept whatever the rejection was. Widen the input so a transform written
-                // against the command's error type still type-checks; the runtime value is
-                // unchanged.
-                let err_input = if cfg.error_handling == ErrorHandlingMode::ResultUnknown {
-                    "(v.error as any)"
-                } else {
-                    "v.error"
+                // An invoke rejection can also be a framework error. In ResultUnknown
+                // pass it through as-is rather than assuming the command's error type.
+                let err_transform = match cfg.error_handling {
+                    ErrorHandlingMode::ResultUnknown => None,
+                    _ => render_result_transform_for_phase(
+                        dt_err,
+                        Phase::Deserialize,
+                        "v.error",
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    )
+                    .map(|transform| jsdoc_transform(transform, "v.error", jsdoc)),
                 };
-                let err_transform = render_result_transform_for_phase(
-                    dt_err,
-                    Phase::Deserialize,
-                    err_input,
-                    &exporter,
-                    cfg,
-                    semantic_types_runtime_types,
-                )
-                .map(|transform| jsdoc_transform(transform, err_input, jsdoc));
 
                 let mut invoke_ts = "typedError".to_string();
-                if !jsdoc {
-                    invoke_ts.push('<');
-                    invoke_ts.push_str(&render_reference_dt_for_phase(
+                // DataError uses null in both arms, which can leak into both
+                // type arguments through contextual inference in JavaScript.
+                let specialize_jsdoc = jsdoc
+                    && cfg.error_handling == ErrorHandlingMode::DataError
+                    && cfg.typed_error_impl.is_empty();
+                if !jsdoc || specialize_jsdoc {
+                    let ok = render_reference_dt_for_phase(
                         dt_ok,
                         if ok_semantic_type {
                             Phase::Deserialize
@@ -448,9 +476,8 @@ fn runtime(
                         &exporter,
                         cfg,
                         semantic_types_runtime_types,
-                    )?);
-                    invoke_ts.push_str(", ");
-                    invoke_ts.push_str(&render_reference_dt_for_phase(
+                    )?;
+                    let err = render_reference_dt_for_phase(
                         dt_err,
                         if err_semantic_type {
                             Phase::Deserialize
@@ -461,8 +488,12 @@ fn runtime(
                         &exporter,
                         cfg,
                         semantic_types_runtime_types,
-                    )?);
-                    invoke_ts.push('>');
+                    )?;
+                    invoke_ts = if specialize_jsdoc {
+                        format!("/** @type {{typeof typedError<{ok}, {err}>}} */ (typedError)")
+                    } else {
+                        format!("typedError<{ok}, {err}>")
+                    };
                 }
                 invoke_ts.push_str("(__TAURI_INVOKE");
                 invoke_ts.push_str(&invoke_args);
@@ -481,11 +512,7 @@ fn runtime(
                 }
             } else {
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
-                let output_dt = command
-                    .result
-                    .as_ref()
-                    .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
-                    .or(command.result.as_ref());
+                let output_dt = result.map(|(ok, _)| ok).or(command.result.as_ref());
 
                 if !jsdoc {
                     let output_semantic_type = output_dt.is_some_and(|dt| {
@@ -499,11 +526,9 @@ fn runtime(
                         )
                     });
                     invoke_ts.push('<');
-                    invoke_ts.push_str(&match command.result.as_ref() {
+                    invoke_ts.push_str(&match output_dt {
                         Some(dt) => Cow::Owned(render_reference_dt_for_phase(
-                            extract_std_result(dt, exporter.types)
-                                .map(|(ok, _)| ok)
-                                .unwrap_or(dt),
+                            dt,
                             if output_semantic_type {
                                 Phase::Deserialize
                             } else {
@@ -569,10 +594,7 @@ fn runtime(
                         docs.push('\n');
                     }
 
-                    let returns = if cfg.error_handling != ErrorHandlingMode::Throw
-                        && let Some(result) = command.result.as_ref()
-                        && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
-                    {
+                    let returns = if let Some((dt_ok, dt_err)) = typed_result {
                         let ok_semantic_type = has_semantic_type_for_phase(
                             dt_ok,
                             Phase::Deserialize,
@@ -616,11 +638,7 @@ fn runtime(
 
                         result_type(cfg.error_handling, &ok, &err)
                     } else {
-                        let output_dt = command
-                            .result
-                            .as_ref()
-                            .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
-                            .or(command.result.as_ref());
+                        let output_dt = result.map(|(ok, _)| ok).or(command.result.as_ref());
                         let output_semantic_type = output_dt.is_some_and(|dt| {
                             has_semantic_type_for_phase(
                                 dt,
@@ -671,33 +689,45 @@ fn runtime(
     // Events
     if has_user_events {
         let mut s = Struct::named();
+        let mut accessors = BTreeMap::new();
         for (name, (_, r)) in &cfg.events {
+            let accessor = cfg.function_casing.apply(name);
+            if let Some(first) = accessors.insert(accessor.clone(), name) {
+                return Err(Error::framework(
+                    format!(
+                        "Events '{first}' and '{name}' would both export as '{accessor}'. Rename one of them so the generated bindings don't conflict."
+                    ),
+                    "",
+                ));
+            }
             let event_name_escaped =
                 serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name)).map_err(
                     |err| Error::framework("failed to serialize an event name for bindings", err),
                 )?;
 
             let event_dt = DataType::Reference(r.clone());
+            let listen_ty = render_reference_dt_for_phase(
+                &event_dt,
+                Phase::Serialize,
+                Phase::Deserialize,
+                &exporter,
+                cfg,
+                semantic_types_runtime_types,
+            )?;
+            let emit_ty = render_reference_dt_for_phase(
+                &event_dt,
+                Phase::Deserialize,
+                Phase::Serialize,
+                &exporter,
+                cfg,
+                semantic_types_runtime_types,
+            )?;
             let mut field_ts = "makeEvent".to_string();
             if !jsdoc {
                 field_ts.push('<');
-                field_ts.push_str(&render_reference_dt_for_phase(
-                    &event_dt,
-                    Phase::Serialize,
-                    Phase::Deserialize,
-                    &exporter,
-                    cfg,
-                    semantic_types_runtime_types,
-                )?);
+                field_ts.push_str(&listen_ty);
                 field_ts.push_str(", ");
-                field_ts.push_str(&render_reference_dt_for_phase(
-                    &event_dt,
-                    Phase::Deserialize,
-                    Phase::Serialize,
-                    &exporter,
-                    cfg,
-                    semantic_types_runtime_types,
-                )?);
+                field_ts.push_str(&emit_ty);
                 field_ts.push('>');
             }
             field_ts.push('(');
@@ -739,20 +769,14 @@ fn runtime(
 
             let mut field = Field::new(define(field_ts).into());
             if jsdoc {
-                field.docs = format!(
-                    "@type {{ReturnType<typeof makeEvent<{}>>}}",
-                    render_reference_dt_for_phase(
-                        &DataType::Reference(r.clone()),
-                        Phase::Deserialize,
-                        Phase::Deserialize,
-                        &exporter,
-                        cfg,
-                        semantic_types_runtime_types,
-                    )?
-                )
-                .into();
+                let type_args = if listen_ty == emit_ty {
+                    listen_ty
+                } else {
+                    format!("{listen_ty}, {emit_ty}")
+                };
+                field.docs = format!("@type {{ReturnType<typeof makeEvent<{type_args}>>}}").into();
             }
-            s = s.field(cfg.function_casing.apply(name).into_owned(), field);
+            s = s.field(accessor.into_owned(), field);
         }
 
         out.push_str("\n/** Events */");
@@ -1021,7 +1045,7 @@ const BUILTIN_EVENTS: &[BuiltinEvent] = &[
     },
 ];
 
-/// A command accessor as it should appear as an object key.
+/// An accessor or IPC payload key as it should appear in an object literal or type.
 ///
 /// Accessors are usually plain identifiers, but [`Casing::KebabCase`](crate::Casing)
 /// produces keys like `hello-world`, which have to be quoted. This is the same rule
@@ -1031,7 +1055,7 @@ fn js_object_key(accessor: &str) -> Result<String, Error> {
         Ok(accessor.to_string())
     } else {
         serde_json::to_string(accessor)
-            .map_err(|err| Error::framework("failed to serialize a command accessor", err))
+            .map_err(|err| Error::framework("failed to serialize a JavaScript property key", err))
     }
 }
 
@@ -1040,11 +1064,7 @@ fn js_member_access(object: &str, accessor: &str) -> Result<String, Error> {
     if is_js_identifier(accessor) {
         Ok(format!("{object}.{accessor}"))
     } else {
-        Ok(format!(
-            "{object}[{}]",
-            serde_json::to_string(accessor)
-                .map_err(|err| Error::framework("failed to serialize a command accessor", err))?
-        ))
+        Ok(format!("{object}[{}]", js_object_key(accessor)?))
     }
 }
 
@@ -1108,23 +1128,21 @@ fn mock_handlers_declaration(
     Ok(out)
 }
 
-/// The frontend-facing name and type of each of a command's arguments.
-///
-/// This is what the generated `commands` accessor declares and what its IPC payload uses,
-/// so anything else describing the same command — mock handlers, for instance — is
-/// written in exactly these terms.
-fn command_argument_types(
+/// The generated parameter name and type for each argument, in declaration order.
+/// Payload keys are kept separately in `CommandArg::name`.
+fn command_arguments(
     command: &crate::Command,
     exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
+    used_names: &mut BTreeSet<String>,
 ) -> Result<Vec<(String, String)>, Error> {
     command
         .args
         .iter()
         .map(|arg| {
             Ok((
-                arg.name.to_lower_camel_case(),
+                command_parameter_name(&arg.name, used_names),
                 render_reference_dt_for_phase(
                     &arg.ty,
                     Phase::Deserialize,
@@ -1136,6 +1154,76 @@ fn command_argument_types(
             ))
         })
         .collect()
+}
+
+fn command_parameter_name(key: &str, used_names: &mut BTreeSet<String>) -> String {
+    let mut name = key.to_lower_camel_case();
+    if !is_js_identifier(&name) {
+        name.insert(0, '_');
+        if !is_js_identifier(&name) {
+            // Be conservative for non-ASCII names; the original key remains in the payload.
+            name = "_arg".into();
+        }
+    }
+    while is_reserved_parameter_name(&name) || !used_names.insert(name.clone()) {
+        name.insert(0, '_');
+    }
+    name
+}
+
+fn is_reserved_parameter_name(name: &str) -> bool {
+    // The generated bindings are modules: strict-mode restrictions apply to parameters.
+    matches!(
+        name,
+        "arguments"
+            | "await"
+            | "break"
+            | "case"
+            | "catch"
+            | "class"
+            | "const"
+            | "continue"
+            | "debugger"
+            | "default"
+            | "delete"
+            | "do"
+            | "else"
+            | "enum"
+            | "eval"
+            | "export"
+            | "extends"
+            | "false"
+            | "finally"
+            | "for"
+            | "function"
+            | "if"
+            | "implements"
+            | "import"
+            | "in"
+            | "instanceof"
+            | "interface"
+            | "let"
+            | "new"
+            | "null"
+            | "package"
+            | "private"
+            | "protected"
+            | "public"
+            | "return"
+            | "static"
+            | "super"
+            | "switch"
+            | "this"
+            | "throw"
+            | "true"
+            | "try"
+            | "typeof"
+            | "var"
+            | "void"
+            | "while"
+            | "with"
+            | "yield"
+    )
 }
 
 /// The `(arguments, result)` signature of one command's mock handler.
@@ -1177,8 +1265,8 @@ fn mock_handler_signature(
             "(args: {{ {} }})",
             arguments
                 .iter()
-                .map(|(name, dt)| format!("{name}: {dt}"))
-                .collect::<Vec<_>>()
+                .map(|(name, dt)| Ok(format!("{}: {dt}", js_object_key(name)?)))
+                .collect::<Result<Vec<_>, Error>>()?
                 .join("; ")
         )
     };
@@ -1276,10 +1364,12 @@ fn validate_mock_transforms(
 
         reject(ok, Phase::Deserialize, "the result")?;
 
-        // A `Throw` mode failure is passed through as-is, so only a mode that wraps the
-        // error goes through a transform.
+        // Only modes that assume the rejection has the declared error type transform it.
         if let Some(err) = err
-            && cfg.error_handling != ErrorHandlingMode::Throw
+            && matches!(
+                cfg.error_handling,
+                ErrorHandlingMode::Result | ErrorHandlingMode::DataError
+            )
         {
             reject(err, Phase::Deserialize, "the error")?;
         }
@@ -1911,15 +2001,9 @@ fn render_result_transform_for_phase(
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
 ) -> Option<String> {
+    // Keep named references so Specta can match registered semantic rules before
+    // descending into the type's fields.
     let dt = specta_serde::select_phase_datatype(dt, semantic_types_runtime_types, phase);
-    let dt = if let DataType::Reference(Reference::Named(r)) = &dt
-        && let Some(ndt) = semantic_types_runtime_types.get(r)
-        && let Some(dt) = &ndt.ty
-    {
-        dt.clone()
-    } else {
-        dt
-    };
     apply_semantic_type_for_phase(&dt, phase, input, semantic_types_runtime_types, cfg)
         .map(|(_, mapped)| mapped)
         .filter(|mapped| mapped != input)
@@ -2142,7 +2226,7 @@ async function typedError(result) {
         return { status: "ok", data: await result };
     } catch (e) {
         if (e instanceof Error) throw e;
-        return { status: "error", error: e };
+        return { status: "error", error: /** @type {E} */ (e) };
     }
 }"#;
 
@@ -2171,7 +2255,7 @@ async function typedError(result) {
         return { data: await result, error: null };
     } catch (e) {
         if (e instanceof Error) throw e;
-        return { data: null, error: e };
+        return { data: null, error: /** @type {E} */ (e) };
     }
 }"#;
 
@@ -2384,45 +2468,46 @@ function makeEvent<TListen, TEmit = TListen>(name: string, serialize?: (payload:
 }"#;
 
 const MAKE_EVENT_IMPL_JS: &str = r#"/**
- * @template T
+ * @template TListen
+ * @template [TEmit=TListen]
  * @param {string} name
- * @param {(payload: T) => unknown} [serialize]
- * @param {(payload: any) => T} [deserialize]
+ * @param {(payload: TEmit) => unknown} [serialize]
+ * @param {(payload: any) => TListen} [deserialize]
  */
 function makeEvent(name, serialize, deserialize) {
     /**
-     * @param {__TAURI_EVENT.EventCallback<T>} cb
+     * @param {__TAURI_EVENT.EventCallback<TListen>} cb
      * @returns {(event: __TAURI_EVENT.Event<any>) => void}
      */
     const mapEvent = (cb) => (event) => cb({ ...event, payload: deserialize ? deserialize(event.payload) : event.payload });
-    /** @param {T} payload */
+    /** @param {TEmit} payload */
     const mapPayload = (payload) => serialize ? serialize(payload) : payload;
 
     const base = {
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
         listen: (cb) => __TAURI_EVENT.listen(name, mapEvent(cb)),
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
         once: (cb) => __TAURI_EVENT.once(name, mapEvent(cb)),
-        /** @param {T} payload */
+        /** @param {TEmit} payload */
         emit: (payload) => __TAURI_EVENT.emit(name, mapPayload(payload)),
         /**
          * @param {__TAURI_EVENT.EventTarget | string} to
-         * @param {T} payload
+         * @param {TEmit} payload
          */
         emitTo: (to, payload) => __TAURI_EVENT.emitTo(to, name, mapPayload(payload)),
     };
 
     /** @param {import("@tauri-apps/api/webview").Webview | import("@tauri-apps/api/window").Window} target */
     const fn = (target) => ({
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
         listen: (cb) => target.listen(name, mapEvent(cb)),
-        /** @param {__TAURI_EVENT.EventCallback<T>} cb */
+        /** @param {__TAURI_EVENT.EventCallback<TListen>} cb */
         once: (cb) => target.once(name, mapEvent(cb)),
-        /** @param {T} payload */
+        /** @param {TEmit} payload */
         emit: (payload) => target.emit(name, mapPayload(payload)),
         /**
          * @param {__TAURI_EVENT.EventTarget | string} to
-         * @param {T} payload
+         * @param {TEmit} payload
          */
         emitTo: (to, payload) => target.emitTo(to, name, mapPayload(payload)),
     });
@@ -2709,6 +2794,7 @@ mod tests {
 
         let js_path = output_dir.join("bindings.js");
         builder
+            .clone()
             .export(JSDoc::default(), &js_path)
             .expect("failed to export JSDoc bindings");
         let js = fs::read_to_string(js_path).expect("failed to read JSDoc bindings");
@@ -2718,6 +2804,19 @@ mod tests {
         assert!(
             js.contains("@returns {Promise<{ data: T; error: null } | { data: null; error: E }>}")
         );
+
+        // A user-supplied JavaScript helper need not declare generic type parameters.
+        let custom = r#"async function typedError(result) {
+    return result.then((data) => ({ data, error: null }), (error) => ({ data: null, error }));
+}"#;
+        let custom_js_path = output_dir.join("custom.js");
+        builder
+            .typed_error_impl(custom)
+            .export(JSDoc::default(), &custom_js_path)
+            .expect("failed to export JSDoc with custom typedError");
+        let custom_js = fs::read_to_string(custom_js_path).expect("failed to read custom bindings");
+        assert!(custom_js.contains(custom));
+        assert!(custom_js.contains("=> typedError(__TAURI_INVOKE("));
 
         fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
     }
@@ -3044,10 +3143,7 @@ mod tests {
     }
 
     #[test]
-    fn result_unknown_mode_widens_error_transform_input() {
-        // The error is typed `unknown`, so a transform written against the command's
-        // error type (`BigInt(v.error)`) would not type-check. The generated mapper
-        // widens the input; the runtime value is unchanged.
+    fn semantic_error_transforms_only_apply_to_typed_errors() {
         let semantic_types =
             specta_typescript::semantic::Configuration::empty().enable_lossless_bigints();
 
@@ -3059,15 +3155,13 @@ mod tests {
             .commands(collect_commands![bigint_error])
             .semantic_types(semantic_types.clone())
             .error_handling(ErrorHandlingMode::ResultUnknown)
+            .mocks()
             .export(Typescript::default(), &unknown_path)
-            .expect("failed to export TypeScript bindings");
+            .expect("mocks are allowed because ResultUnknown leaves errors untouched");
         let ts = fs::read_to_string(&unknown_path).expect("failed to read TypeScript bindings");
-        assert!(
-            ts.contains("BigInt((v.error as any))"),
-            "the error transform should be widened to accept `unknown`:\n{ts}"
-        );
+        assert!(!ts.contains("BigInt("), "{ts}");
 
-        // `Result` types the error as the command's own type, so the transform stays narrow.
+        // `Result` still assumes the error has the declared type and transforms it.
         let result_path = std::env::temp_dir().join(format!(
             "tauri-specta-result-semantic-error-test-{}.ts",
             std::process::id()
@@ -3079,9 +3173,6 @@ mod tests {
             .export(Typescript::default(), &result_path)
             .expect("failed to export TypeScript bindings");
         let ts = fs::read_to_string(&result_path).expect("failed to read TypeScript bindings");
-        assert!(
-            ts.contains("BigInt(v.error)") && !ts.contains("(v.error as any)"),
-            "`Result` should keep the narrow error transform:\n{ts}"
-        );
+        assert!(ts.contains("BigInt(v.error)"), "{ts}");
     }
 }

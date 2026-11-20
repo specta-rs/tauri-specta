@@ -67,7 +67,7 @@ enum UntaggedEnum {
     Text(String),
 }
 
-#[derive(Serialize, Deserialize, Type)]
+#[derive(Serialize, Deserialize, Type, Event)]
 struct PhaseSpecificRename {
     #[serde(rename(serialize = "serialized_value", deserialize = "deserialized_value"))]
     value: String,
@@ -172,6 +172,11 @@ fn tagged_error() -> Result<Profile, TaggedError> {
 #[tauri::command]
 fn nullable_result() -> Result<Option<String>, PlainError> {
     Ok(None)
+}
+
+#[tauri::command]
+fn bigint_result() -> Result<u64, u64> {
+    Ok(42)
 }
 
 #[tauri::command]
@@ -330,6 +335,8 @@ const SCENARIOS: &[&str] = &[
     "error_result_jsdoc",
     "error_result_ts",
     "error_result_unknown_jsdoc",
+    "error_result_unknown_semantic_jsdoc",
+    "error_result_unknown_semantic_ts",
     "error_result_unknown_ts",
     "error_throw_jsdoc",
     "error_throw_ts",
@@ -605,10 +612,15 @@ fn events_only_ts() {
 
 #[test]
 fn events_only_jsdoc() {
+    let builder = Builder::<MockRuntime>::new().events(collect_events![
+        EmptyEvent,
+        StructEvent,
+        PhaseSpecificRename
+    ]);
     assert_export(
         "events_only_jsdoc",
         "bindings.js",
-        &events_only(),
+        &builder,
         JSDoc::default(),
     );
 }
@@ -729,6 +741,35 @@ fn error_result_unknown_jsdoc() {
         "error_result_unknown_jsdoc",
         "bindings.js",
         &builder,
+        JSDoc::default(),
+    );
+}
+
+fn result_unknown_semantic() -> Builder<MockRuntime> {
+    Builder::<MockRuntime>::new()
+        .commands(collect_commands![bigint_result])
+        .semantic_types(
+            specta_typescript::semantic::Configuration::empty().enable_lossless_bigints(),
+        )
+        .error_handling(ErrorHandlingMode::ResultUnknown)
+}
+
+#[test]
+fn error_result_unknown_semantic_ts() {
+    assert_export(
+        "error_result_unknown_semantic_ts",
+        "bindings.ts",
+        &result_unknown_semantic(),
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn error_result_unknown_semantic_jsdoc() {
+    assert_export(
+        "error_result_unknown_semantic_jsdoc",
+        "bindings.js",
+        &result_unknown_semantic(),
         JSDoc::default(),
     );
 }

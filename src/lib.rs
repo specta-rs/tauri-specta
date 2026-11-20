@@ -628,6 +628,8 @@ pub mod internal {
 
     use super::*;
 
+    pub use specta::Type;
+
     /// Called by `collect_commands!` to construct `Commands`.
     pub fn command<R: Runtime, F, T>(f: F, types: T) -> Commands<R>
     where

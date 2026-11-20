@@ -5,9 +5,12 @@ use std::future::Future;
 use specta::Type;
 use specta::{
     Types,
-    datatype::{DataType, Deprecated},
+    datatype::{DataType, Deprecated, Reference},
 };
-use tauri::{Runtime, ipc::Invoke};
+use tauri::{
+    Runtime,
+    ipc::{CommandScope, GlobalScope, Invoke, ScopeObject},
+};
 
 /// A command as seen by the binding exporters.
 ///
@@ -139,7 +142,7 @@ pub trait CommandSignature<TMarker> {
 #[diagnostic::on_unimplemented(
     message = "one or more Tauri command arguments cannot be exported by specta",
     note = "derive or implement `specta::Type` for every argument the frontend sends",
-    note = "`State`, `AppHandle`, `Window`, `Webview` and `WebviewWindow` are injected by Tauri and are not sent from the frontend"
+    note = "`State`, `AppHandle`, `Window`, `Webview`, `WebviewWindow`, `CommandScope` and `GlobalScope` are injected by Tauri and are not sent from the frontend"
 )]
 pub trait CommandArguments<TMarker> {
     /// One entry per argument, in declaration order. `None` marks an injected argument.
@@ -198,6 +201,18 @@ impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::Webview<R> {
 }
 
 impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::WebviewWindow<R> {
+    fn to_datatype(_: &mut Types) -> Option<DataType> {
+        None
+    }
+}
+
+impl<T: ScopeObject> CommandArgument<InjectedArgumentMarker> for CommandScope<T> {
+    fn to_datatype(_: &mut Types) -> Option<DataType> {
+        None
+    }
+}
+
+impl<T: ScopeObject> CommandArgument<InjectedArgumentMarker> for GlobalScope<T> {
     fn to_datatype(_: &mut Types) -> Option<DataType> {
         None
     }
@@ -280,6 +295,7 @@ fn command_from_parts(
     accessor: Cow<'static, str>,
     arg_types: Vec<Option<DataType>>,
     result: Option<DataType>,
+    types: &Types,
 ) -> Command {
     // Zip before filtering: `metadata.arguments` lists every argument, including the
     // ones Tauri injects, so dropping injected types first would shift the names.
@@ -288,8 +304,22 @@ fn command_from_parts(
         .iter()
         .zip(arg_types)
         .filter_map(|(name, ty)| {
-            ty.filter(|_| !name.is_empty()).map(|ty| CommandArg {
-                name: Cow::Borrowed(*name),
+            let ty = ty?;
+            let name = if !name.is_empty() {
+                *name
+            } else if let DataType::Reference(Reference::Named(reference)) = &ty
+                && types.get(reference).is_some_and(|ndt| {
+                    ndt.name == "TAURI_REQUEST" && ndt.module_path.starts_with("tauri::")
+                })
+            {
+                // Tauri supplies the whole request regardless of the argument pattern.
+                // This is a frontend parameter name, not a key in the IPC payload.
+                "request"
+            } else {
+                return None;
+            };
+            Some(CommandArg {
+                name: Cow::Borrowed(name),
                 ty,
             })
         })
@@ -343,6 +373,7 @@ macro_rules! impl_command_signature {
                     accessor,
                     Vec::new(),
                     Self::Result::to_datatype(types),
+                    types,
                 )
             }
         }
@@ -383,6 +414,7 @@ macro_rules! impl_command_signature {
                     accessor,
                     Self::Args::to_datatypes(types),
                     Self::Result::to_datatype(types),
+                    types,
                 )
             }
         }
