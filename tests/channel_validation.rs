@@ -90,6 +90,16 @@ fn channel_arg(channel: tauri::ipc::Channel<u32>) {
 }
 
 #[tauri::command]
+fn channel_result() -> tauri::ipc::Channel<u32> {
+    unimplemented!()
+}
+
+#[tauri::command]
+fn channel_in_result_wrapper() -> Result<tauri::ipc::Channel<u32>, String> {
+    unimplemented!()
+}
+
+#[tauri::command]
 fn payload_channel_arg(channel: tauri::ipc::Channel<ChannelPayload>) {
     let _ = channel;
 }
@@ -257,8 +267,46 @@ fn top_level_channel_argument_stays_untouched_without_a_semantic_payload() {
     .expect("a channel whose payload needs no transform is passed as-is");
 
     assert!(
-        !bindings.contains("mapChannel("),
+        !bindings.contains("__TAURI_DESERIALIZE_CHANNEL("),
         "the channel should not be touched when its payload is already the wire shape:\n{bindings}"
+    );
+}
+
+#[test]
+fn channel_as_a_command_result_is_rejected() {
+    let err = export(
+        &Builder::<MockRuntime>::new().commands(collect_commands![channel_result]),
+        "channel_result",
+    )
+    .expect_err("a Rust-created channel has no frontend callback to send to");
+
+    assert!(err.contains("channel_result"), "unexpected error: {err}");
+    assert!(
+        err.contains("can only be a direct command argument"),
+        "unexpected error: {err}"
+    );
+    // The error has to explain why, and what to do instead.
+    assert!(
+        err.contains("__CHANNEL__") && err.contains("Declare the channel as a command argument"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn channel_inside_a_result_is_rejected_as_a_result() {
+    let err = export(
+        &Builder::<MockRuntime>::new().commands(collect_commands![channel_in_result_wrapper]),
+        "channel_in_result_wrapper",
+    )
+    .expect_err("wrapping the channel in a `Result` doesn't give it a frontend callback");
+
+    assert!(
+        err.contains("can only be a direct command argument"),
+        "the channel should be rejected as a result rather than told to move to the top level: {err}"
+    );
+    assert!(
+        !err.contains("is nested inside"),
+        "moving the channel to the top level is not a fix for a result: {err}"
     );
 }
 
@@ -268,16 +316,21 @@ fn semantic_channel_payload_is_deserialized_by_the_channel() {
         .commands(collect_commands![semantic_channel_arg])
         .semantic_types(semantic_types());
 
-    let expected = "mapChannel(channel, (v) => ({...v,url:new URL(v.url)}))";
+    let expected = "__TAURI_DESERIALIZE_CHANNEL(channel, (v) => ({...v,url:new URL(v.url)}))";
 
     let bindings = export(&builder, "semantic_channel").expect("semantic channel payload exports");
     assert!(bindings.contains(expected), "{bindings}");
-    // The channel the caller passes is the one Rust addresses, so the deserializer is
-    // registered on it rather than on a replacement channel.
+    // The helper prefers the frontend API's own method and falls back to the channel's
+    // handler, so the binding works against released APIs too.
     assert!(
-        bindings.contains("Object.defineProperty(channel"),
+        bindings.contains("typeof nativeDeserialize === \"function\""),
         "{bindings}"
     );
+    assert!(
+        bindings.contains("Reflect.deleteProperty(channel, \"onmessage\")"),
+        "{bindings}"
+    );
+    assert!(!bindings.contains("mapChannel"), "{bindings}");
     assert!(!bindings.contains("new Channel("), "{bindings}");
 
     let jsdoc = export_with(
@@ -288,6 +341,14 @@ fn semantic_channel_payload_is_deserialized_by_the_channel() {
     )
     .expect("semantic channel payload exports for JSDoc");
     assert!(jsdoc.contains(expected), "{jsdoc}");
-    assert!(jsdoc.contains("Object.defineProperty(channel"), "{jsdoc}");
+    assert!(
+        jsdoc.contains("typeof nativeDeserialize === \"function\""),
+        "{jsdoc}"
+    );
+    assert!(
+        jsdoc.contains("Reflect.deleteProperty(channel, \"onmessage\")"),
+        "{jsdoc}"
+    );
+    assert!(!jsdoc.contains("mapChannel"), "{jsdoc}");
     assert!(!jsdoc.contains("new Channel("), "{jsdoc}");
 }

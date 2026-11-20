@@ -11,7 +11,7 @@ export const commands = {
 	 * @param {InvokeOptions} [options]
 	 * @returns {Promise<void>}
 	 */
-	streamUrls: (channel, options) => __TAURI_INVOKE("stream_urls", { channel: mapChannel(channel, (v) => ({...v,url:new URL(v.url)})) }, options),
+	streamUrls: (channel, options) => __TAURI_INVOKE("stream_urls", { channel: __TAURI_DESERIALIZE_CHANNEL(channel, (v) => ({...v,url:new URL(v.url)})) }, options),
 	/**
 	 * @param {Channel<PlainPayload>} channel
 	 * @param {InvokeOptions} [options]
@@ -120,31 +120,35 @@ export const tauriEvents = {
 	*/
 
 /* Tauri Specta runtime */
-const channelTransform = Symbol.for("tauri-specta.channelTransform");
 /**
  * @template T
  * @param {Channel<T>} channel
  * @param {(value: any) => T} transform
  * @returns {Channel<T>}
  */
-function mapChannel(channel, transform) {
-    /** @type {Channel<T> & { [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T } }} */
-    const mapped = channel;
-    const existing = mapped[channelTransform];
-    if (existing) {
-        existing.transform = transform;
-        return channel;
+function __TAURI_DESERIALIZE_CHANNEL(channel, transform) {
+    const nativeDeserialize = /** @type {Channel<T> & { deserialize?: (transform: (payload: unknown) => T) => Channel<T> }} */ (channel).deserialize;
+    if (typeof nativeDeserialize === "function") {
+        return nativeDeserialize.call(channel, transform);
     }
-    const state = { handler: channel.onmessage, transform };
+    // This frontend API has no `Channel.deserialize` yet (Tauri v3 alphas and v2 before
+    // 2.13), so register the transform on the channel's own handler instead. That keeps
+    // the channel the caller passed, and the callback id Tauri addresses.
+    if (!Object.isExtensible(channel)) {
+        throw new TypeError("tauri-specta: this channel is frozen or sealed, which this frontend API cannot support. Update @tauri-apps/api so Channel.deserialize is available.");
+    }
+    const handler = channel.onmessage;
+    Reflect.deleteProperty(channel, "onmessage");
+    const state = { handler, transform };
     channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
     Object.defineProperty(channel, "onmessage", {
         configurable: true,
         get: () => state.handler,
-        set: (/** @type {(value: T) => void} */ handler) => { state.handler = handler; },
+        set: (handler) => { state.handler = handler; },
     });
-    Object.defineProperty(channel, channelTransform, { value: state });
     return channel;
 }
+
 
 /**
  * @template T

@@ -113,7 +113,7 @@ fn runtime(
         .unwrap_or(exporter.types);
 
     let mut out = String::new();
-    let mut needs_channel_mapping = false;
+    let mut needs_channel_deserializer = false;
 
     if let Some((ndt, name)) = exporter
         .types
@@ -163,20 +163,18 @@ fn runtime(
         }
     }
 
-    // A `Channel` is only usable as a whole command argument or result. Anywhere else it
-    // renders as a bare reference name with no definition, so fail the export rather than
-    // emitting bindings that don't type-check. This runs for both the TypeScript and JSDoc
-    // exporters because it is part of the shared runtime path.
+    // A `Channel` is only usable as a whole command argument. Anywhere else it renders
+    // as a bare reference name with no definition, so fail the export rather than emitting
+    // bindings that don't type-check. This runs for both the TypeScript and JSDoc exporters
+    // because it is part of the shared runtime path.
     validate_channel_placement(cfg, exporter.types)?;
 
+    // A channel in a result is rejected above, so only arguments can import `Channel`.
     let is_channel_used = cfg.commands.iter().any(|command| {
-        // Check if any argument is a Channel
         command
             .args
             .iter()
             .any(|arg| is_channel_type(&arg.ty, exporter.types))
-            // Check if result contains a Channel
-            || command.result.as_ref().is_some_and(|dt| is_channel_type(dt, exporter.types))
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling != ErrorHandlingMode::Throw
@@ -317,7 +315,7 @@ fn runtime(
                             jsdoc,
                         )
                         .map(|transform| {
-                            needs_channel_mapping |= is_channel_type(&arg.ty, exporter.types);
+                            needs_channel_deserializer |= is_channel_type(&arg.ty, exporter.types);
                             format!("{key}: {transform}")
                         })
                     })
@@ -350,9 +348,8 @@ fn runtime(
                                 semantic_types_runtime_types,
                                 jsdoc,
                             );
-                            needs_channel_mapping |=
+                            needs_channel_deserializer |=
                                 value.is_some() && is_channel_type(&arg.ty, exporter.types);
-
                             match (value, key == param) {
                                 (None, true) => param,
                                 (None, false) => format!("{key}: {param}"),
@@ -839,15 +836,14 @@ fn runtime(
     // `tauriEvents` always needs `makeEvent`, so this block is always emitted.
     out.push_str("\n/* Tauri Specta runtime */\n");
 
-    if needs_channel_mapping {
+    if needs_channel_deserializer {
         out.push_str(if jsdoc {
-            MAP_CHANNEL_IMPL_JS
+            DESERIALIZE_CHANNEL_IMPL_JS
         } else {
-            MAP_CHANNEL_IMPL_TS
+            DESERIALIZE_CHANNEL_IMPL_TS
         });
-        out.push('\n');
+        out.push_str("\n\n");
     }
-
     if has_typed_error {
         out.push_str(typed_error_impl);
         out.push('\n');
@@ -1782,7 +1778,7 @@ fn fields_nested_channel<'a>(
     }
 }
 
-/// Reject `Channel`s that aren't the whole command argument or result.
+/// Reject `Channel`s that aren't a whole command argument.
 fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Result<(), Error> {
     // Covers events, `Builder::typ`, and command results that are named types: a channel
     // anywhere in a definition renders as an undefined reference name.
@@ -1803,6 +1799,7 @@ fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Resu
                     arg.name,
                     command.name.as_ref()
                 ),
+                ChannelPosition::Argument,
             )?;
         }
         if let Some(dt) = command.result.as_ref() {
@@ -1810,6 +1807,7 @@ fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Resu
                 dt,
                 types,
                 &format!("the result of command '{}'", command.name.as_ref()),
+                ChannelPosition::Result,
             )?;
         }
     }
@@ -1821,20 +1819,39 @@ fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Resu
             &DataType::Reference(reference.clone()),
             types,
             &format!("event '{name}'"),
+            ChannelPosition::Event,
         )?;
     }
 
     Ok(())
 }
 
+/// Where a signature uses a `Channel`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ChannelPosition {
+    /// A whole command argument, the only supported position.
+    Argument,
+    /// A command result, which has no frontend callback to send to.
+    Result,
+    /// An event payload, which is delivered Rust to frontend and cannot carry one.
+    Event,
+}
+
 fn validate_channel_signature_datatype(
     dt: &DataType,
     types: &Types,
     subject: &str,
+    position: ChannelPosition,
 ) -> Result<(), Error> {
-    // A channel is allowed as the whole argument or result, but its payload is plain
-    // serialized data so a channel can't hide in there either.
+    // An argument channel's payload is plain serialized data, so a channel can't hide
+    // in there either.
     if let Some(payload) = channel_generic_type(dt, types) {
+        match position {
+            ChannelPosition::Result => return Err(channel_result_error(subject)),
+            ChannelPosition::Event => return Err(channel_event_error(subject)),
+            ChannelPosition::Argument => {}
+        }
+
         let mut visited = BTreeSet::new();
         if let Some(site) = find_nested_channel(payload, types, None, &mut visited) {
             return Err(channel_nested_error(site, subject));
@@ -1843,10 +1860,34 @@ fn validate_channel_signature_datatype(
     }
 
     let mut visited = BTreeSet::new();
-    match find_nested_channel(dt, types, None, &mut visited) {
-        Some(site) => Err(channel_nested_error(site, subject)),
-        None => Ok(()),
+    match (position, find_nested_channel(dt, types, None, &mut visited)) {
+        (_, None) => Ok(()),
+        // A `Result<Channel<_>, _>` result would otherwise be told to move the channel
+        // to a top level that is just as unusable.
+        (ChannelPosition::Result, Some(ChannelSite::Signature)) => {
+            Err(channel_result_error(subject))
+        }
+        (ChannelPosition::Event, Some(_)) => Err(channel_event_error(subject)),
+        (_, Some(site)) => Err(channel_nested_error(site, subject)),
     }
+}
+
+fn channel_result_error(subject: &str) -> Error {
+    Error::framework(
+        format!(
+            "`tauri::ipc::Channel` is used as {subject}, but a channel can only be a direct command argument. Tauri sends messages through the callback of a channel created on the frontend, so a channel created on the Rust side has no callback to send to and the caller would receive the `__CHANNEL__:<id>` string. Declare the channel as a command argument and send from the command instead."
+        ),
+        "",
+    )
+}
+
+fn channel_event_error(subject: &str) -> Error {
+    Error::framework(
+        format!(
+            "`tauri::ipc::Channel` is used in {subject}, but a channel can only be a direct command argument. Tauri delivers channel messages through a callback the frontend created, and that callback only exists as a command argument, so an event payload cannot carry a channel. Send the values from a command that takes the channel instead."
+        ),
+        "",
+    )
 }
 
 fn channel_nested_error(site: ChannelSite<'_>, signature_subject: &str) -> Error {
@@ -1859,7 +1900,7 @@ fn channel_nested_error(site: ChannelSite<'_>, signature_subject: &str) -> Error
 
     Error::framework(
         format!(
-            "`tauri::ipc::Channel` is nested inside {subject}. A channel must be a direct command argument (or the whole command result), so move it to the top level. To send a channel id inside a payload, use `tauri::ipc::JavaScriptChannelId` and resolve it with `channel_on` instead."
+            "`tauri::ipc::Channel` is nested inside {subject}. A channel must be a direct command argument, so move it to the top level. To send a channel id inside a payload, use `tauri::ipc::JavaScriptChannelId` and resolve it with `channel_on` instead."
         ),
         "",
     )
@@ -1868,9 +1909,9 @@ fn channel_nested_error(site: ChannelSite<'_>, signature_subject: &str) -> Error
 /// The JavaScript expression that adapts one command argument for the IPC.
 ///
 /// A `Channel` payload is decoded as messages arrive, so the transform is
-/// registered on the channel itself: `mapChannel` keeps the channel the caller
-/// passed (and the callback id Rust addresses) intact on released APIs too. Every other
-/// argument is transformed before it is sent.
+/// registered on the channel itself: `.deserialize(...)` keeps the channel the
+/// caller passed (and the callback id Rust addresses) intact. Every other argument
+/// is transformed before it is sent.
 fn invoke_argument(
     input: &str,
     dt: &DataType,
@@ -1889,7 +1930,10 @@ fn invoke_argument(
             semantic_types_runtime_types,
         )
         .map(|transform| jsdoc_transform(transform, "v", jsdoc))
-        .map(|transform| format!("mapChannel({input}, (v) => {transform})"))
+        // The helper uses `Channel.deserialize` when the frontend API has it and falls
+        // back to the channel's own handler when it doesn't, so the binding runs against
+        // released APIs too.
+        .map(|transform| format!("__TAURI_DESERIALIZE_CHANNEL({input}, (v) => {transform})"))
     } else {
         render_result_transform_for_phase(
             dt,
@@ -2076,8 +2120,7 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "tauriEvents",
     "typedError",
     "makeEvent",
-    "mapChannel",
-    "channelTransform",
+    "__TAURI_DESERIALIZE_CHANNEL",
 ];
 
 /// Names only the mocks runtime declares, and so only reserved on an export that
@@ -2237,63 +2280,12 @@ const MOCK_CALL_TYPES_JS: &str = r#"/**
  */
 "#;
 
-// Keep the original channel and its IPC callback. The symbol shares the mapping
-// across generated modules without retaining channels in a global registry.
-const MAP_CHANNEL_IMPL_TS: &str = r#"const channelTransform = Symbol.for("tauri-specta.channelTransform");
-function mapChannel<T>(channel: Channel<T>, transform: (value: any) => T): Channel<T> {
-    const mapped: Channel<T> & {
-        [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T };
-    } = channel;
-    const existing = mapped[channelTransform];
-    if (existing) {
-        existing.transform = transform;
-        return channel;
-    }
-    const state = { handler: channel.onmessage, transform };
-    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
-    Object.defineProperty(channel, "onmessage", {
-        configurable: true,
-        get: () => state.handler,
-        set: (handler: (value: T) => void) => { state.handler = handler; },
-    });
-    Object.defineProperty(channel, channelTransform, { value: state });
-    return channel;
-}
-"#;
-
-const MAP_CHANNEL_IMPL_JS: &str = r#"const channelTransform = Symbol.for("tauri-specta.channelTransform");
-/**
- * @template T
- * @param {Channel<T>} channel
- * @param {(value: any) => T} transform
- * @returns {Channel<T>}
- */
-function mapChannel(channel, transform) {
-    /** @type {Channel<T> & { [channelTransform]?: { handler: (value: T) => void; transform: (value: any) => T } }} */
-    const mapped = channel;
-    const existing = mapped[channelTransform];
-    if (existing) {
-        existing.transform = transform;
-        return channel;
-    }
-    const state = { handler: channel.onmessage, transform };
-    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
-    Object.defineProperty(channel, "onmessage", {
-        configurable: true,
-        get: () => state.handler,
-        set: (/** @type {(value: T) => void} */ handler) => { state.handler = handler; },
-    });
-    Object.defineProperty(channel, channelTransform, { value: state });
-    return channel;
-}
-"#;
-
 const MOCK_COMMANDS_DOC: &str = r#"/**
  * Install typed mock handlers for the generated commands.
  *
  * Handlers are installed through `@tauri-apps/api/mocks`'s `mockIPC`, so the application
  * under test keeps importing the real `commands` object and still runs the result transform
- * and channel mapping the bindings wrap around each call.
+ * and the channel deserializer the binding registers on each call.
  *
  * A handler receives the command's arguments and returns its success value; throw (or
  * return a rejected promise) to make the command fail. A command with no handler rejects
@@ -2357,6 +2349,60 @@ function mockCommandHandler(handler, name, args) {
     if (handler === undefined) throw new Error(`No mock handler registered for command '${name}'`);
     return handler(args);
 }"#;
+
+const DESERIALIZE_CHANNEL_IMPL_TS: &str = r#"function __TAURI_DESERIALIZE_CHANNEL<T>(channel: Channel<T>, transform: (value: any) => T): Channel<T> {
+    const nativeDeserialize = (channel as Channel<T> & { deserialize?: (transform: (payload: unknown) => T) => Channel<T> }).deserialize;
+    if (typeof nativeDeserialize === "function") {
+        return nativeDeserialize.call(channel, transform);
+    }
+    // This frontend API has no `Channel.deserialize` yet (Tauri v3 alphas and v2 before
+    // 2.13), so register the transform on the channel's own handler instead. That keeps
+    // the channel the caller passed, and the callback id Tauri addresses.
+    if (!Object.isExtensible(channel)) {
+        throw new TypeError("tauri-specta: this channel is frozen or sealed, which this frontend API cannot support. Update @tauri-apps/api so Channel.deserialize is available.");
+    }
+    const handler = channel.onmessage;
+    Reflect.deleteProperty(channel, "onmessage");
+    const state = { handler, transform };
+    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
+    Object.defineProperty(channel, "onmessage", {
+        configurable: true,
+        get: () => state.handler,
+        set: (handler: (value: T) => void) => { state.handler = handler; },
+    });
+    return channel;
+}
+"#;
+
+const DESERIALIZE_CHANNEL_IMPL_JS: &str = r#"/**
+ * @template T
+ * @param {Channel<T>} channel
+ * @param {(value: any) => T} transform
+ * @returns {Channel<T>}
+ */
+function __TAURI_DESERIALIZE_CHANNEL(channel, transform) {
+    const nativeDeserialize = /** @type {Channel<T> & { deserialize?: (transform: (payload: unknown) => T) => Channel<T> }} */ (channel).deserialize;
+    if (typeof nativeDeserialize === "function") {
+        return nativeDeserialize.call(channel, transform);
+    }
+    // This frontend API has no `Channel.deserialize` yet (Tauri v3 alphas and v2 before
+    // 2.13), so register the transform on the channel's own handler instead. That keeps
+    // the channel the caller passed, and the callback id Tauri addresses.
+    if (!Object.isExtensible(channel)) {
+        throw new TypeError("tauri-specta: this channel is frozen or sealed, which this frontend API cannot support. Update @tauri-apps/api so Channel.deserialize is available.");
+    }
+    const handler = channel.onmessage;
+    Reflect.deleteProperty(channel, "onmessage");
+    const state = { handler, transform };
+    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
+    Object.defineProperty(channel, "onmessage", {
+        configurable: true,
+        get: () => state.handler,
+        set: (handler) => { state.handler = handler; },
+    });
+    return channel;
+}
+"#;
 
 const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
@@ -2436,7 +2482,7 @@ mod tests {
 
     use serde::{Deserialize, Serialize};
     use specta::{
-        Type,
+        Type, Types,
         datatype::{DataType, Primitive},
         specta,
     };
@@ -2682,6 +2728,26 @@ mod tests {
             .expect("a Channel in a separate JSDoc file should not conflict with the runtime");
 
         fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn channel_in_an_event_payload_is_reported_as_an_event() {
+        let mut types = Types::default();
+        let dt = <tauri::ipc::Channel<u32> as Type>::definition(&mut types);
+
+        let err = super::validate_channel_signature_datatype(
+            &dt,
+            &types,
+            "event 'progress'",
+            super::ChannelPosition::Event,
+        )
+        .expect_err("an event payload cannot carry a channel");
+
+        let message = err.to_string();
+        assert!(message.contains("event 'progress'"), "{message}");
+        assert!(message.contains("event payload cannot carry"), "{message}");
+        // Moving the channel to the top level cannot fix an event payload.
+        assert!(!message.contains("top level"), "{message}");
     }
 
     #[test]

@@ -269,8 +269,8 @@
 //! ## Channels
 //!
 //! A [`tauri::ipc::Channel`] streams values from a command to the frontend. A
-//! channel is only valid as a direct argument or return value of a command, and
-//! the generated binding types it as `Channel<T>`.
+//! channel is only valid as a direct argument of a command, and the generated
+//! binding types it as `Channel<T>`.
 //!
 //! ```rust,no_run
 //! use tauri::ipc::Channel;
@@ -293,11 +293,13 @@
 //! await commands.download("https://example.com/file.zip", onProgress);
 //! ```
 //!
-//! A channel cannot be nested inside a struct, enum, or event payload. Only a
-//! top-level command argument or return value is turned into a channel, so a
-//! channel in a nested position is invalid. To send a channel alongside other
-//! data, put a [`tauri::ipc::JavaScriptChannelId`] in the payload and call
-//! `channel_on` to get a `Channel`:
+//! A channel cannot be nested inside a struct, enum, or event payload, and it
+//! cannot be a command result: Tauri delivers messages through the callback of a
+//! channel the frontend created, so a channel created on the Rust side has
+//! nowhere to send and the caller would receive the `__CHANNEL__:<id>` string.
+//! To send a channel alongside other data, put a
+//! [`tauri::ipc::JavaScriptChannelId`] in the payload and call `channel_on` to
+//! get a `Channel`:
 //!
 //! ```rust,ignore
 //! use tauri::ipc::{Channel, JavaScriptChannelId};
@@ -318,15 +320,16 @@
 //! ```
 //!
 //! When a channel's payload contains a [semantic type](#semantic-frontend-types),
-//! the generated binding registers the payload transform on the channel using
-//! the published `onmessage` getter/setter API. The channel id Tauri addresses stays
-//! unchanged. Handlers can be replaced after registration, and repeated registration
-//! replaces rather than stacks transforms. A channel can only carry one deserializer.
-//! The mapping remains attached even when the channel is passed to
-//! a command whose payload has **no transform**. Use a fresh channel when switching
-//! between transformed and untransformed payloads, and do not share a channel
-//! concurrently between commands needing different transforms. Registration adds
-//! properties to the channel, so leave it extensible (do not freeze or seal it).
+//! the generated binding registers the payload transform on the channel you pass,
+//! so the channel id Tauri addresses is the one the binding sends.
+//!
+//! With `@tauri-apps/api` 2.13 or newer it uses `Channel.deserialize`, which also
+//! works on frozen and sealed channels. Older APIs, including the published v3
+//! alpha, fall back to wrapping the channel's `onmessage`, which needs an
+//! extensible channel; that fallback is
+//! [tracked for removal](https://github.com/specta-rs/tauri-specta/issues/289).
+//! Either way a channel carries one transform, so don't pass the same channel
+//! instance to commands whose payloads need different ones.
 //!
 //! ## Custom types
 //!
