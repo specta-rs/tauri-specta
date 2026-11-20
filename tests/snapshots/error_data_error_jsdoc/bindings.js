@@ -321,7 +321,7 @@ async function typedError(result) {
         return { data: await result, error: null };
     } catch (e) {
         if (e instanceof Error) throw e;
-        return { data: null, error: e };
+        return { data: null, error: /** @type {E} */ (e) };
     }
 }
 

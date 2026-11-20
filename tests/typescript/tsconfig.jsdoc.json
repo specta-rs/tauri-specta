@@ -4,8 +4,7 @@
   // the mocks runtime, `tauri-events.js` for the event accessors). `allowJs`/`checkJs`
   // are what makes the emitter's `@type` comments matter at all.
   //
-  // The remaining JSDoc fixtures carry pre-existing diagnostics unrelated to these
-  // additions (e.g. in the `typedError` runtime and the `Files` layout), so they stay out.
+  // The `Files` layout and `DataError` fixture still have unrelated diagnostics.
   "compilerOptions": {
     "strict": true,
     "allowJs": true,
@@ -19,6 +18,7 @@
     "types": []
   },
   "include": [
+    "../snapshots/error_result_jsdoc/bindings.js",
     "../snapshots/semantic_channels_jsdoc/bindings.js",
     "event-phases.js",
     "jsdoc-mocks.js",

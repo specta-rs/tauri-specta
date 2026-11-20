@@ -2219,7 +2219,7 @@ async function typedError(result) {
         return { status: "ok", data: await result };
     } catch (e) {
         if (e instanceof Error) throw e;
-        return { status: "error", error: e };
+        return { status: "error", error: /** @type {E} */ (e) };
     }
 }"#;
 
@@ -2248,7 +2248,7 @@ async function typedError(result) {
         return { data: await result, error: null };
     } catch (e) {
         if (e instanceof Error) throw e;
-        return { data: null, error: e };
+        return { data: null, error: /** @type {E} */ (e) };
     }
 }"#;
 
