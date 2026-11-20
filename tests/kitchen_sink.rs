@@ -67,7 +67,7 @@ enum UntaggedEnum {
     Text(String),
 }
 
-#[derive(Serialize, Deserialize, Type)]
+#[derive(Serialize, Deserialize, Type, Event)]
 struct PhaseSpecificRename {
     #[serde(rename(serialize = "serialized_value", deserialize = "deserialized_value"))]
     value: String,
@@ -612,10 +612,15 @@ fn events_only_ts() {
 
 #[test]
 fn events_only_jsdoc() {
+    let builder = Builder::<MockRuntime>::new().events(collect_events![
+        EmptyEvent,
+        StructEvent,
+        PhaseSpecificRename
+    ]);
     assert_export(
         "events_only_jsdoc",
         "bindings.js",
-        &events_only(),
+        &builder,
         JSDoc::default(),
     );
 }

@@ -20,6 +20,7 @@
   },
   "include": [
     "../snapshots/semantic_channels_jsdoc/bindings.js",
+    "event-phases.js",
     "jsdoc-mocks.js",
     "tauri-events.js"
   ]
