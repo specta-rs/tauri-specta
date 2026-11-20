@@ -162,20 +162,18 @@ fn runtime(
         }
     }
 
-    // A `Channel` is only usable as a whole command argument or result. Anywhere else it
-    // renders as a bare reference name with no definition, so fail the export rather than
-    // emitting bindings that don't type-check. This runs for both the TypeScript and JSDoc
-    // exporters because it is part of the shared runtime path.
+    // A `Channel` is only usable as a whole command argument. Anywhere else it renders
+    // as a bare reference name with no definition, so fail the export rather than emitting
+    // bindings that don't type-check. This runs for both the TypeScript and JSDoc exporters
+    // because it is part of the shared runtime path.
     validate_channel_placement(cfg, exporter.types)?;
 
+    // A channel in a result is rejected above, so only arguments can import `Channel`.
     let is_channel_used = cfg.commands.iter().any(|command| {
-        // Check if any argument is a Channel
         command
             .args
             .iter()
             .any(|arg| is_channel_type(&arg.ty, exporter.types))
-            // Check if result contains a Channel
-            || command.result.as_ref().is_some_and(|dt| is_channel_type(dt, exporter.types))
     });
     let has_typed_error = enabled_commands
         && cfg.error_handling != ErrorHandlingMode::Throw
@@ -1766,7 +1764,7 @@ fn fields_nested_channel<'a>(
     }
 }
 
-/// Reject `Channel`s that aren't the whole command argument or result.
+/// Reject `Channel`s that aren't a whole command argument.
 fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Result<(), Error> {
     // Covers events, `Builder::typ`, and command results that are named types: a channel
     // anywhere in a definition renders as an undefined reference name.
@@ -1807,20 +1805,22 @@ fn validate_channel_placement(cfg: &BuilderConfiguration, types: &Types) -> Resu
             &DataType::Reference(reference.clone()),
             types,
             &format!("event '{name}'"),
-            ChannelPosition::Argument,
+            ChannelPosition::Event,
         )?;
     }
 
     Ok(())
 }
 
-/// Where a command signature uses a `Channel`.
+/// Where a signature uses a `Channel`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ChannelPosition {
     /// A whole command argument, the only supported position.
     Argument,
-    /// The command result or an event payload.
+    /// A command result, which has no frontend callback to send to.
     Result,
+    /// An event payload, which is delivered Rust to frontend and cannot carry one.
+    Event,
 }
 
 fn validate_channel_signature_datatype(
@@ -1832,8 +1832,10 @@ fn validate_channel_signature_datatype(
     // An argument channel's payload is plain serialized data, so a channel can't hide
     // in there either.
     if let Some(payload) = channel_generic_type(dt, types) {
-        if position == ChannelPosition::Result {
-            return Err(channel_result_error(subject));
+        match position {
+            ChannelPosition::Result => return Err(channel_result_error(subject)),
+            ChannelPosition::Event => return Err(channel_event_error(subject)),
+            ChannelPosition::Argument => {}
         }
 
         let mut visited = BTreeSet::new();
@@ -1844,14 +1846,15 @@ fn validate_channel_signature_datatype(
     }
 
     let mut visited = BTreeSet::new();
-    match find_nested_channel(dt, types, None, &mut visited) {
+    match (position, find_nested_channel(dt, types, None, &mut visited)) {
+        (_, None) => Ok(()),
         // A `Result<Channel<_>, _>` result would otherwise be told to move the channel
         // to a top level that is just as unusable.
-        Some(ChannelSite::Signature) if position == ChannelPosition::Result => {
+        (ChannelPosition::Result, Some(ChannelSite::Signature)) => {
             Err(channel_result_error(subject))
         }
-        Some(site) => Err(channel_nested_error(site, subject)),
-        None => Ok(()),
+        (ChannelPosition::Event, Some(_)) => Err(channel_event_error(subject)),
+        (_, Some(site)) => Err(channel_nested_error(site, subject)),
     }
 }
 
@@ -1859,6 +1862,15 @@ fn channel_result_error(subject: &str) -> Error {
     Error::framework(
         format!(
             "`tauri::ipc::Channel` is used as {subject}, but a channel can only be a direct command argument. Tauri sends messages through the callback of a channel created on the frontend, so a channel created on the Rust side has no callback to send to and the caller would receive the `__CHANNEL__:<id>` string. Declare the channel as a command argument and send from the command instead."
+        ),
+        "",
+    )
+}
+
+fn channel_event_error(subject: &str) -> Error {
+    Error::framework(
+        format!(
+            "`tauri::ipc::Channel` is used in {subject}, but a channel can only be a direct command argument. Tauri delivers channel messages through a callback the frontend created, and that callback only exists as a command argument, so an event payload cannot carry a channel. Send the values from a command that takes the channel instead."
         ),
         "",
     )
@@ -2264,7 +2276,7 @@ const MOCK_COMMANDS_DOC: &str = r#"/**
  *
  * Handlers are installed through `@tauri-apps/api/mocks`'s `mockIPC`, so the application
  * under test keeps importing the real `commands` object and still runs the result transform
- * and channel mapping the bindings wrap around each call.
+ * and the channel deserializer the binding registers on each call.
  *
  * A handler receives the command's arguments and returns its success value; throw (or
  * return a rejected promise) to make the command fail. A command with no handler rejects
@@ -2407,7 +2419,7 @@ mod tests {
 
     use serde::{Deserialize, Serialize};
     use specta::{
-        Type,
+        Type, Types,
         datatype::{DataType, Primitive},
         specta,
     };
@@ -2653,6 +2665,26 @@ mod tests {
             .expect("a Channel in a separate JSDoc file should not conflict with the runtime");
 
         fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn channel_in_an_event_payload_is_reported_as_an_event() {
+        let mut types = Types::default();
+        let dt = <tauri::ipc::Channel<u32> as Type>::definition(&mut types);
+
+        let err = super::validate_channel_signature_datatype(
+            &dt,
+            &types,
+            "event 'progress'",
+            super::ChannelPosition::Event,
+        )
+        .expect_err("an event payload cannot carry a channel");
+
+        let message = err.to_string();
+        assert!(message.contains("event 'progress'"), "{message}");
+        assert!(message.contains("event payload cannot carry"), "{message}");
+        // Moving the channel to the top level cannot fix an event payload.
+        assert!(!message.contains("top level"), "{message}");
     }
 
     #[test]

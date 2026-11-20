@@ -72,10 +72,13 @@ mocks against the real v3 frontend API in all four error-handling modes.
 Shared semantic-channel tests run against both frontend majors in TypeScript and
 JSDoc, checking the original channel/callback id, ordered delivery, end-message
 cleanup, late handler assignment, and repeated/cross-module registration without
-stacking transforms. The adapter uses only the released `onmessage` API, not a
-speculative native `Channel.deserialize` method. Mapping remains attached when a
-channel is passed to an untransformed command: use a fresh channel when switching
-payload contracts. Mapped channels must remain extensible, not frozen/sealed.
+stacking transforms. The adapter calls `Channel.deserialize`, which the published
+v3 frontend API does not have yet: the fixture augments the type and the runtime
+suite installs a stand-in with the same semantics, both marked to delete once a v3
+alpha ships the method. Mapping remains attached when a channel is passed to an
+untransformed command: use a fresh channel when switching payload contracts, and
+give commands that need different transforms their own channel. Frozen and sealed
+channels work, because the method keeps its state in a private field.
 
 ## Known gaps
 
