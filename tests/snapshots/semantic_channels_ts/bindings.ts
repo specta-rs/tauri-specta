@@ -6,7 +6,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
-	streamUrls: (channel: Channel<Payload>, options?: InvokeOptions) => __TAURI_INVOKE<void>("stream_urls", { channel: channel.deserialize((v) => ({...v,url:new URL(v.url)})) }, options),
+	streamUrls: (channel: Channel<Payload>, options?: InvokeOptions) => __TAURI_INVOKE<void>("stream_urls", { channel: channel.deserialize((v: any) => ({...v,url:new URL(v.url)})) }, options),
 	plainUrls: (channel: Channel<PlainPayload>, options?: InvokeOptions) => __TAURI_INVOKE<void>("plain_urls", { channel }, options),
 };
 

@@ -11,7 +11,7 @@ export const commands = {
 	 * @param {InvokeOptions} [options]
 	 * @returns {Promise<void>}
 	 */
-	streamUrls: (channel, options) => __TAURI_INVOKE("stream_urls", { channel: channel.deserialize((v) => ({...v,url:new URL(v.url)})) }, options),
+	streamUrls: (channel, options) => __TAURI_INVOKE("stream_urls", { channel: channel.deserialize((/** @type {any} */ v) => ({...v,url:new URL(v.url)})) }, options),
 	/**
 	 * @param {Channel<PlainPayload>} channel
 	 * @param {InvokeOptions} [options]

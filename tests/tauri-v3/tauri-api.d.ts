@@ -6,6 +6,6 @@ export {}
 
 declare module "@tauri-apps/api/core" {
   interface Channel<T> {
-    deserialize(deserialize: (payload: any) => T): this
+    deserialize(deserialize: (payload: unknown) => T): this
   }
 }

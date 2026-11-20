@@ -1904,7 +1904,16 @@ fn invoke_argument(
             semantic_types_runtime_types,
         )
         .map(|transform| jsdoc_transform(transform, "v", jsdoc))
-        .map(|transform| format!("{input}.deserialize((v) => {transform})"))
+        .map(|transform| {
+            // The API takes an `unknown` payload, so the generated transform names the
+            // shape it was written against: the binding is what knows the wire type.
+            let payload = if jsdoc {
+                "(/** @type {any} */ v)"
+            } else {
+                "(v: any)"
+            };
+            format!("{input}.deserialize({payload} => {transform})")
+        })
     } else {
         render_result_transform_for_phase(
             dt,

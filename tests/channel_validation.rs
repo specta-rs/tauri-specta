@@ -316,7 +316,8 @@ fn semantic_channel_payload_is_deserialized_by_the_channel() {
         .commands(collect_commands![semantic_channel_arg])
         .semantic_types(semantic_types());
 
-    let expected = "channel.deserialize((v) => ({...v,url:new URL(v.url)}))";
+    // The API takes `unknown`, so the binding names the wire shape it was generated for.
+    let expected = "channel.deserialize((v: any) => ({...v,url:new URL(v.url)}))";
 
     let bindings = export(&builder, "semantic_channel").expect("semantic channel payload exports");
     assert!(bindings.contains(expected), "{bindings}");
@@ -332,7 +333,11 @@ fn semantic_channel_payload_is_deserialized_by_the_channel() {
         "bindings.js",
     )
     .expect("semantic channel payload exports for JSDoc");
-    assert!(jsdoc.contains(expected), "{jsdoc}");
+    assert!(
+        jsdoc
+            .contains("channel.deserialize((/** @type {any} */ v) => ({...v,url:new URL(v.url)}))"),
+        "{jsdoc}"
+    );
     assert!(!jsdoc.contains("mapChannel"), "{jsdoc}");
     assert!(!jsdoc.contains("new Channel("), "{jsdoc}");
 }
