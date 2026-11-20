@@ -23,6 +23,12 @@ enum r#enum {
     Value,
 }
 
+// Tauri allows non-ASCII letters and the punctuation below, so the derive must not
+// be stricter than the runtime it feeds.
+#[derive(Type, Event)]
+#[tauri_specta(event_name = "héllo/wörld:ok-name_1")]
+struct TauriValidEvent(String);
+
 #[derive(Clone)]
 struct Marker;
 
@@ -39,6 +45,11 @@ where
 fn raw_identifiers_use_the_unrawed_name() {
     assert_eq!(<r#type as Event>::NAME, "type");
     assert_eq!(<r#enum as Event>::NAME, "enum");
+}
+
+#[test]
+fn tauri_valid_event_names_are_accepted() {
+    assert_eq!(TauriValidEvent::NAME, "héllo/wörld:ok-name_1");
 }
 
 #[test]

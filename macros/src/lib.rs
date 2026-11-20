@@ -85,6 +85,14 @@ fn strip_path_generics(path: &Path) -> Path {
     path
 }
 
+/// The characters Tauri allows in an event name.
+///
+/// Tauri validates the name in `EventName::new` before emitting or listening, using
+/// `char::is_alphanumeric` plus `-`, `/`, `:` and `_`.
+fn is_valid_event_name_character(character: char) -> bool {
+    character.is_alphanumeric() || matches!(character, '-' | '/' | ':' | '_')
+}
+
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(tauri_specta), supports(struct_any, enum_any))]
 struct EventOpts {
@@ -113,6 +121,22 @@ pub fn derive_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         Some(name_from_attr) => name_from_attr,
         None => ident.unraw().to_string().to_kebab_case(),
     };
+
+    // Tauri rejects an event name containing anything other than alphanumeric
+    // characters, `-`, `/`, `:` and `_` when the event is emitted or listened to, so a
+    // name that can never cross the IPC boundary should fail here instead of at runtime.
+    if let Some(character) = name_str_value
+        .chars()
+        .find(|character| !is_valid_event_name_character(*character))
+    {
+        let message = format!(
+            "event name {name_str_value:?} contains {character:?}, which Tauri does not allow in an event name. Use only alphanumeric characters, `-`, `/`, `:` and `_`."
+        );
+        return syn::Error::new(ident.span(), message)
+            .to_compile_error()
+            .into();
+    }
+
     let name_lit = LitStr::new(&name_str_value, ident.span());
 
     if !generics.params.is_empty() {
