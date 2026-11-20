@@ -106,6 +106,12 @@ pub(crate) fn duplicate_command_name(commands: &[Command]) -> Option<&str> {
 /// arguments. The marker parameter keeps the argument-count and result-kind
 /// implementations from overlapping.
 #[doc(hidden)]
+#[diagnostic::on_unimplemented(
+    message = "this function cannot be collected as a Tauri command",
+    label = "not a supported command signature",
+    note = "commands may take at most ten arguments",
+    note = "commands must be free functions whose argument and result types implement `specta::Type`"
+)]
 pub trait CommandSignature<TMarker> {
     /// The command's argument tuple.
     type Args;
@@ -198,12 +204,19 @@ impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::WebviewWindo
 }
 
 /// A command's declared result type.
+///
+/// The diagnostic deliberately avoids `{Self}` in its notes. For an `async fn` the
+/// failing type is the opaque future, so advice phrased as "implement `specta::Type`
+/// for `{Self}`" would ask the author to implement a trait for `impl Future<...>`.
+/// The type they actually have to fix is the future's output, which rustc prints
+/// after `Output =`.
 #[doc(hidden)]
 #[diagnostic::on_unimplemented(
-    message = "`{Self}` cannot be exported as a Tauri command result",
-    label = "this result needs `specta::Type`",
-    note = "derive or implement `specta::Type` for `{Self}`",
-    note = "for an `async fn`, the type to annotate is the future's output: `impl Future<Output = T>` in this message means `T` needs `specta::Type`"
+    message = "this command's result cannot be described for the generated bindings",
+    label = "needs a `specta::Type` impl",
+    note = "add `#[derive(specta::Type)]`, or implement `specta::Type` by hand",
+    note = "`serde::Serialize` only lets Tauri send the value; tauri-specta also needs the type's shape to write the bindings",
+    note = "for an `async fn`, the type to fix is the one after `Output =`"
 )]
 pub trait CommandResult<TMarker> {
     /// `None` for a result that is not sent to the frontend (a top-level unit).
@@ -236,15 +249,14 @@ where
 
 /// The awaited output of an `async fn` command.
 ///
-/// This exists separately from [`CommandResult`] so the diagnostic names the awaited
-/// type instead of the future, which is what the author actually has to fix.
+/// This exists separately from [`CommandResult`] because the marker parameter picks
+/// between the synchronous and asynchronous shapes before the output is involved.
+///
+/// It has no `#[diagnostic::on_unimplemented]` on purpose. rustc reports the
+/// outermost failing obligation, so a missing `specta::Type` here always surfaces as
+/// `impl Future<Output = T>: CommandResult<_>` and never reaches this trait. The
+/// diagnostic on [`CommandResult`] is the one that has to explain the fix.
 #[doc(hidden)]
-#[diagnostic::on_unimplemented(
-    message = "`{Self}` is the awaited return type of an async command but cannot be exported by specta",
-    label = "this async command's return type needs `specta::Type`",
-    note = "derive or implement `specta::Type` for `{Self}`",
-    note = "an `async fn` command must resolve to a type specta understands, like a struct, `String`, `Result<T, E>`, or `()`"
-)]
 pub trait AsyncCommandResult {
     /// `None` for a top-level unit, which Tauri sends as `void`.
     fn to_datatype(types: &mut Types) -> Option<DataType>;

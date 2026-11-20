@@ -4,8 +4,8 @@
 )]
 
 use heck::ToKebabCase;
-use proc_macro2::TokenStream;
-use quote::quote;
+use proc_macro2::{Span, TokenStream};
+use quote::{quote, quote_spanned};
 use syn::{
     ConstParam, DeriveInput, GenericParam, Generics, Ident, LifetimeParam, LitStr, Path,
     PathArguments, Token, TypeParam, WhereClause, ext::IdentExt, parse_macro_input, parse_quote,
@@ -42,13 +42,20 @@ pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             .unwrap_or_default();
 
         handlers.push(quote!(#stripped));
-        inferences.push(quote! {
-            collected.commands.push(::tauri_specta::internal::infer_command(
+        let span = command
+            .segments
+            .last()
+            .map_or_else(Span::call_site, |segment| segment.ident.span());
+        let call = quote_spanned! {span=>
+            ::tauri_specta::internal::infer_command(
                 #command,
                 ::tauri::command_metadata!(#stripped),
                 #accessor,
                 types,
-            ));
+            )
+        };
+        inferences.push(quote! {
+            collected.commands.push(#call);
         });
     }
 
