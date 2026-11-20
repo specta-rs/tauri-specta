@@ -320,11 +320,16 @@
 //! ```
 //!
 //! When a channel's payload contains a [semantic type](#semantic-frontend-types),
-//! the generated binding registers the payload transform on the channel with its
-//! `deserialize` method. It is applied to the channel you pass, so the channel id
-//! Tauri addresses is the one the binding sends. A channel can only carry one
-//! deserializer, so don't pass the same channel instance to commands whose payloads
-//! need different transforms. This needs `@tauri-apps/api` v2.13 or newer.
+//! the generated binding registers the payload transform on the channel you pass,
+//! so the channel id Tauri addresses is the one the binding sends.
+//!
+//! With `@tauri-apps/api` 2.13 or newer it uses `Channel.deserialize`, which also
+//! works on frozen and sealed channels. Older APIs, including the published v3
+//! alpha, fall back to wrapping the channel's `onmessage`, which needs an
+//! extensible channel; that fallback is
+//! [tracked for removal](https://github.com/specta-rs/tauri-specta/issues/289).
+//! Either way a channel carries one transform, so don't pass the same channel
+//! instance to commands whose payloads need different ones.
 //!
 //! ## Custom types
 //!

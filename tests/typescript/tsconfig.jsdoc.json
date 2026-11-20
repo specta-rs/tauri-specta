@@ -21,7 +21,6 @@
   "include": [
     "../snapshots/semantic_channels_jsdoc/bindings.js",
     "jsdoc-mocks.js",
-    "tauri-events.js",
-    "tauri-api.d.ts"
+    "tauri-events.js"
   ]
 }

@@ -72,13 +72,14 @@ mocks against the real v3 frontend API in all four error-handling modes.
 Shared semantic-channel tests run against both frontend majors in TypeScript and
 JSDoc, checking the original channel/callback id, ordered delivery, end-message
 cleanup, late handler assignment, and repeated/cross-module registration without
-stacking transforms. The adapter calls `Channel.deserialize`, which the published
-v3 frontend API does not have yet: the fixture augments the type and the runtime
-suite installs a stand-in with the same semantics, both marked to delete once a v3
-alpha ships the method. Mapping remains attached when a channel is passed to an
-untransformed command: use a fresh channel when switching payload contracts, and
-give commands that need different transforms their own channel. Frozen and sealed
-channels work, because the method keeps its state in a private field.
+stacking transforms. The adapter calls `Channel.deserialize` when the frontend
+API has it and otherwise registers the transform on the channel's `onmessage`,
+so the published v3 API exercises the fallback path
+([tracked for removal](https://github.com/specta-rs/tauri-specta/issues/289)).
+Mapping remains attached when a channel is passed to an untransformed command:
+use a fresh channel when switching payload contracts, and give commands that need
+different transforms their own channel. On APIs with `deserialize`, frozen and
+sealed channels work; the fallback needs an extensible channel.
 
 ## Known gaps
 

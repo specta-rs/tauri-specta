@@ -2,46 +2,9 @@ import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { afterEach, test } from "node:test";
 
-/**
- * `Channel.deserialize` is added in tauri-apps/tauri#16583 and is not in a published
- * `@tauri-apps/api` yet, so the generated bindings can't run against the version these
- * tests install. Stand in for it with the same semantics until the minimum supported
- * API version has the method, then delete this.
- */
-function installChannelDeserialize(Channel) {
-  if (typeof Channel.prototype.deserialize === "function") return;
-
-  const state = Symbol("tauriSpectaChannelTransform");
-  Channel.prototype.deserialize = function (transform) {
-    const existing = this[state];
-    if (existing) {
-      // Replacing must not stack transforms: a second generated module mapping the
-      // same channel still runs one transform per message.
-      existing.transform = transform;
-      return this;
-    }
-
-    const current = { handler: this.onmessage, transform };
-    // The class delivers to its private handler, so point that at the transform and
-    // back the public accessor with `current.handler` so handlers can still be set
-    // (and replaced) after registration.
-    this.onmessage = (payload) => current.handler.call(this, current.transform(payload));
-    Object.defineProperty(this, "onmessage", {
-      configurable: true,
-      get: () => current.handler,
-      set: (handler) => {
-        current.handler = handler;
-      },
-    });
-    Object.defineProperty(this, state, { value: current });
-    return this;
-  };
-}
-
 // The caller supplies its own installed Tauri API, so these tests exercise the
 // same generated runtime against v2 and v3 without accidentally importing v2.
 export function channelTests({ Channel, mockIPC, clearMocks }, ts, js) {
-  installChannelDeserialize(Channel);
   globalThis.window = { crypto: webcrypto };
   afterEach(() => clearMocks());
 

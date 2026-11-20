@@ -6,7 +6,7 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 
 /** Commands */
 export const commands = {
-	streamUrls: (channel: Channel<Payload>, options?: InvokeOptions) => __TAURI_INVOKE<void>("stream_urls", { channel: channel.deserialize((v: any) => ({...v,url:new URL(v.url)})) }, options),
+	streamUrls: (channel: Channel<Payload>, options?: InvokeOptions) => __TAURI_INVOKE<void>("stream_urls", { channel: __TAURI_DESERIALIZE_CHANNEL(channel, (v) => ({...v,url:new URL(v.url)})) }, options),
 	plainUrls: (channel: Channel<PlainPayload>, options?: InvokeOptions) => __TAURI_INVOKE<void>("plain_urls", { channel }, options),
 };
 
@@ -58,6 +58,30 @@ export type PlainPayload = {
 export type SemanticUrl = URL;
 
 /* Tauri Specta runtime */
+function __TAURI_DESERIALIZE_CHANNEL<T>(channel: Channel<T>, transform: (value: any) => T): Channel<T> {
+    const nativeDeserialize = (channel as Channel<T> & { deserialize?: (transform: (payload: unknown) => T) => Channel<T> }).deserialize;
+    if (typeof nativeDeserialize === "function") {
+        return nativeDeserialize.call(channel, transform);
+    }
+    // This frontend API has no `Channel.deserialize` yet (Tauri v3 alphas and v2 before
+    // 2.13), so register the transform on the channel's own handler instead. That keeps
+    // the channel the caller passed, and the callback id Tauri addresses.
+    if (!Object.isExtensible(channel)) {
+        throw new TypeError("tauri-specta: this channel is frozen or sealed, which this frontend API cannot support. Update @tauri-apps/api so Channel.deserialize is available.");
+    }
+    const handler = channel.onmessage;
+    Reflect.deleteProperty(channel, "onmessage");
+    const state = { handler, transform };
+    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
+    Object.defineProperty(channel, "onmessage", {
+        configurable: true,
+        get: () => state.handler,
+        set: (handler: (value: T) => void) => { state.handler = handler; },
+    });
+    return channel;
+}
+
+
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 
 type EventEmitTo<T> = [T] extends [null] ? (target: __TAURI_EVENT.EventTarget | string) => Promise<void> : (target: __TAURI_EVENT.EventTarget | string, payload: T) => Promise<void>;

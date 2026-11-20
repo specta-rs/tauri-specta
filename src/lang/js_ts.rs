@@ -113,6 +113,7 @@ fn runtime(
         .unwrap_or(exporter.types);
 
     let mut out = String::new();
+    let mut needs_channel_deserializer = false;
 
     if let Some((ndt, name)) = exporter
         .types
@@ -313,7 +314,10 @@ fn runtime(
                             semantic_types_runtime_types,
                             jsdoc,
                         )
-                        .map(|transform| format!("{key}: {transform}"))
+                        .map(|transform| {
+                            needs_channel_deserializer |= is_channel_type(&arg.ty, exporter.types);
+                            format!("{key}: {transform}")
+                        })
                     })
                     .collect::<Vec<_>>();
                 let value = if fields.is_empty() {
@@ -344,6 +348,8 @@ fn runtime(
                                 semantic_types_runtime_types,
                                 jsdoc,
                             );
+                            needs_channel_deserializer |=
+                                value.is_some() && is_channel_type(&arg.ty, exporter.types);
                             match (value, key == param) {
                                 (None, true) => param,
                                 (None, false) => format!("{key}: {param}"),
@@ -830,6 +836,14 @@ fn runtime(
     // `tauriEvents` always needs `makeEvent`, so this block is always emitted.
     out.push_str("\n/* Tauri Specta runtime */\n");
 
+    if needs_channel_deserializer {
+        out.push_str(if jsdoc {
+            DESERIALIZE_CHANNEL_IMPL_JS
+        } else {
+            DESERIALIZE_CHANNEL_IMPL_TS
+        });
+        out.push_str("\n\n");
+    }
     if has_typed_error {
         out.push_str(typed_error_impl);
         out.push('\n');
@@ -1916,16 +1930,10 @@ fn invoke_argument(
             semantic_types_runtime_types,
         )
         .map(|transform| jsdoc_transform(transform, "v", jsdoc))
-        .map(|transform| {
-            // The API takes an `unknown` payload, so the generated transform names the
-            // shape it was written against: the binding is what knows the wire type.
-            let payload = if jsdoc {
-                "(/** @type {any} */ v)"
-            } else {
-                "(v: any)"
-            };
-            format!("{input}.deserialize({payload} => {transform})")
-        })
+        // The helper uses `Channel.deserialize` when the frontend API has it and falls
+        // back to the channel's own handler when it doesn't, so the binding runs against
+        // released APIs too.
+        .map(|transform| format!("__TAURI_DESERIALIZE_CHANNEL({input}, (v) => {transform})"))
     } else {
         render_result_transform_for_phase(
             dt,
@@ -2112,6 +2120,7 @@ const RESERVED_NDT_NAMES: &[&str] = &[
     "tauriEvents",
     "typedError",
     "makeEvent",
+    "__TAURI_DESERIALIZE_CHANNEL",
 ];
 
 /// Names only the mocks runtime declares, and so only reserved on an export that
@@ -2340,6 +2349,60 @@ function mockCommandHandler(handler, name, args) {
     if (handler === undefined) throw new Error(`No mock handler registered for command '${name}'`);
     return handler(args);
 }"#;
+
+const DESERIALIZE_CHANNEL_IMPL_TS: &str = r#"function __TAURI_DESERIALIZE_CHANNEL<T>(channel: Channel<T>, transform: (value: any) => T): Channel<T> {
+    const nativeDeserialize = (channel as Channel<T> & { deserialize?: (transform: (payload: unknown) => T) => Channel<T> }).deserialize;
+    if (typeof nativeDeserialize === "function") {
+        return nativeDeserialize.call(channel, transform);
+    }
+    // This frontend API has no `Channel.deserialize` yet (Tauri v3 alphas and v2 before
+    // 2.13), so register the transform on the channel's own handler instead. That keeps
+    // the channel the caller passed, and the callback id Tauri addresses.
+    if (!Object.isExtensible(channel)) {
+        throw new TypeError("tauri-specta: this channel is frozen or sealed, which this frontend API cannot support. Update @tauri-apps/api so Channel.deserialize is available.");
+    }
+    const handler = channel.onmessage;
+    Reflect.deleteProperty(channel, "onmessage");
+    const state = { handler, transform };
+    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
+    Object.defineProperty(channel, "onmessage", {
+        configurable: true,
+        get: () => state.handler,
+        set: (handler: (value: T) => void) => { state.handler = handler; },
+    });
+    return channel;
+}
+"#;
+
+const DESERIALIZE_CHANNEL_IMPL_JS: &str = r#"/**
+ * @template T
+ * @param {Channel<T>} channel
+ * @param {(value: any) => T} transform
+ * @returns {Channel<T>}
+ */
+function __TAURI_DESERIALIZE_CHANNEL(channel, transform) {
+    const nativeDeserialize = /** @type {Channel<T> & { deserialize?: (transform: (payload: unknown) => T) => Channel<T> }} */ (channel).deserialize;
+    if (typeof nativeDeserialize === "function") {
+        return nativeDeserialize.call(channel, transform);
+    }
+    // This frontend API has no `Channel.deserialize` yet (Tauri v3 alphas and v2 before
+    // 2.13), so register the transform on the channel's own handler instead. That keeps
+    // the channel the caller passed, and the callback id Tauri addresses.
+    if (!Object.isExtensible(channel)) {
+        throw new TypeError("tauri-specta: this channel is frozen or sealed, which this frontend API cannot support. Update @tauri-apps/api so Channel.deserialize is available.");
+    }
+    const handler = channel.onmessage;
+    Reflect.deleteProperty(channel, "onmessage");
+    const state = { handler, transform };
+    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
+    Object.defineProperty(channel, "onmessage", {
+        configurable: true,
+        get: () => state.handler,
+        set: (handler) => { state.handler = handler; },
+    });
+    return channel;
+}
+"#;
 
 const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 

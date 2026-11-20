@@ -139,9 +139,10 @@ plugin dependencies are not a v3 application template.
 
 **Known limitations:** published v3 does not yet provide Specta implementations
 for IPC `Request`/`Response`, and its frontend API does not yet have
-`Channel.deserialize`. Generated semantic channel bindings call that method, so
-they need a v3 alpha that ships it; the v3 fixture stands the method in until
-then. See the
+`Channel.deserialize`. Generated semantic channel bindings use that method when
+the frontend API has it and otherwise register the transform on the channel's
+handler, so the published v3 API runs the fallback; removing it is
+[tracked here](https://github.com/specta-rs/tauri-specta/issues/289). See the
 [v3 consumer fixture](https://github.com/specta-rs/tauri-specta/blob/main/tests/tauri-v3/README.md)
 for coverage and details. Newer Tauri alphas **and v3 stable** are excluded until
 the dependency upper bound is updated. The range also admits earlier 3.0.0 alphas,
@@ -150,9 +151,10 @@ but only alpha.6 is tested; pin that version for experimental v3 support.
 Semantic mappings remain attached to their channel, including when passed to an
 untransformed command. Use a fresh channel when switching payload contracts, and
 give commands that need different transforms their own channel.
-`Channel.deserialize` keeps its state in a private field, so frozen and sealed
-channels work. It arrives in `@tauri-apps/api` 2.13, so a v2 frontend that
-receives a semantic channel payload needs that version or newer.
+On `@tauri-apps/api` 2.13+ the transform is registered with
+`Channel.deserialize`, which supports frozen and sealed channels; on older APIs
+the binding wraps the channel's `onmessage` instead, which needs an extensible
+channel.
 
 ## Development
 

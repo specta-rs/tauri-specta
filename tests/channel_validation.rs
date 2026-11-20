@@ -267,7 +267,7 @@ fn top_level_channel_argument_stays_untouched_without_a_semantic_payload() {
     .expect("a channel whose payload needs no transform is passed as-is");
 
     assert!(
-        !bindings.contains(".deserialize("),
+        !bindings.contains("__TAURI_DESERIALIZE_CHANNEL("),
         "the channel should not be touched when its payload is already the wire shape:\n{bindings}"
     );
 }
@@ -316,13 +316,20 @@ fn semantic_channel_payload_is_deserialized_by_the_channel() {
         .commands(collect_commands![semantic_channel_arg])
         .semantic_types(semantic_types());
 
-    // The API takes `unknown`, so the binding names the wire shape it was generated for.
-    let expected = "channel.deserialize((v: any) => ({...v,url:new URL(v.url)}))";
+    let expected = "__TAURI_DESERIALIZE_CHANNEL(channel, (v) => ({...v,url:new URL(v.url)}))";
 
     let bindings = export(&builder, "semantic_channel").expect("semantic channel payload exports");
     assert!(bindings.contains(expected), "{bindings}");
-    // The channel the caller passes is the one Rust addresses, so the deserializer is
-    // registered on it rather than on a replacement channel.
+    // The helper prefers the frontend API's own method and falls back to the channel's
+    // handler, so the binding works against released APIs too.
+    assert!(
+        bindings.contains("typeof nativeDeserialize === \"function\""),
+        "{bindings}"
+    );
+    assert!(
+        bindings.contains("Reflect.deleteProperty(channel, \"onmessage\")"),
+        "{bindings}"
+    );
     assert!(!bindings.contains("mapChannel"), "{bindings}");
     assert!(!bindings.contains("new Channel("), "{bindings}");
 
@@ -333,9 +340,13 @@ fn semantic_channel_payload_is_deserialized_by_the_channel() {
         "bindings.js",
     )
     .expect("semantic channel payload exports for JSDoc");
+    assert!(jsdoc.contains(expected), "{jsdoc}");
     assert!(
-        jsdoc
-            .contains("channel.deserialize((/** @type {any} */ v) => ({...v,url:new URL(v.url)}))"),
+        jsdoc.contains("typeof nativeDeserialize === \"function\""),
+        "{jsdoc}"
+    );
+    assert!(
+        jsdoc.contains("Reflect.deleteProperty(channel, \"onmessage\")"),
         "{jsdoc}"
     );
     assert!(!jsdoc.contains("mapChannel"), "{jsdoc}");
