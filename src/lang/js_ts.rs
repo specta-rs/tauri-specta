@@ -22,8 +22,8 @@ impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let cfg = cfg.clone();
-        let types = hide_ipc_standins(hide_unused_std_result_type(&cfg, cfg.types.clone()));
+        let mut cfg = cfg.clone();
+        let types = export_types(&mut cfg);
         let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
@@ -56,8 +56,8 @@ impl LanguageExt for specta_typescript::JSDoc {
     type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let cfg = cfg.clone();
-        let types = hide_ipc_standins(hide_unused_std_result_type(&cfg, cfg.types.clone()));
+        let mut cfg = cfg.clone();
+        let types = export_types(&mut cfg);
         let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
@@ -84,6 +84,21 @@ impl LanguageExt for specta_typescript::JSDoc {
             })
             .export_to(path, &types, format)
     }
+}
+
+/// The type graph the generated runtime and the user's types are rendered from.
+///
+/// `hide_*` need an owned graph, and `export` already owns a clone of the configuration, so
+/// the graph is moved out of that clone instead of being copied a second time. That is only
+/// safe without semantic types: `runtime` re-derives the semantic runtime type graph from
+/// `cfg.types`, so it still needs the original there.
+fn export_types(cfg: &mut BuilderConfiguration) -> Types {
+    if cfg.semantic_types.is_some() {
+        return hide_ipc_standins(hide_unused_std_result_type(cfg, cfg.types.clone()));
+    }
+
+    let types = std::mem::take(&mut cfg.types);
+    hide_ipc_standins(hide_unused_std_result_type(cfg, types))
 }
 
 fn runtime(
