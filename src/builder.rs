@@ -1,4 +1,4 @@
-use std::{any::TypeId, borrow::Cow, collections::BTreeMap, path::Path};
+use std::{any::TypeId, borrow::Cow, collections::BTreeMap, fmt, path::Path};
 
 use crate::{
     Casing, Command, Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta,
@@ -110,11 +110,53 @@ pub enum ErrorHandlingMode {
 ///     .run(tauri::test::mock_context(tauri::test::noop_assets()))
 ///     .expect("error while running tauri application");
 /// ```
-#[derive(Debug)]
 #[non_exhaustive]
 pub struct Builder<R: Runtime> {
     commands: Commands<R>,
     cfg: BuilderConfiguration,
+    type_registrations: Vec<TypeRegistration>,
+}
+
+impl<R: Runtime> fmt::Debug for Builder<R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Builder")
+            .field("commands", &self.commands)
+            .field("cfg", &self.cfg)
+            .finish()
+    }
+}
+
+#[derive(Clone)]
+enum TypeRegistration {
+    Commands,
+    Events(Events),
+    ExplicitType(fn(&mut Types)),
+    ExplicitTypes(Types),
+}
+
+impl TypeRegistration {
+    #[allow(clippy::panic)]
+    fn apply<R: Runtime>(&self, commands: &Commands<R>, cfg: &mut BuilderConfiguration) {
+        match self {
+            Self::Commands => {
+                cfg.commands = (commands.1)(&mut cfg.types).commands;
+                if let Some(name) = crate::commands::duplicate_command_name(&cfg.commands) {
+                    panic!(
+                        "Command '{name}' is registered multiple times. Remove the duplicate registration."
+                    );
+                }
+            }
+            Self::Events(events) => {
+                cfg.events = events
+                    .0
+                    .iter()
+                    .map(|(name, build)| (*name, build(&mut cfg.types)))
+                    .collect();
+            }
+            Self::ExplicitType(register) => register(&mut cfg.types),
+            Self::ExplicitTypes(types) => cfg.types.extend(types),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -164,6 +206,7 @@ impl<R: Runtime> Default for Builder<R> {
         Self {
             commands: Default::default(),
             cfg: Default::default(),
+            type_registrations: Vec::new(),
         }
     }
 }
@@ -173,6 +216,7 @@ impl<R: Runtime> Clone for Builder<R> {
         Self {
             commands: self.commands.clone(),
             cfg: self.cfg.clone(),
+            type_registrations: self.type_registrations.clone(),
         }
     }
 }
@@ -181,6 +225,32 @@ impl<R: Runtime> Builder<R> {
     /// Construct a new Tauri Specta builder.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn register(mut self, registration: TypeRegistration) -> Self {
+        use TypeRegistration::{Commands, Events};
+
+        if matches!(&registration, Commands | Events(_))
+            && let Some(index) = self.type_registrations.iter().position(|previous| {
+                matches!(
+                    (previous, &registration),
+                    (Commands, Commands) | (Events(_), Events(_))
+                )
+            })
+        {
+            // Types has no way to remove one registration's definitions or roots.
+            // Replay the surviving registrations in order: the first definition wins
+            // when multiple registrations supply the same type.
+            self.type_registrations.remove(index);
+            self.cfg.types = Types::default();
+            for previous in &self.type_registrations {
+                previous.apply(&self.commands, &mut self.cfg);
+            }
+        }
+
+        registration.apply(&self.commands, &mut self.cfg);
+        self.type_registrations.push(registration);
+        self
     }
 
     /// Set the name of the current plugin name.
@@ -193,7 +263,8 @@ impl<R: Runtime> Builder<R> {
 
     /// Register commands with the builder.
     ///
-    /// **WARNING:** This method will overwrite any previously registered commands.
+    /// This replaces any previously registered commands, including types collected
+    /// only for those commands.
     ///
     /// # Panics
     ///
@@ -214,24 +285,15 @@ impl<R: Runtime> Builder<R> {
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().commands(collect_commands![hello_world]);
     /// ```
-    #[allow(clippy::panic)]
     pub fn commands(mut self, commands: Commands<R>) -> Self {
-        let collected = (commands.1)(&mut self.cfg.types);
-        self.cfg.commands = collected.commands;
-        if let Some(name) = crate::commands::duplicate_command_name(&self.cfg.commands) {
-            panic!(
-                "Command '{name}' is registered multiple times. Remove the duplicate registration."
-            );
-        }
-        Self {
-            commands,
-            cfg: self.cfg,
-        }
+        self.commands = commands;
+        self.register(TypeRegistration::Commands)
     }
 
     /// Register events with the builder.
     ///
-    /// **WARNING:** This method will overwrite any previously registered events.
+    /// This replaces any previously registered events, including types collected
+    /// only for those events. Use [`Events::merge`] to combine event collections first.
     ///
     /// # Example
     ///
@@ -245,13 +307,8 @@ impl<R: Runtime> Builder<R> {
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().events(collect_events![DemoEvent]);
     /// ```
-    pub fn events(mut self, events: Events) -> Self {
-        self.cfg.events = events
-            .0
-            .iter()
-            .map(|(k, build)| (*k, build(&mut self.cfg.types)))
-            .collect();
-        self
+    pub fn events(self, events: Events) -> Self {
+        self.register(TypeRegistration::Events(events))
     }
 
     /// Export a new type with the frontend.
@@ -272,9 +329,10 @@ impl<R: Runtime> Builder<R> {
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().typ::<MyStruct>();
     /// ```
-    pub fn typ<T: Type>(mut self) -> Self {
-        self.cfg.types.register_mut::<T>();
-        self
+    pub fn typ<T: Type>(self) -> Self {
+        self.register(TypeRegistration::ExplicitType(|types| {
+            types.register_mut::<T>();
+        }))
     }
 
     /// Export a group of types to the frontend.
@@ -289,9 +347,8 @@ impl<R: Runtime> Builder<R> {
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().types(&Types::default());
     /// ```
-    pub fn types(mut self, types: &Types) -> Self {
-        self.cfg.types.extend(types);
-        self
+    pub fn types(self, types: &Types) -> Self {
+        self.register(TypeRegistration::ExplicitTypes(types.clone()))
     }
 
     /// Export a constant value to the frontend.
