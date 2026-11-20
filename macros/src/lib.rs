@@ -32,6 +32,10 @@ pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     // Keep collector locals separate from unqualified command paths at the call site.
     let types = Ident::new("types", Span::mixed_site());
     let collected = Ident::new("collected", Span::mixed_site());
+    // Reused across every command so the per-argument datatypes do not need a fresh
+    // allocation each time.
+    let arg_types = Ident::new("arg_types", Span::mixed_site());
+    let count = commands.len();
     let mut handlers = Vec::new();
     let mut inferences = Vec::new();
 
@@ -54,6 +58,7 @@ pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStre
                 ::tauri::command_metadata!(#stripped),
                 #accessor,
                 #types,
+                &mut #arg_types,
             )
         };
         inferences.push(quote! {
@@ -66,7 +71,12 @@ pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStre
             ::tauri::generate_handler![#(#handlers),*],
             |#[allow(unused_variables)] #types: &mut ::specta::Types| {
                 #[allow(unused_mut)]
-                let mut #collected = ::tauri_specta::CollectedCommands::default();
+                let mut #collected =
+                    ::tauri_specta::CollectedCommands::with_capacity(#count);
+                #[allow(unused_mut, unused_variables)]
+                let mut #arg_types: ::std::vec::Vec<
+                    ::core::option::Option<::specta::datatype::DataType>,
+                > = ::std::vec::Vec::new();
                 #(#inferences)*
                 #collected
             },
