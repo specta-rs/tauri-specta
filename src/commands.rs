@@ -7,7 +7,10 @@ use specta::{
     Types,
     datatype::{DataType, Deprecated},
 };
-use tauri::{Runtime, ipc::Invoke};
+use tauri::{
+    Runtime,
+    ipc::{CommandScope, GlobalScope, Invoke, ScopeObject},
+};
 
 /// A command as seen by the binding exporters.
 ///
@@ -139,7 +142,7 @@ pub trait CommandSignature<TMarker> {
 #[diagnostic::on_unimplemented(
     message = "one or more Tauri command arguments cannot be exported by specta",
     note = "derive or implement `specta::Type` for every argument the frontend sends",
-    note = "`State`, `AppHandle`, `Window`, `Webview` and `WebviewWindow` are injected by Tauri and are not sent from the frontend"
+    note = "`State`, `AppHandle`, `Window`, `Webview`, `WebviewWindow`, `CommandScope` and `GlobalScope` are injected by Tauri and are not sent from the frontend"
 )]
 pub trait CommandArguments<TMarker> {
     /// One entry per argument, in declaration order. `None` marks an injected argument.
@@ -198,6 +201,18 @@ impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::Webview<R> {
 }
 
 impl<R: Runtime> CommandArgument<InjectedArgumentMarker> for tauri::WebviewWindow<R> {
+    fn to_datatype(_: &mut Types) -> Option<DataType> {
+        None
+    }
+}
+
+impl<T: ScopeObject> CommandArgument<InjectedArgumentMarker> for CommandScope<T> {
+    fn to_datatype(_: &mut Types) -> Option<DataType> {
+        None
+    }
+}
+
+impl<T: ScopeObject> CommandArgument<InjectedArgumentMarker> for GlobalScope<T> {
     fn to_datatype(_: &mut Types) -> Option<DataType> {
         None
     }

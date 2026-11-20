@@ -37,6 +37,16 @@ fn injected_first(state: tauri::State<'_, u32>, name: String) -> String {
 }
 
 #[tauri::command]
+fn injected_scopes(
+    command_scope: tauri::ipc::CommandScope<String>,
+    name: String,
+    global_scope: tauri::ipc::GlobalScope<String>,
+    count: u32,
+) {
+    let _ = (command_scope, name, global_scope, count);
+}
+
+#[tauri::command]
 async fn async_command(value: u32) -> Result<u32, String> {
     Ok(value)
 }
@@ -132,6 +142,18 @@ fn injected_arguments_do_not_shift_argument_names() {
         "{bindings}"
     );
     assert!(!bindings.contains("state: "), "{bindings}");
+}
+
+#[test]
+fn injected_scopes_do_not_appear_in_the_ipc_payload() {
+    let builder = Builder::new().commands(collect_commands![injected_scopes]);
+    let bindings = export(&builder, "injected_scopes");
+    assert!(
+        bindings.contains(
+            r#"injectedScopes: (name: string, count: number, options?: InvokeOptions) => __TAURI_INVOKE<void>("injected_scopes", { name, count }, options)"#
+        ),
+        "{bindings}"
+    );
 }
 
 #[test]
