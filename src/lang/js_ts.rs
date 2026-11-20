@@ -167,10 +167,7 @@ fn runtime(
     // register for `tauri::ipc::Channel`, so a graph without one cannot contain a channel
     // anywhere. That makes the walks below no-ops for most exports, which is worth checking
     // for once rather than traversing every type and signature to discover.
-    let has_channel_standin = exporter
-        .types
-        .into_unsorted_iter()
-        .any(is_channel_ndt);
+    let has_channel_standin = exporter.types.into_unsorted_iter().any(is_channel_ndt);
 
     // A `Channel` is only usable as a whole command argument or result. Anywhere else it
     // renders as a bare reference name with no definition, so fail the export rather than
@@ -249,6 +246,9 @@ fn runtime(
     // Commands
     if enabled_commands {
         let mut s = Struct::named();
+        // Reused across commands so the per-command bookkeeping doesn't allocate.
+        let mut seen_keys: Vec<&str> = Vec::new();
+        let mut reserved_names: Vec<&str> = Vec::with_capacity(3);
         for command in &cfg.commands {
             let named_args = command
                 .args
@@ -258,9 +258,9 @@ fn runtime(
             let raw_request = named_args.len() != command.args.len();
             // A payload object cannot carry two independent values under the same key.
             // Check Tauri's normalized keys, not the generated parameter names.
-            let mut seen_keys = BTreeSet::new();
+            seen_keys.clear();
             for arg in &named_args {
-                if !seen_keys.insert(arg.name.as_ref()) {
+                if seen_keys.contains(&arg.name.as_ref()) {
                     return Err(Error::framework(
                         format!(
                             "Command '{}' uses the IPC payload key '{}' more than once. Rename one of the parameters or change `rename_all` so their keys are distinct.",
@@ -269,6 +269,7 @@ fn runtime(
                         "",
                     ));
                 }
+                seen_keys.push(arg.name.as_ref());
             }
             if raw_request && cfg.mocks {
                 return Err(Error::framework(
@@ -283,9 +284,10 @@ fn runtime(
                 .as_ref()
                 .and_then(|dt| extract_std_result(dt, exporter.types));
             let typed_result = result.filter(|_| cfg.error_handling != ErrorHandlingMode::Throw);
-            let mut used_names = BTreeSet::from(["__TAURI_INVOKE".to_string()]);
+            reserved_names.clear();
+            reserved_names.push("__TAURI_INVOKE");
             if typed_result.is_some() {
-                used_names.insert("typedError".into());
+                reserved_names.push("typedError");
             }
             if cfg.semantic_types.is_some()
                 && command
@@ -293,54 +295,79 @@ fn runtime(
                     .iter()
                     .any(|arg| is_channel_type(&arg.ty, exporter.types))
             {
-                used_names.insert("mapChannel".into());
+                reserved_names.push("mapChannel");
             }
             let mut arguments = command_arguments(
                 command,
                 &exporter,
                 cfg,
                 semantic_types_runtime_types,
-                &mut used_names,
+                &reserved_names,
             )?;
             let mixed_request = raw_request && !named_args.is_empty();
             if mixed_request {
-                let fields = arguments
+                let mut fields = String::new();
+                for ((_, ty), arg) in arguments
                     .iter()
                     .zip(&command.args)
                     .filter(|(_, arg)| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
+                {
+                    if !fields.is_empty() {
+                        fields.push_str("; ");
+                    }
                     // `value` is the IPC payload object, so its keys are Tauri's keys.
-                    .map(|((_, ty), arg)| format!("{}: {ty}", js_object_key(&arg.name)))
-                    .collect::<Vec<_>>()
-                    .join("; ");
+                    fields.push_str(&js_object_key(&arg.name));
+                    fields.push_str(": ");
+                    fields.push_str(ty);
+                }
                 arguments = vec![("value".into(), format!("{{ {fields} }}"))];
             } else if raw_request {
                 arguments.truncate(1);
             }
-            let mut options_name = "options".to_string();
-            while arguments.iter().any(|(name, _)| name == &options_name) {
-                options_name = format!("_{options_name}");
+            let options_name = {
+                let mut options_name: Cow<'_, str> = Cow::Borrowed("options");
+                while arguments
+                    .iter()
+                    .any(|(name, _)| name == options_name.as_ref())
+                {
+                    options_name = Cow::Owned(format!("_{options_name}"));
+                }
+                options_name
+            };
+            arguments.push((
+                {
+                    let mut name = String::with_capacity(options_name.len() + 1);
+                    name.push_str(&options_name);
+                    name.push('?');
+                    name
+                },
+                "InvokeOptions".to_string(),
+            ));
+
+            let mut fn_arguments = String::new();
+            for (index, (name, dt)) in arguments.iter().enumerate() {
+                if index > 0 {
+                    fn_arguments.push_str(", ");
+                }
+                if jsdoc {
+                    fn_arguments.push_str(name.trim_end_matches('?'));
+                } else {
+                    fn_arguments.push_str(name);
+                    fn_arguments.push_str(": ");
+                    fn_arguments.push_str(dt);
+                }
             }
-            arguments.push((format!("{options_name}?"), "InvokeOptions".into()));
 
-            let fn_arguments = arguments
-                .iter()
-                .map(|(name, dt)| {
-                    let mut arg = if jsdoc {
-                        name.trim_end_matches('?').to_string()
-                    } else {
-                        name.to_string()
-                    };
-                    if !jsdoc {
-                        arg.push_str(": ");
-                        arg.push_str(dt);
-                    }
-                    arg
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
+            // The `(name, …)` payload object Tauri's `invoke` receives, written straight
+            // into the call instead of being assembled separately.
+            let mut invoke_args =
+                String::with_capacity(command_name.len() + command.args.len() * 32 + 16);
+            invoke_args.push('(');
+            write_js_string_literal(&mut invoke_args, &command_name);
+            invoke_args.push_str(", ");
 
-            let arguments_invoke_obj = if mixed_request {
-                let mut fields = Vec::new();
+            if mixed_request {
+                let mut fields = String::new();
                 for arg in named_args {
                     // Read the original IPC key, not a generated parameter name.
                     let input = js_member_access("value", &arg.name);
@@ -353,63 +380,64 @@ fn runtime(
                         jsdoc,
                     ) {
                         needs_channel_mapping |= is_channel_type(&arg.ty, exporter.types);
-                        fields.push(format!("{}: {transform}", js_object_key(&arg.name)));
+                        if !fields.is_empty() {
+                            fields.push_str(", ");
+                        }
+                        fields.push_str(&js_object_key(&arg.name));
+                        fields.push_str(": ");
+                        fields.push_str(&transform);
                     }
                 }
-                let value = if fields.is_empty() {
-                    "value".to_string()
+                if fields.is_empty() {
+                    invoke_args.push_str("value");
                 } else {
-                    format!("{{ ...value, {} }}", fields.join(", "))
-                };
-                format!(", {value}, {options_name}")
+                    invoke_args.push_str("{ ...value, ");
+                    invoke_args.push_str(&fields);
+                    invoke_args.push_str(" }");
+                }
             } else if raw_request {
                 let name = &arguments[0].0;
-                format!(", Array.isArray({name}) ? new Uint8Array({name}) : {name}, {options_name}")
+                invoke_args.push_str("Array.isArray(");
+                invoke_args.push_str(name);
+                invoke_args.push_str(") ? new Uint8Array(");
+                invoke_args.push_str(name);
+                invoke_args.push_str(") : ");
+                invoke_args.push_str(name);
             } else if command.args.is_empty() {
-                format!(", undefined, {options_name}")
+                invoke_args.push_str("undefined");
             } else {
-                format!(
-                    ", {{ {} }}, {options_name}",
-                    command
-                        .args
-                        .iter()
-                        .zip(&arguments)
-                        .map(|(arg, (param, _))| {
-                            let key = arg.name.as_ref();
-                            let value = invoke_argument(
-                                param,
-                                &arg.ty,
-                                &exporter,
-                                cfg,
-                                semantic_types_runtime_types,
-                                jsdoc,
-                            );
-                            needs_channel_mapping |=
-                                value.is_some() && is_channel_type(&arg.ty, exporter.types);
+                invoke_args.push_str("{ ");
+                for (index, (arg, (param, _))) in command.args.iter().zip(&arguments).enumerate() {
+                    if index > 0 {
+                        invoke_args.push_str(", ");
+                    }
+                    let key = arg.name.as_ref();
+                    let value = invoke_argument(
+                        param,
+                        &arg.ty,
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                        jsdoc,
+                    );
+                    needs_channel_mapping |=
+                        value.is_some() && is_channel_type(&arg.ty, exporter.types);
 
-                            Ok(match value {
-                                None if key == param => param.clone(),
-                                value => format!(
-                                    "{}: {}",
-                                    js_object_key(key),
-                                    value.as_deref().unwrap_or(param)
-                                ),
-                            })
-                        })
-                        .collect::<Result<Vec<_>, Error>>()?
-                        .join(", ")
-                )
-            };
+                    match value {
+                        None if key == param => invoke_args.push_str(param),
+                        value => {
+                            invoke_args.push_str(&js_object_key(key));
+                            invoke_args.push_str(": ");
+                            invoke_args.push_str(value.as_deref().unwrap_or(param));
+                        }
+                    }
+                }
+                invoke_args.push_str(" }");
+            }
 
-            let invoke_args = {
-                let mut invoke_args =
-                    String::with_capacity(command_name.len() + arguments_invoke_obj.len() + 4);
-                invoke_args.push('(');
-                write_js_string_literal(&mut invoke_args, &command_name);
-                invoke_args.push_str(&arguments_invoke_obj);
-                invoke_args.push(')');
-                invoke_args
-            };
+            invoke_args.push_str(", ");
+            invoke_args.push_str(&options_name);
+            invoke_args.push(')');
 
             let body = if let Some((dt_ok, dt_err)) = typed_result {
                 let semantic_err_type = apply_semantic_type_for_phase(
@@ -580,111 +608,122 @@ fn runtime(
                 }
             };
 
-            let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
+            let mut field_ts = String::with_capacity(fn_arguments.len() + body.len() + 8);
+            field_ts.push('(');
+            field_ts.push_str(&fn_arguments);
+            field_ts.push_str(") => ");
+            field_ts.push_str(&body);
+
+            let mut field = Field::new(define(field_ts).into());
             field.deprecated = command.deprecated.clone();
-            field.docs = {
+            field.docs = if jsdoc {
                 let mut docs = command.docs.to_string();
-
-                if jsdoc {
-                    if !docs.is_empty() {
-                        docs.push('\n');
-                    }
-
-                    docs.push_str(
-                        &arguments
-                            .iter()
-                            .map(|(name, dt)| {
-                                if let Some(name) = name.strip_suffix('?') {
-                                    format!("@param {{{dt}}} [{name}]")
-                                } else {
-                                    format!("@param {{{dt}}} {name}")
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n"),
-                    );
-
-                    if !arguments.is_empty() {
-                        docs.push('\n');
-                    }
-
-                    let returns = if let Some((dt_ok, dt_err)) = typed_result {
-                        let ok_semantic_type = has_semantic_type_for_phase(
-                            dt_ok,
-                            Phase::Deserialize,
-                            "v.data",
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                        );
-                        let err_semantic_type = has_semantic_type_for_phase(
-                            dt_err,
-                            Phase::Deserialize,
-                            "v.error",
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                        );
-                        let ok = render_reference_dt_for_phase(
-                            dt_ok,
-                            if ok_semantic_type {
-                                Phase::Deserialize
-                            } else {
-                                Phase::Serialize
-                            },
-                            Phase::Deserialize,
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                        )?;
-                        let err = render_reference_dt_for_phase(
-                            dt_err,
-                            if err_semantic_type {
-                                Phase::Deserialize
-                            } else {
-                                Phase::Serialize
-                            },
-                            Phase::Deserialize,
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                        )?;
-
-                        result_type(cfg.error_handling, &ok, &err)
-                    } else {
-                        let output_dt = result.map(|(ok, _)| ok).or(command.result.as_ref());
-                        let output_semantic_type = output_dt.is_some_and(|dt| {
-                            has_semantic_type_for_phase(
-                                dt,
-                                Phase::Deserialize,
-                                "v",
-                                &exporter,
-                                cfg,
-                                semantic_types_runtime_types,
-                            )
-                        });
-
-                        match output_dt {
-                            Some(dt) => render_reference_dt_for_phase(
-                                dt,
-                                if output_semantic_type {
-                                    Phase::Deserialize
-                                } else {
-                                    Phase::Serialize
-                                },
-                                Phase::Deserialize,
-                                &exporter,
-                                cfg,
-                                semantic_types_runtime_types,
-                            )?,
-                            None => "void".to_string(),
-                        }
-                    };
-
-                    docs.push_str(&format!("@returns {{Promise<{returns}>}}"));
+                if !docs.is_empty() {
+                    docs.push('\n');
                 }
 
+                for (index, (name, dt)) in arguments.iter().enumerate() {
+                    if index > 0 {
+                        docs.push('\n');
+                    }
+                    if let Some(name) = name.strip_suffix('?') {
+                        docs.push_str("@param {");
+                        docs.push_str(dt);
+                        docs.push_str("} [");
+                        docs.push_str(name);
+                        docs.push(']');
+                    } else {
+                        docs.push_str("@param {");
+                        docs.push_str(dt);
+                        docs.push_str("} ");
+                        docs.push_str(name);
+                    }
+                }
+
+                if !arguments.is_empty() {
+                    docs.push('\n');
+                }
+
+                let returns = if let Some((dt_ok, dt_err)) = typed_result {
+                    let ok_semantic_type = has_semantic_type_for_phase(
+                        dt_ok,
+                        Phase::Deserialize,
+                        "v.data",
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    );
+                    let err_semantic_type = has_semantic_type_for_phase(
+                        dt_err,
+                        Phase::Deserialize,
+                        "v.error",
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    );
+                    let ok = render_reference_dt_for_phase(
+                        dt_ok,
+                        if ok_semantic_type {
+                            Phase::Deserialize
+                        } else {
+                            Phase::Serialize
+                        },
+                        Phase::Deserialize,
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    )?;
+                    let err = render_reference_dt_for_phase(
+                        dt_err,
+                        if err_semantic_type {
+                            Phase::Deserialize
+                        } else {
+                            Phase::Serialize
+                        },
+                        Phase::Deserialize,
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    )?;
+
+                    result_type(cfg.error_handling, &ok, &err)
+                } else {
+                    let output_dt = result.map(|(ok, _)| ok).or(command.result.as_ref());
+                    let output_semantic_type = output_dt.is_some_and(|dt| {
+                        has_semantic_type_for_phase(
+                            dt,
+                            Phase::Deserialize,
+                            "v",
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        )
+                    });
+
+                    match output_dt {
+                        Some(dt) => render_reference_dt_for_phase(
+                            dt,
+                            if output_semantic_type {
+                                Phase::Deserialize
+                            } else {
+                                Phase::Serialize
+                            },
+                            Phase::Deserialize,
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        )?,
+                        None => "void".to_string(),
+                    }
+                };
+
+                docs.push_str("@returns {Promise<");
+                docs.push_str(&returns);
+                docs.push_str(">}");
+
                 docs.into()
+            } else {
+                command.docs.clone()
             };
             s = s.field(
                 cfg.function_casing
@@ -1154,7 +1193,9 @@ fn mock_handlers_declaration(
     let mut handlers = Vec::new();
 
     for command in cfg.commands.iter() {
-        let accessor = cfg.function_casing.apply(cfg.command_accessor_name(command));
+        let accessor = cfg
+            .function_casing
+            .apply(cfg.command_accessor_name(command));
         let key = js_object_key(&accessor);
         let (arguments, result) =
             mock_handler_signature(command, exporter, cfg, semantic_types_runtime_types)?;
@@ -1195,28 +1236,31 @@ fn command_arguments(
     exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
-    used_names: &mut BTreeSet<String>,
+    reserved_names: &[&str],
 ) -> Result<Vec<(String, String)>, Error> {
-    command
-        .args
-        .iter()
-        .map(|arg| {
-            Ok((
-                command_parameter_name(&arg.name, used_names),
-                render_reference_dt_for_phase(
-                    &arg.ty,
-                    Phase::Deserialize,
-                    Phase::Serialize,
-                    exporter,
-                    cfg,
-                    semantic_types_runtime_types,
-                )?,
-            ))
-        })
-        .collect()
+    let mut arguments = Vec::with_capacity(command.args.len());
+    for arg in &command.args {
+        // A name is taken if an earlier argument, a runtime helper or the trailing
+        // `options` parameter would shadow it.
+        let name = command_parameter_name(&arg.name, |name| {
+            reserved_names.contains(&name) || arguments.iter().any(|(used, _)| used == name)
+        });
+        arguments.push((
+            name,
+            render_reference_dt_for_phase(
+                &arg.ty,
+                Phase::Deserialize,
+                Phase::Serialize,
+                exporter,
+                cfg,
+                semantic_types_runtime_types,
+            )?,
+        ));
+    }
+    Ok(arguments)
 }
 
-fn command_parameter_name(key: &str, used_names: &mut BTreeSet<String>) -> String {
+fn command_parameter_name(key: &str, is_taken: impl Fn(&str) -> bool) -> String {
     let mut name = key.to_lower_camel_case();
     if !is_js_identifier(&name) {
         name.insert(0, '_');
@@ -1225,7 +1269,7 @@ fn command_parameter_name(key: &str, used_names: &mut BTreeSet<String>) -> Strin
             name = "_arg".into();
         }
     }
-    while is_reserved_parameter_name(&name) || !used_names.insert(name.clone()) {
+    while is_reserved_parameter_name(&name) || is_taken(&name) {
         name.insert(0, '_');
     }
     name
