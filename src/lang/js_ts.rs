@@ -667,7 +667,17 @@ fn runtime(
     // Events
     if has_user_events {
         let mut s = Struct::named();
+        let mut accessors = BTreeMap::new();
         for (name, (_, r)) in &cfg.events {
+            let accessor = cfg.function_casing.apply(name);
+            if let Some(first) = accessors.insert(accessor.clone(), name) {
+                return Err(Error::framework(
+                    format!(
+                        "Events '{first}' and '{name}' would both export as '{accessor}'. Rename one of them so the generated bindings don't conflict."
+                    ),
+                    "",
+                ));
+            }
             let event_name_escaped =
                 serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name)).map_err(
                     |err| Error::framework("failed to serialize an event name for bindings", err),
@@ -748,7 +758,7 @@ fn runtime(
                 )
                 .into();
             }
-            s = s.field(cfg.function_casing.apply(name).into_owned(), field);
+            s = s.field(accessor.into_owned(), field);
         }
 
         out.push_str("\n/** Events */");
