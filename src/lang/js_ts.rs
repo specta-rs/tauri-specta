@@ -153,19 +153,26 @@ fn runtime(
         ));
     }
 
+    // `Casing::apply` allocates an accessor per command, and the same accessor is
+    // needed by the duplicate check below, the `commands` object and the mock handlers.
+    let accessors: Vec<Cow<'_, str>> = cfg
+        .commands
+        .iter()
+        .map(|command| {
+            cfg.function_casing
+                .apply(cfg.command_accessor_name(command))
+        })
+        .collect();
+
     {
         // Two differently named commands can still produce one accessor (e.g. `my_cmd` and
         // `MyCmd`), which silently keeps only the last. This has to run at export because
         // the accessor depends on the final `function_casing`, which can be set after the
         // commands were registered. Literal duplicates are rejected earlier, when they are
         // registered (see `Builder::commands`).
-        let mut seen: BTreeMap<String, &str> = BTreeMap::new();
-        for command in cfg.commands.iter() {
-            let accessor = cfg
-                .function_casing
-                .apply(cfg.command_accessor_name(command))
-                .into_owned();
-            if let Some(first) = seen.get(&accessor) {
+        let mut seen: BTreeMap<&str, &str> = BTreeMap::new();
+        for (accessor, command) in accessors.iter().zip(cfg.commands.iter()) {
+            if let Some(first) = seen.get(accessor.as_ref()) {
                 return Err(Error::framework(
                     format!(
                         "Commands '{first}' and '{}' would both export as '{accessor}'. Rename one of them so the generated bindings don't conflict.",
@@ -264,7 +271,7 @@ fn runtime(
         // Reused across commands so the per-command bookkeeping doesn't allocate.
         let mut seen_keys: Vec<&str> = Vec::new();
         let mut reserved_names: Vec<&str> = Vec::with_capacity(3);
-        for command in &cfg.commands {
+        for (command, accessor) in cfg.commands.iter().zip(&accessors) {
             let named_args = command
                 .args
                 .iter()
@@ -740,12 +747,7 @@ fn runtime(
             } else {
                 command.docs.clone()
             };
-            s = s.field(
-                cfg.function_casing
-                    .apply(cfg.command_accessor_name(command))
-                    .into_owned(),
-                field,
-            );
+            s = s.field(accessor.to_string(), field);
         }
 
         out.push_str("\n/** Commands */");
@@ -757,10 +759,10 @@ fn runtime(
     // Events
     if has_user_events {
         let mut s = Struct::named();
-        let mut accessors = BTreeMap::new();
+        let mut event_accessors = BTreeMap::new();
         for (name, (_, r)) in &cfg.events {
             let accessor = cfg.function_casing.apply(name);
-            if let Some(first) = accessors.insert(accessor.clone(), name) {
+            if let Some(first) = event_accessors.insert(accessor.clone(), name) {
                 return Err(Error::framework(
                     format!(
                         "Events '{first}' and '{name}' would both export as '{accessor}'. Rename one of them so the generated bindings don't conflict."
@@ -957,12 +959,13 @@ fn runtime(
         out.push_str("\n/* Tauri Specta mocks */\n\n");
         out.push_str(&mock_handlers_declaration(
             cfg,
+            &accessors,
             &exporter,
             semantic_types_runtime_types,
             jsdoc,
         )?);
         out.push('\n');
-        out.push_str(&mock_commands_impl(cfg, jsdoc)?);
+        out.push_str(&mock_commands_impl(cfg, &accessors, jsdoc)?);
         if enabled_commands {
             out.push('\n');
             out.push_str(if jsdoc {
@@ -1201,17 +1204,15 @@ fn is_js_identifier(name: &str) -> bool {
 /// frontend-facing API here any more than it does for `commands` itself.
 fn mock_handlers_declaration(
     cfg: &BuilderConfiguration,
+    accessors: &[Cow<'_, str>],
     exporter: &FrameworkExporter,
     semantic_types_runtime_types: &Types,
     jsdoc: bool,
 ) -> Result<String, Error> {
     let mut handlers = Vec::new();
 
-    for command in cfg.commands.iter() {
-        let accessor = cfg
-            .function_casing
-            .apply(cfg.command_accessor_name(command));
-        let key = js_object_key(&accessor);
+    for (command, accessor) in cfg.commands.iter().zip(accessors) {
+        let key = js_object_key(accessor);
         let (arguments, result) =
             mock_handler_signature(command, exporter, cfg, semantic_types_runtime_types)?;
         handlers.push(format!(
@@ -1499,7 +1500,11 @@ fn validate_mock_transforms(
 
 /// The `mockCommands` installer, which routes each registered Tauri command name to its
 /// handler.
-fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String, Error> {
+fn mock_commands_impl(
+    cfg: &BuilderConfiguration,
+    accessors: &[Cow<'_, str>],
+    jsdoc: bool,
+) -> Result<String, Error> {
     let mut out = String::new();
     out.push_str(if jsdoc {
         MOCK_CALL_TYPES_JS
@@ -1534,12 +1539,8 @@ fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String,
     out.push_str("    __TAURI_MOCK_IPC((cmd, args) => {\n");
     out.push_str("        switch (cmd) {\n");
 
-    for command in cfg.commands.iter() {
-        let accessor = cfg
-            .function_casing
-            .apply(cfg.command_accessor_name(command))
-            .into_owned();
-        let access = js_member_access("mockHandlers", &accessor);
+    for (command, accessor) in cfg.commands.iter().zip(accessors) {
+        let access = js_member_access("mockHandlers", accessor);
         // The recorded name is the accessor, not the Tauri command name, so a test can
         // assert against the same name it uses for `commands`.
         let command_name = resolve_tauri_command_name(cfg.plugin_name, command.name.as_ref());
