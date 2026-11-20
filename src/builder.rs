@@ -595,7 +595,11 @@ impl<R: Runtime> Builder<R> {
         }
 
         for (&name, (tid, _)) in &self.cfg.events {
-            map.insert(*tid, EventRegistryMeta { plugin_name, name });
+            // A conflicting namespace was rejected above, so an event type that is
+            // already mounted is mounted under this plugin name. Keeping that entry
+            // preserves the Tauri name it has already cached.
+            map.entry(*tid)
+                .or_insert_with(|| EventRegistryMeta::new(plugin_name, name));
         }
     }
 

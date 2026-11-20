@@ -80,6 +80,24 @@ fn rejects_a_conflicting_namespace_without_changing_the_registry() {
 }
 
 #[test]
+fn remounting_after_an_emit_keeps_delivering() {
+    let app = tauri::test::mock_app();
+    let builder = Builder::new()
+        .plugin_name("bench")
+        .events(collect_events![Shared]);
+    let delivered = count_deliveries(&app, "plugin:bench:shared");
+
+    builder.mount_events(&app);
+    Shared(1).emit(&app).unwrap();
+
+    // The first emit populates the cached Tauri name. A second mount must keep it.
+    builder.mount_events(&app);
+    Shared(2).emit(&app).unwrap();
+
+    assert_eq!(delivered.load(Ordering::Relaxed), 2);
+}
+
+#[test]
 fn application_and_plugin_namespaces_also_conflict() {
     let app = tauri::test::mock_app();
     Builder::new()

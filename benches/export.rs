@@ -65,8 +65,13 @@ struct Wrapper(String);
 enum EventKind {
     Unit,
     Tuple(String),
-    Struct { id: u32 },
-    Created { at: String, by: u32 },
+    Struct {
+        id: u32,
+    },
+    Created {
+        at: String,
+        by: u32,
+    },
     Updated {
         at: String,
         by: u32,
@@ -129,6 +134,13 @@ struct MessageEvent {
 struct WideEvent {
     event: EventKind,
     wide: Wide,
+}
+
+/// A payload with no heap fields, so an emit measures dispatch rather than payload
+/// construction.
+#[derive(Serialize, Deserialize, Type, Event, Clone)]
+struct EmitEvent {
+    id: u32,
 }
 
 // ----- commands -----
@@ -430,6 +442,25 @@ fn bench_collect(label: &str, mut workload: impl FnMut() -> Builder<MockRuntime>
     drop(tracking);
 }
 
+/// Measure a typed event emit. The event is mounted under a plugin name, which is the
+/// path that has to build a prefixed Tauri event name.
+fn bench_emit(label: &str, app: &tauri::App<MockRuntime>) {
+    let event = EmitEvent { id: 1 };
+    for _ in 0..5 {
+        event.emit(app).unwrap();
+    }
+
+    measure_time(label, TIME_ITERATIONS * 5, || {
+        event.emit(black_box(app)).unwrap();
+    });
+
+    let tracking = dhat::Profiler::builder().testing().build();
+    measure_allocations(label, || {
+        event.emit(black_box(app)).unwrap();
+    });
+    drop(tracking);
+}
+
 fn bench_export<L: LanguageExt + Clone>(
     label: &str,
     builder: &Builder<MockRuntime>,
@@ -468,9 +499,28 @@ fn main() {
     bench_collect("collect", workload);
     bench_collect("collect_wide", workload_wide);
 
+    let event_app = tauri::test::mock_app();
+    Builder::<MockRuntime>::new()
+        .plugin_name("bench")
+        .events(collect_events![EmitEvent])
+        .mount_events(&event_app);
+    bench_emit("event_emit", &event_app);
+
     let mut profiler = None;
-    bench_export("export_ts", &builder, Typescript::default(), "ts", &mut profiler);
-    bench_export("export_jsdoc", &builder, JSDoc::default(), "js", &mut profiler);
+    bench_export(
+        "export_ts",
+        &builder,
+        Typescript::default(),
+        "ts",
+        &mut profiler,
+    );
+    bench_export(
+        "export_jsdoc",
+        &builder,
+        JSDoc::default(),
+        "js",
+        &mut profiler,
+    );
     bench_export(
         "export_ts_mocks",
         &mocks,
