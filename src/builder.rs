@@ -1,8 +1,9 @@
 use std::{any::TypeId, borrow::Cow, collections::BTreeMap, fmt, path::Path};
 
 use crate::{
-    Casing, Command, Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta,
-    name::resolve_tauri_event_name,
+    Casing, Command, Commands, EventRegistry, Events, LanguageExt,
+    event::EventRegistryMeta,
+    name::{is_valid_tauri_event_name, resolve_tauri_event_name},
 };
 use serde::Serialize;
 use specta::{Type, Types, datatype::Reference};
@@ -523,6 +524,10 @@ impl<R: Runtime> Builder<R> {
     /// would receive the other's payload. Give one of the types a different
     /// `#[tauri_specta(event_name = "...")]`.
     ///
+    /// Panics if the resolved name is not one Tauri accepts: alphanumeric characters,
+    /// `-`, `/`, `:` and `_`. Tauri otherwise rejects the event on first use, so
+    /// `emit` fails and `listen` panics.
+    ///
     /// # Example
     ///
     /// ```rust,no_run
@@ -544,6 +549,18 @@ impl<R: Runtime> Builder<R> {
         let registry = EventRegistry::get_or_manage(handle);
         let mut map = registry.0.write().expect("Failed to lock EventRegistry");
         let plugin_name = self.cfg.plugin_name;
+
+        // Tauri only validates the name when the event is first used, where `emit`
+        // returns an error and `listen` panics. Reject it at mount instead.
+        if let Some(name) = self.cfg.events.keys().find_map(|&name| {
+            let resolved = resolve_tauri_event_name(plugin_name, name);
+            (!is_valid_tauri_event_name(&resolved)).then_some(resolved)
+        }) {
+            drop(map);
+            panic!(
+                "Event '{name}' is not a valid Tauri event name. Tauri only accepts alphanumeric characters, '-', '/', ':' and '_', so change the event's `#[tauri_specta(event_name = ...)]` or the plugin name."
+            );
+        }
 
         if let Some((name, previous)) = self.cfg.events.iter().find_map(|(&name, (tid, _))| {
             let previous = map.get(tid)?.plugin_name;

@@ -149,3 +149,50 @@ fn the_same_name_may_be_used_in_a_different_namespace() {
     NameCollisionOther(String::new()).emit(&app).unwrap();
     assert_eq!(delivered.load(Ordering::Relaxed), 1);
 }
+
+#[derive(Clone, Serialize, Type)]
+struct InvalidName(u32);
+
+// The derive rejects this name at compile time, but `Event` is a public trait, so the
+// mount-time check must also catch a hand-written implementation.
+impl Event for InvalidName {
+    const NAME: &'static str = "invalid event name";
+}
+
+#[test]
+fn rejects_an_event_name_tauri_cannot_use() {
+    let app = tauri::test::mock_app();
+    let invalid = Builder::new().events(collect_events![InvalidName]);
+
+    // Tauri validates the name on every listen (panic) and emit (Err), so the only
+    // failure this config can produce is a runtime one far from the mistake.
+    let error = catch_unwind(AssertUnwindSafe(|| invalid.mount_events(&app)))
+        .expect_err("Tauri rejects a space in an event name");
+    let message = panic_message(error.as_ref());
+    assert!(message.contains("'invalid event name'"), "{message}");
+    assert!(message.contains("alphanumeric"), "{message}");
+
+    // The rejected batch must not leave the registry in a state that blocks other events.
+    let delivered = count_deliveries(&app, "shared");
+    Builder::new()
+        .events(collect_events![Shared])
+        .mount_events(&app);
+    Shared(1).emit(&app).unwrap();
+    assert_eq!(delivered.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn rejects_a_plugin_name_tauri_cannot_use() {
+    let app = tauri::test::mock_app();
+    let invalid = Builder::new()
+        .plugin_name("not a plugin")
+        .events(collect_events![Shared]);
+
+    let error = catch_unwind(AssertUnwindSafe(|| invalid.mount_events(&app)))
+        .expect_err("Tauri rejects a space in the plugin-prefixed event name");
+    assert!(
+        panic_message(error.as_ref()).contains("'plugin:not a plugin:shared'"),
+        "{}",
+        panic_message(error.as_ref())
+    );
+}
