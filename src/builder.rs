@@ -2,6 +2,7 @@ use std::{any::TypeId, borrow::Cow, collections::BTreeMap, fmt, path::Path};
 
 use crate::{
     Casing, Command, Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta,
+    name::resolve_tauri_event_name,
 };
 use serde::Serialize;
 use specta::{Type, Types, datatype::Reference};
@@ -511,6 +512,12 @@ impl<R: Runtime> Builder<R> {
     ///
     /// This should be called within [`tauri::Builder::setup`](tauri::Builder::setup) like the example below.
     ///
+    /// # Panics
+    ///
+    /// Panics if an event type is already mounted in a different namespace on this app.
+    /// Use a distinct Rust event type for each plugin or application namespace.
+    /// Mounting the same event type again in the same namespace is allowed.
+    ///
     /// # Example
     ///
     /// ```rust,no_run
@@ -527,17 +534,27 @@ impl<R: Runtime> Builder<R> {
     ///     .run(tauri::test::mock_context(tauri::test::noop_assets()))
     ///     .expect("error while running tauri application");
     /// ```
+    #[allow(clippy::panic)]
     pub fn mount_events(&self, handle: &impl Manager<R>) {
         let registry = EventRegistry::get_or_manage(handle);
         let mut map = registry.0.write().expect("Failed to lock EventRegistry");
+        let plugin_name = self.cfg.plugin_name;
+
+        if let Some((name, previous)) = self.cfg.events.iter().find_map(|(&name, (tid, _))| {
+            let previous = map.get(tid)?.plugin_name;
+            (previous != plugin_name).then_some((name, previous))
+        }) {
+            // A rejected mount must leave the registry usable even if the caller catches the panic.
+            drop(map);
+            let previous = resolve_tauri_event_name(previous, name);
+            let requested = resolve_tauri_event_name(plugin_name, name);
+            panic!(
+                "Event type for '{previous}' is already mounted and cannot also be mounted as '{requested}' in the same Tauri app. Use a distinct Rust event type for each namespace."
+            );
+        }
 
         for (tid, _) in self.cfg.events.values() {
-            map.insert(
-                *tid,
-                EventRegistryMeta {
-                    plugin_name: self.cfg.plugin_name,
-                },
-            );
+            map.insert(*tid, EventRegistryMeta { plugin_name });
         }
     }
 
