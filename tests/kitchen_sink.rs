@@ -175,6 +175,11 @@ fn nullable_result() -> Result<Option<String>, PlainError> {
 }
 
 #[tauri::command]
+fn bigint_result() -> Result<u64, u64> {
+    Ok(42)
+}
+
+#[tauri::command]
 fn maybe() -> Option<String> {
     None
 }
@@ -330,6 +335,8 @@ const SCENARIOS: &[&str] = &[
     "error_result_jsdoc",
     "error_result_ts",
     "error_result_unknown_jsdoc",
+    "error_result_unknown_semantic_jsdoc",
+    "error_result_unknown_semantic_ts",
     "error_result_unknown_ts",
     "error_throw_jsdoc",
     "error_throw_ts",
@@ -729,6 +736,35 @@ fn error_result_unknown_jsdoc() {
         "error_result_unknown_jsdoc",
         "bindings.js",
         &builder,
+        JSDoc::default(),
+    );
+}
+
+fn result_unknown_semantic() -> Builder<MockRuntime> {
+    Builder::<MockRuntime>::new()
+        .commands(collect_commands![bigint_result])
+        .semantic_types(
+            specta_typescript::semantic::Configuration::empty().enable_lossless_bigints(),
+        )
+        .error_handling(ErrorHandlingMode::ResultUnknown)
+}
+
+#[test]
+fn error_result_unknown_semantic_ts() {
+    assert_export(
+        "error_result_unknown_semantic_ts",
+        "bindings.ts",
+        &result_unknown_semantic(),
+        Typescript::default(),
+    );
+}
+
+#[test]
+fn error_result_unknown_semantic_jsdoc() {
+    assert_export(
+        "error_result_unknown_semantic_jsdoc",
+        "bindings.js",
+        &result_unknown_semantic(),
         JSDoc::default(),
     );
 }

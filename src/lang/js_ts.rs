@@ -415,24 +415,20 @@ fn runtime(
                     semantic_types_runtime_types,
                 )
                 .map(|transform| jsdoc_transform(transform, "v.data", jsdoc));
-                // `ResultUnknown` declares the error as `unknown`, so the transform must
-                // accept whatever the rejection was. Widen the input so a transform written
-                // against the command's error type still type-checks; the runtime value is
-                // unchanged.
-                let err_input = if cfg.error_handling == ErrorHandlingMode::ResultUnknown {
-                    "(v.error as any)"
-                } else {
-                    "v.error"
+                // An invoke rejection can also be a framework error. In ResultUnknown
+                // pass it through as-is rather than assuming the command's error type.
+                let err_transform = match cfg.error_handling {
+                    ErrorHandlingMode::ResultUnknown => None,
+                    _ => render_result_transform_for_phase(
+                        dt_err,
+                        Phase::Deserialize,
+                        "v.error",
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    )
+                    .map(|transform| jsdoc_transform(transform, "v.error", jsdoc)),
                 };
-                let err_transform = render_result_transform_for_phase(
-                    dt_err,
-                    Phase::Deserialize,
-                    err_input,
-                    &exporter,
-                    cfg,
-                    semantic_types_runtime_types,
-                )
-                .map(|transform| jsdoc_transform(transform, err_input, jsdoc));
 
                 let mut invoke_ts = "typedError".to_string();
                 if !jsdoc {
@@ -1276,10 +1272,12 @@ fn validate_mock_transforms(
 
         reject(ok, Phase::Deserialize, "the result")?;
 
-        // A `Throw` mode failure is passed through as-is, so only a mode that wraps the
-        // error goes through a transform.
+        // Only modes that assume the rejection has the declared error type transform it.
         if let Some(err) = err
-            && cfg.error_handling != ErrorHandlingMode::Throw
+            && matches!(
+                cfg.error_handling,
+                ErrorHandlingMode::Result | ErrorHandlingMode::DataError
+            )
         {
             reject(err, Phase::Deserialize, "the error")?;
         }
@@ -3044,10 +3042,7 @@ mod tests {
     }
 
     #[test]
-    fn result_unknown_mode_widens_error_transform_input() {
-        // The error is typed `unknown`, so a transform written against the command's
-        // error type (`BigInt(v.error)`) would not type-check. The generated mapper
-        // widens the input; the runtime value is unchanged.
+    fn semantic_error_transforms_only_apply_to_typed_errors() {
         let semantic_types =
             specta_typescript::semantic::Configuration::empty().enable_lossless_bigints();
 
@@ -3059,15 +3054,13 @@ mod tests {
             .commands(collect_commands![bigint_error])
             .semantic_types(semantic_types.clone())
             .error_handling(ErrorHandlingMode::ResultUnknown)
+            .mocks()
             .export(Typescript::default(), &unknown_path)
-            .expect("failed to export TypeScript bindings");
+            .expect("mocks are allowed because ResultUnknown leaves errors untouched");
         let ts = fs::read_to_string(&unknown_path).expect("failed to read TypeScript bindings");
-        assert!(
-            ts.contains("BigInt((v.error as any))"),
-            "the error transform should be widened to accept `unknown`:\n{ts}"
-        );
+        assert!(!ts.contains("BigInt("), "{ts}");
 
-        // `Result` types the error as the command's own type, so the transform stays narrow.
+        // `Result` still assumes the error has the declared type and transforms it.
         let result_path = std::env::temp_dir().join(format!(
             "tauri-specta-result-semantic-error-test-{}.ts",
             std::process::id()
@@ -3079,9 +3072,6 @@ mod tests {
             .export(Typescript::default(), &result_path)
             .expect("failed to export TypeScript bindings");
         let ts = fs::read_to_string(&result_path).expect("failed to read TypeScript bindings");
-        assert!(
-            ts.contains("BigInt(v.error)") && !ts.contains("(v.error as any)"),
-            "`Result` should keep the narrow error transform:\n{ts}"
-        );
+        assert!(ts.contains("BigInt(v.error)"), "{ts}");
     }
 }
