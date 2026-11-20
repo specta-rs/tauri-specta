@@ -50,6 +50,20 @@ pub struct CollectedCommands {
     pub commands: Vec<Command>,
 }
 
+impl CollectedCommands {
+    /// An empty collection with room for `capacity` commands.
+    ///
+    /// `collect_commands!` knows the command count at compile time, so it can size the
+    /// vector once instead of growing it while pushing each command.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            commands: Vec::with_capacity(capacity),
+        }
+    }
+}
+
 /// Type-erased collector used by [`Commands`] to register command metadata.
 #[doc(hidden)]
 pub type CommandTypeCollector = dyn Fn(&mut Types) -> CollectedCommands + Send + Sync + 'static;
@@ -131,6 +145,7 @@ pub trait CommandSignature<TMarker> {
         metadata: tauri::ipc::CommandMetadata,
         accessor: Cow<'static, str>,
         types: &mut Types,
+        arg_types: &mut Vec<Option<DataType>>,
     ) -> Command
     where
         Self::Args: CommandArguments<Self::ArgMarkers>,
@@ -145,8 +160,12 @@ pub trait CommandSignature<TMarker> {
     note = "`State`, `AppHandle`, `Window`, `Webview`, `WebviewWindow`, `CommandScope` and `GlobalScope` are injected by Tauri and are not sent from the frontend"
 )]
 pub trait CommandArguments<TMarker> {
-    /// One entry per argument, in declaration order. `None` marks an injected argument.
-    fn to_datatypes(types: &mut Types) -> Vec<Option<DataType>>;
+    /// Append one entry per argument, in declaration order. `None` marks an injected
+    /// argument.
+    ///
+    /// Entries are appended to the caller's buffer rather than returned in a fresh
+    /// `Vec` so the buffer can be reused across every command in a collection.
+    fn to_datatypes(types: &mut Types, out: &mut Vec<Option<DataType>>);
 }
 
 /// A single command argument.
@@ -293,37 +312,36 @@ fn top_level_unit_as_void(dt: DataType) -> Option<DataType> {
 fn command_from_parts(
     metadata: tauri::ipc::CommandMetadata,
     accessor: Cow<'static, str>,
-    arg_types: Vec<Option<DataType>>,
+    arg_types: &mut Vec<Option<DataType>>,
     result: Option<DataType>,
     types: &Types,
 ) -> Command {
-    // Zip before filtering: `metadata.arguments` lists every argument, including the
-    // ones Tauri injects, so dropping injected types first would shift the names.
-    let args = metadata
-        .arguments
-        .iter()
-        .zip(arg_types)
-        .filter_map(|(name, ty)| {
-            let ty = ty?;
-            let name = if !name.is_empty() {
-                *name
-            } else if let DataType::Reference(Reference::Named(reference)) = &ty
-                && types.get(reference).is_some_and(|ndt| {
-                    ndt.name == "TAURI_REQUEST" && ndt.module_path.starts_with("tauri::")
-                })
-            {
-                // Tauri supplies the whole request regardless of the argument pattern.
-                // This is a frontend parameter name, not a key in the IPC payload.
-                "request"
-            } else {
-                return None;
-            };
-            Some(CommandArg {
-                name: Cow::Borrowed(name),
-                ty,
+    // `metadata.arguments` lists every argument, including the ones Tauri injects, so the
+    // types are zipped with the names before any are dropped. Draining leaves the
+    // buffer's allocation in place for the next command in the collection.
+    let mut args = Vec::with_capacity(metadata.arguments.len());
+    for (name, ty) in metadata.arguments.iter().zip(arg_types.drain(..)) {
+        let Some(ty) = ty else {
+            continue;
+        };
+        let name = if !name.is_empty() {
+            *name
+        } else if let DataType::Reference(Reference::Named(reference)) = &ty
+            && types.get(reference).is_some_and(|ndt| {
+                ndt.name == "TAURI_REQUEST" && ndt.module_path.starts_with("tauri::")
             })
-        })
-        .collect();
+        {
+            // Tauri supplies the whole request regardless of the argument pattern.
+            // This is a frontend parameter name, not a key in the IPC payload.
+            "request"
+        } else {
+            continue;
+        };
+        args.push(CommandArg {
+            name: Cow::Borrowed(name),
+            ty,
+        });
+    }
 
     Command {
         name: Cow::Borrowed(metadata.name),
@@ -343,9 +361,7 @@ fn command_from_parts(
 macro_rules! impl_command_signature {
     () => {
         impl CommandArguments<()> for () {
-            fn to_datatypes(_: &mut Types) -> Vec<Option<DataType>> {
-                Vec::new()
-            }
+            fn to_datatypes(_: &mut Types, _: &mut Vec<Option<DataType>>) {}
         }
 
         impl<F, TResult, TResultMarker> CommandSignature<(TResult, TResultMarker)> for F
@@ -362,19 +378,16 @@ macro_rules! impl_command_signature {
                 metadata: tauri::ipc::CommandMetadata,
                 accessor: Cow<'static, str>,
                 types: &mut Types,
+                arg_types: &mut Vec<Option<DataType>>,
             ) -> Command
             where
                 Self::Args: CommandArguments<Self::ArgMarkers>,
                 Self::Result: CommandResult<Self::ResultMarker>,
             {
                 let _ = self;
-                command_from_parts(
-                    metadata,
-                    accessor,
-                    Vec::new(),
-                    Self::Result::to_datatype(types),
-                    types,
-                )
+                arg_types.clear();
+                let result = Self::Result::to_datatype(types);
+                command_from_parts(metadata, accessor, arg_types, result, types)
             }
         }
     };
@@ -383,8 +396,8 @@ macro_rules! impl_command_signature {
         where
             $($ty: CommandArgument<$marker>,)+
         {
-            fn to_datatypes(types: &mut Types) -> Vec<Option<DataType>> {
-                vec![$($ty::to_datatype(types)),+]
+            fn to_datatypes(types: &mut Types, out: &mut Vec<Option<DataType>>) {
+                out.extend([$($ty::to_datatype(types)),+]);
             }
         }
 
@@ -403,19 +416,17 @@ macro_rules! impl_command_signature {
                 metadata: tauri::ipc::CommandMetadata,
                 accessor: Cow<'static, str>,
                 types: &mut Types,
+                arg_types: &mut Vec<Option<DataType>>,
             ) -> Command
             where
                 Self::Args: CommandArguments<Self::ArgMarkers>,
                 Self::Result: CommandResult<Self::ResultMarker>,
             {
                 let _ = self;
-                command_from_parts(
-                    metadata,
-                    accessor,
-                    Self::Args::to_datatypes(types),
-                    Self::Result::to_datatype(types),
-                    types,
-                )
+                arg_types.clear();
+                Self::Args::to_datatypes(types, arg_types);
+                let result = Self::Result::to_datatype(types);
+                command_from_parts(metadata, accessor, arg_types, result, types)
             }
         }
     };

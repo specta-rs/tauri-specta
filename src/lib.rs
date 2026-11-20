@@ -646,13 +646,14 @@ pub mod internal {
         metadata: tauri::ipc::CommandMetadata,
         accessor: &'static str,
         types: &mut Types,
+        arg_types: &mut Vec<Option<DataType>>,
     ) -> Command
     where
         F: crate::commands::CommandSignature<M>,
         F::Args: crate::commands::CommandArguments<F::ArgMarkers>,
         F::Result: crate::commands::CommandResult<F::ResultMarker>,
     {
-        f.into_command(metadata, Cow::Borrowed(accessor), types)
+        f.into_command(metadata, Cow::Borrowed(accessor), types, arg_types)
     }
 
     /// called by `collect_events` to register events to an `Events`
