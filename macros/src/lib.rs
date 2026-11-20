@@ -30,6 +30,9 @@ use darling::FromDeriveInput;
 pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let commands = parse_macro_input!(input with Punctuated::<Path, Token![,]>::parse_terminated);
 
+    // Keep collector locals separate from unqualified command paths at the call site.
+    let types = Ident::new("types", Span::mixed_site());
+    let collected = Ident::new("collected", Span::mixed_site());
     let mut handlers = Vec::new();
     let mut inferences = Vec::new();
 
@@ -51,28 +54,22 @@ pub fn collect_commands(input: proc_macro::TokenStream) -> proc_macro::TokenStre
                 #command,
                 ::tauri::command_metadata!(#stripped),
                 #accessor,
-                types,
+                #types,
             )
         };
         inferences.push(quote! {
-            collected.commands.push(#call);
+            #collected.commands.push(#call);
         });
     }
 
     quote! {
         ::tauri_specta::internal::command(
             ::tauri::generate_handler![#(#handlers),*],
-            {
-                #[allow(unused_variables, unused_mut)]
-                fn export(
-                    types: &mut ::specta::Types,
-                ) -> ::tauri_specta::CollectedCommands {
-                    let mut collected = ::tauri_specta::CollectedCommands::default();
-                    #(#inferences)*
-                    collected
-                }
-
-                export
+            |#[allow(unused_variables)] #types: &mut ::specta::Types| {
+                #[allow(unused_mut)]
+                let mut #collected = ::tauri_specta::CollectedCommands::default();
+                #(#inferences)*
+                #collected
             },
         )
     }
