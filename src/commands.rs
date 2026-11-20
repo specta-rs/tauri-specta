@@ -5,7 +5,7 @@ use std::future::Future;
 use specta::Type;
 use specta::{
     Types,
-    datatype::{DataType, Deprecated},
+    datatype::{DataType, Deprecated, Reference},
 };
 use tauri::{
     Runtime,
@@ -295,6 +295,7 @@ fn command_from_parts(
     accessor: Cow<'static, str>,
     arg_types: Vec<Option<DataType>>,
     result: Option<DataType>,
+    types: &Types,
 ) -> Command {
     // Zip before filtering: `metadata.arguments` lists every argument, including the
     // ones Tauri injects, so dropping injected types first would shift the names.
@@ -303,8 +304,22 @@ fn command_from_parts(
         .iter()
         .zip(arg_types)
         .filter_map(|(name, ty)| {
-            ty.filter(|_| !name.is_empty()).map(|ty| CommandArg {
-                name: Cow::Borrowed(*name),
+            let ty = ty?;
+            let name = if !name.is_empty() {
+                *name
+            } else if let DataType::Reference(Reference::Named(reference)) = &ty
+                && types.get(reference).is_some_and(|ndt| {
+                    ndt.name == "TAURI_REQUEST" && ndt.module_path.starts_with("tauri::")
+                })
+            {
+                // Tauri supplies the whole request regardless of the argument pattern.
+                // This is a frontend parameter name, not a key in the IPC payload.
+                "request"
+            } else {
+                return None;
+            };
+            Some(CommandArg {
+                name: Cow::Borrowed(name),
                 ty,
             })
         })
@@ -358,6 +373,7 @@ macro_rules! impl_command_signature {
                     accessor,
                     Vec::new(),
                     Self::Result::to_datatype(types),
+                    types,
                 )
             }
         }
@@ -398,6 +414,7 @@ macro_rules! impl_command_signature {
                     accessor,
                     Self::Args::to_datatypes(types),
                     Self::Result::to_datatype(types),
+                    types,
                 )
             }
         }

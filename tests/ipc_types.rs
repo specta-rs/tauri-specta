@@ -23,6 +23,9 @@ fn mixed(todo: String, request: tauri::ipc::Request<'_>) -> String {
 }
 
 #[tauri::command]
+fn unnamed_request(_: tauri::ipc::Request<'_>) {}
+
+#[tauri::command]
 fn no_args() {}
 
 #[tauri::command]
@@ -83,6 +86,27 @@ fn raw_ipc_uses_sdk_request_types_and_unknown_response() {
     );
     assert!(
         !js.contains("TAURI_REQUEST") && !js.contains("TAURI_RESPONSE"),
+        "{js}"
+    );
+}
+
+#[test]
+fn raw_request_does_not_require_an_argument_name() {
+    let builder = Builder::<MockRuntime>::new().commands(collect_commands![unnamed_request]);
+    let ts = export(
+        &builder,
+        specta_typescript::Typescript::default(),
+        "unnamed.ts",
+    );
+    assert!(
+        ts.contains(r#"unnamedRequest: (request: InvokeArgs, options?: InvokeOptions) => __TAURI_INVOKE<void>("unnamed_request", Array.isArray(request) ? new Uint8Array(request) : request, options)"#),
+        "{ts}"
+    );
+
+    let js = export(&builder, specta_typescript::JSDoc::default(), "unnamed.js");
+    assert!(js.contains("@param {InvokeArgs} request"), "{js}");
+    assert!(
+        js.contains(r#"__TAURI_INVOKE("unnamed_request", Array.isArray(request) ? new Uint8Array(request) : request, options)"#),
         "{js}"
     );
 }
