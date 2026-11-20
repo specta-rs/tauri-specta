@@ -256,8 +256,30 @@ fn runtime(
                 Error::framework("failed to serialize a command name for bindings", err)
             })?;
 
-            let mut arguments =
-                command_argument_types(command, &exporter, cfg, semantic_types_runtime_types)?;
+            let result = command
+                .result
+                .as_ref()
+                .and_then(|dt| extract_std_result(dt, exporter.types));
+            let typed_result = result.filter(|_| cfg.error_handling != ErrorHandlingMode::Throw);
+            let mut used_names = BTreeSet::from(["__TAURI_INVOKE".to_string()]);
+            if typed_result.is_some() {
+                used_names.insert("typedError".into());
+            }
+            if cfg.semantic_types.is_some()
+                && command
+                    .args
+                    .iter()
+                    .any(|arg| is_channel_type(&arg.ty, exporter.types))
+            {
+                used_names.insert("mapChannel".into());
+            }
+            let mut arguments = command_arguments(
+                command,
+                &exporter,
+                cfg,
+                semantic_types_runtime_types,
+                &mut used_names,
+            )?;
             let named_args = command
                 .args
                 .iter()
@@ -270,8 +292,8 @@ fn runtime(
                     .zip(&command.args)
                     .filter(|(_, arg)| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
                     // `value` is the IPC payload object, so its keys are Tauri's keys.
-                    .map(|((_, ty), arg)| format!("{}: {ty}", arg.name))
-                    .collect::<Vec<_>>()
+                    .map(|((_, ty), arg)| Ok(format!("{}: {ty}", js_object_key(&arg.name)?)))
+                    .collect::<Result<Vec<_>, Error>>()?
                     .join("; ");
                 arguments = vec![("value".into(), format!("{{ {fields} }}"))];
             } else if raw_request {
@@ -301,27 +323,22 @@ fn runtime(
                 .join(", ");
 
             let arguments_invoke_obj = if mixed_request {
-                let fields = named_args
-                    .iter()
-                    .filter_map(|arg| {
-                        // `value` is the IPC payload object, so its keys are the keys
-                        // Tauri reads, not the camelCased TypeScript parameter names.
-                        let key = arg.name.as_ref();
-                        let input = format!("value.{key}");
-                        invoke_argument(
-                            &input,
-                            &arg.ty,
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                            jsdoc,
-                        )
-                        .map(|transform| {
-                            needs_channel_mapping |= is_channel_type(&arg.ty, exporter.types);
-                            format!("{key}: {transform}")
-                        })
-                    })
-                    .collect::<Vec<_>>();
+                let mut fields = Vec::new();
+                for arg in named_args {
+                    // Read the original IPC key, not a generated parameter name.
+                    let input = js_member_access("value", &arg.name)?;
+                    if let Some(transform) = invoke_argument(
+                        &input,
+                        &arg.ty,
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                        jsdoc,
+                    ) {
+                        needs_channel_mapping |= is_channel_type(&arg.ty, exporter.types);
+                        fields.push(format!("{}: {transform}", js_object_key(&arg.name)?));
+                    }
+                }
                 let value = if fields.is_empty() {
                     "value".to_string()
                 } else {
@@ -339,11 +356,11 @@ fn runtime(
                     command
                         .args
                         .iter()
-                        .map(|arg| {
-                            let param = arg.name.to_lower_camel_case();
+                        .zip(&arguments)
+                        .map(|(arg, (param, _))| {
                             let key = arg.name.as_ref();
                             let value = invoke_argument(
-                                &param,
+                                param,
                                 &arg.ty,
                                 &exporter,
                                 cfg,
@@ -353,23 +370,23 @@ fn runtime(
                             needs_channel_mapping |=
                                 value.is_some() && is_channel_type(&arg.ty, exporter.types);
 
-                            match (value, key == param) {
-                                (None, true) => param,
-                                (None, false) => format!("{key}: {param}"),
-                                (Some(value), _) => format!("{key}: {value}"),
-                            }
+                            Ok(match value {
+                                None if key == param => param.clone(),
+                                value => format!(
+                                    "{}: {}",
+                                    js_object_key(key)?,
+                                    value.as_deref().unwrap_or(param)
+                                ),
+                            })
                         })
-                        .collect::<Vec<_>>()
+                        .collect::<Result<Vec<_>, Error>>()?
                         .join(", ")
                 )
             };
 
             let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
 
-            let body = if cfg.error_handling != ErrorHandlingMode::Throw
-                && let Some(result) = command.result.as_ref()
-                && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
-            {
+            let body = if let Some((dt_ok, dt_err)) = typed_result {
                 let semantic_err_type = apply_semantic_type_for_phase(
                     dt_err,
                     Phase::Deserialize,
@@ -477,11 +494,7 @@ fn runtime(
                 }
             } else {
                 let mut invoke_ts = "__TAURI_INVOKE".to_string();
-                let output_dt = command
-                    .result
-                    .as_ref()
-                    .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
-                    .or(command.result.as_ref());
+                let output_dt = result.map(|(ok, _)| ok).or(command.result.as_ref());
 
                 if !jsdoc {
                     let output_semantic_type = output_dt.is_some_and(|dt| {
@@ -495,11 +508,9 @@ fn runtime(
                         )
                     });
                     invoke_ts.push('<');
-                    invoke_ts.push_str(&match command.result.as_ref() {
+                    invoke_ts.push_str(&match output_dt {
                         Some(dt) => Cow::Owned(render_reference_dt_for_phase(
-                            extract_std_result(dt, exporter.types)
-                                .map(|(ok, _)| ok)
-                                .unwrap_or(dt),
+                            dt,
                             if output_semantic_type {
                                 Phase::Deserialize
                             } else {
@@ -565,10 +576,7 @@ fn runtime(
                         docs.push('\n');
                     }
 
-                    let returns = if cfg.error_handling != ErrorHandlingMode::Throw
-                        && let Some(result) = command.result.as_ref()
-                        && let Some((dt_ok, dt_err)) = extract_std_result(result, exporter.types)
-                    {
+                    let returns = if let Some((dt_ok, dt_err)) = typed_result {
                         let ok_semantic_type = has_semantic_type_for_phase(
                             dt_ok,
                             Phase::Deserialize,
@@ -612,11 +620,7 @@ fn runtime(
 
                         result_type(cfg.error_handling, &ok, &err)
                     } else {
-                        let output_dt = command
-                            .result
-                            .as_ref()
-                            .and_then(|dt| extract_std_result(dt, exporter.types).map(|(ok, _)| ok))
-                            .or(command.result.as_ref());
+                        let output_dt = result.map(|(ok, _)| ok).or(command.result.as_ref());
                         let output_semantic_type = output_dt.is_some_and(|dt| {
                             has_semantic_type_for_phase(
                                 dt,
@@ -1027,7 +1031,7 @@ const BUILTIN_EVENTS: &[BuiltinEvent] = &[
     },
 ];
 
-/// A command accessor as it should appear as an object key.
+/// An accessor or IPC payload key as it should appear in an object literal or type.
 ///
 /// Accessors are usually plain identifiers, but [`Casing::KebabCase`](crate::Casing)
 /// produces keys like `hello-world`, which have to be quoted. This is the same rule
@@ -1037,7 +1041,7 @@ fn js_object_key(accessor: &str) -> Result<String, Error> {
         Ok(accessor.to_string())
     } else {
         serde_json::to_string(accessor)
-            .map_err(|err| Error::framework("failed to serialize a command accessor", err))
+            .map_err(|err| Error::framework("failed to serialize a JavaScript property key", err))
     }
 }
 
@@ -1046,11 +1050,7 @@ fn js_member_access(object: &str, accessor: &str) -> Result<String, Error> {
     if is_js_identifier(accessor) {
         Ok(format!("{object}.{accessor}"))
     } else {
-        Ok(format!(
-            "{object}[{}]",
-            serde_json::to_string(accessor)
-                .map_err(|err| Error::framework("failed to serialize a command accessor", err))?
-        ))
+        Ok(format!("{object}[{}]", js_object_key(accessor)?))
     }
 }
 
@@ -1114,23 +1114,21 @@ fn mock_handlers_declaration(
     Ok(out)
 }
 
-/// The frontend-facing name and type of each of a command's arguments.
-///
-/// This is what the generated `commands` accessor declares and what its IPC payload uses,
-/// so anything else describing the same command — mock handlers, for instance — is
-/// written in exactly these terms.
-fn command_argument_types(
+/// The generated parameter name and type for each argument, in declaration order.
+/// Payload keys are kept separately in `CommandArg::name`.
+fn command_arguments(
     command: &crate::Command,
     exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
+    used_names: &mut BTreeSet<String>,
 ) -> Result<Vec<(String, String)>, Error> {
     command
         .args
         .iter()
         .map(|arg| {
             Ok((
-                arg.name.to_lower_camel_case(),
+                command_parameter_name(&arg.name, used_names),
                 render_reference_dt_for_phase(
                     &arg.ty,
                     Phase::Deserialize,
@@ -1142,6 +1140,76 @@ fn command_argument_types(
             ))
         })
         .collect()
+}
+
+fn command_parameter_name(key: &str, used_names: &mut BTreeSet<String>) -> String {
+    let mut name = key.to_lower_camel_case();
+    if !is_js_identifier(&name) {
+        name.insert(0, '_');
+        if !is_js_identifier(&name) {
+            // Be conservative for non-ASCII names; the original key remains in the payload.
+            name = "_arg".into();
+        }
+    }
+    while is_reserved_parameter_name(&name) || !used_names.insert(name.clone()) {
+        name.insert(0, '_');
+    }
+    name
+}
+
+fn is_reserved_parameter_name(name: &str) -> bool {
+    // The generated bindings are modules: strict-mode restrictions apply to parameters.
+    matches!(
+        name,
+        "arguments"
+            | "await"
+            | "break"
+            | "case"
+            | "catch"
+            | "class"
+            | "const"
+            | "continue"
+            | "debugger"
+            | "default"
+            | "delete"
+            | "do"
+            | "else"
+            | "enum"
+            | "eval"
+            | "export"
+            | "extends"
+            | "false"
+            | "finally"
+            | "for"
+            | "function"
+            | "if"
+            | "implements"
+            | "import"
+            | "in"
+            | "instanceof"
+            | "interface"
+            | "let"
+            | "new"
+            | "null"
+            | "package"
+            | "private"
+            | "protected"
+            | "public"
+            | "return"
+            | "static"
+            | "super"
+            | "switch"
+            | "this"
+            | "throw"
+            | "true"
+            | "try"
+            | "typeof"
+            | "var"
+            | "void"
+            | "while"
+            | "with"
+            | "yield"
+    )
 }
 
 /// The `(arguments, result)` signature of one command's mock handler.
@@ -1183,8 +1251,8 @@ fn mock_handler_signature(
             "(args: {{ {} }})",
             arguments
                 .iter()
-                .map(|(name, dt)| format!("{name}: {dt}"))
-                .collect::<Vec<_>>()
+                .map(|(name, dt)| Ok(format!("{}: {dt}", js_object_key(name)?)))
+                .collect::<Result<Vec<_>, Error>>()?
                 .join("; ")
         )
     };
