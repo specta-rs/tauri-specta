@@ -1983,15 +1983,9 @@ fn render_result_transform_for_phase(
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
 ) -> Option<String> {
+    // Keep named references so Specta can match registered semantic rules before
+    // descending into the type's fields.
     let dt = specta_serde::select_phase_datatype(dt, semantic_types_runtime_types, phase);
-    let dt = if let DataType::Reference(Reference::Named(r)) = &dt
-        && let Some(ndt) = semantic_types_runtime_types.get(r)
-        && let Some(dt) = &ndt.ty
-    {
-        dt.clone()
-    } else {
-        dt
-    };
     apply_semantic_type_for_phase(&dt, phase, input, semantic_types_runtime_types, cfg)
         .map(|(_, mapped)| mapped)
         .filter(|mapped| mapped != input)
