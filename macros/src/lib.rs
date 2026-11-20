@@ -111,7 +111,7 @@ pub fn derive_type(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let name_str_value = match opts.event_name {
         Some(name_from_attr) => name_from_attr,
-        None => ident.to_string().to_kebab_case(),
+        None => ident.unraw().to_string().to_kebab_case(),
     };
     let name_lit = LitStr::new(&name_str_value, ident.span());
 
