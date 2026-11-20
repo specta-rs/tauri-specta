@@ -163,21 +163,33 @@ fn runtime(
         }
     }
 
+    // Every channel reference resolves through the stand-in `NamedDataType` Tauri's derives
+    // register for `tauri::ipc::Channel`, so a graph without one cannot contain a channel
+    // anywhere. That makes the walks below no-ops for most exports, which is worth checking
+    // for once rather than traversing every type and signature to discover.
+    let has_channel_standin = exporter
+        .types
+        .into_unsorted_iter()
+        .any(is_channel_ndt);
+
     // A `Channel` is only usable as a whole command argument or result. Anywhere else it
     // renders as a bare reference name with no definition, so fail the export rather than
     // emitting bindings that don't type-check. This runs for both the TypeScript and JSDoc
     // exporters because it is part of the shared runtime path.
-    validate_channel_placement(cfg, exporter.types)?;
+    if has_channel_standin {
+        validate_channel_placement(cfg, exporter.types)?;
+    }
 
-    let is_channel_used = cfg.commands.iter().any(|command| {
-        // Check if any argument is a Channel
-        command
-            .args
-            .iter()
-            .any(|arg| is_channel_type(&arg.ty, exporter.types))
-            // Check if result contains a Channel
-            || command.result.as_ref().is_some_and(|dt| is_channel_type(dt, exporter.types))
-    });
+    let is_channel_used = has_channel_standin
+        && cfg.commands.iter().any(|command| {
+            // Check if any argument is a Channel
+            command
+                .args
+                .iter()
+                .any(|arg| is_channel_type(&arg.ty, exporter.types))
+                // Check if result contains a Channel
+                || command.result.as_ref().is_some_and(|dt| is_channel_type(dt, exporter.types))
+        });
     let has_typed_error = enabled_commands
         && cfg.error_handling != ErrorHandlingMode::Throw
         && cfg.commands.iter().any(|command| {
