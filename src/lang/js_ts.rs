@@ -896,34 +896,88 @@ fn runtime(
         // The names this configuration's runtime declares. A constant key is emitted as
         // `export const <key> = ...`, so declaring one of these would either be a
         // duplicate declaration or silently shadow the runtime's own binding.
-        let mut runtime_names: Vec<&str> = Vec::with_capacity(14);
-        runtime_names.extend(["__TAURI_EVENT", "makeEvent", "tauriEvents"]);
+        let mut runtime_names: Vec<Cow<'_, str>> = Vec::with_capacity(20);
+        runtime_names.extend(["__TAURI_EVENT", "makeEvent", "tauriEvents"].map(Cow::Borrowed));
         if enabled_commands {
-            runtime_names.extend(["__TAURI_INVOKE", "commands"]);
+            runtime_names.extend(["__TAURI_INVOKE", "commands"].map(Cow::Borrowed));
+            // TypeScript imports these as types, which still occupy the module scope.
+            // JSDoc declares the same names as `@typedef` comments, which create no
+            // binding, so a constant may use them there.
+            if !jsdoc {
+                runtime_names.push(Cow::Borrowed("InvokeOptions"));
+                if is_raw_request_used {
+                    runtime_names.push(Cow::Borrowed("InvokeArgs"));
+                }
+            }
         }
         if has_user_events {
-            runtime_names.push("events");
+            runtime_names.push(Cow::Borrowed("events"));
         }
         if is_channel_used {
-            runtime_names.push("Channel");
+            runtime_names.push(Cow::Borrowed("Channel"));
         }
         if has_typed_error {
-            runtime_names.push("typedError");
+            runtime_names.push(Cow::Borrowed("typedError"));
             if !cfg.typed_error_impl.is_empty() && !jsdoc {
-                runtime_names.push("_assertTypedErrorFollowsContract");
+                runtime_names.push(Cow::Borrowed("_assertTypedErrorFollowsContract"));
             }
         }
         if needs_channel_mapping {
-            runtime_names.extend(["mapChannel", "channelTransform"]);
+            runtime_names.extend(["mapChannel", "channelTransform"].map(Cow::Borrowed));
         }
         if enabled_mocks {
-            runtime_names.extend(["__TAURI_MOCK_IPC", "mockCommands", "mockCommandHandler"]);
+            runtime_names.extend(["__TAURI_MOCK_IPC", "mockCommands"].map(Cow::Borrowed));
+            if enabled_commands {
+                runtime_names.push(Cow::Borrowed("mockCommandHandler"));
+            }
         }
+        // TypeScript's `Namespaces` layout declares `namespace $s$` and re-exports every
+        // top-level module and root-module type as a value, and its `Files` layout imports
+        // each referenced module into the file that holds the constants. Those bindings
+        // share the module scope with the constants. JSDoc uses `@typedef` comments for the
+        // same information (and rejects `Namespaces` outright), so it has no conflict.
+        if !jsdoc && matches!(exporter.layout, Layout::Namespaces | Layout::Files) {
+            let rendered = exporter
+                .types
+                .into_unsorted_iter()
+                .filter(|ndt| ndt.ty.is_some())
+                .collect::<Vec<_>>();
+            if exporter.layout == Layout::Namespaces && !rendered.is_empty() {
+                runtime_names.push(Cow::Borrowed("$s$"));
+            }
+            for ndt in rendered {
+                if ndt.module_path.is_empty() {
+                    // `export import <name> = $s$.<name>` for a root-module type.
+                    if exporter.layout == Layout::Namespaces {
+                        runtime_names.push(Cow::Borrowed(ndt.name.as_ref()));
+                    }
+                } else if exporter.layout == Layout::Namespaces {
+                    // `export import <first segment> = $s$.<first segment>`.
+                    if let Some(module) = ndt.module_path.split("::").next() {
+                        runtime_names.push(Cow::Borrowed(module));
+                    }
+                } else {
+                    // `import type * as <full path with $ separators> from "./...";`
+                    runtime_names.push(Cow::Owned(ndt.module_path.replace("::", "$")));
+                }
+            }
+        }
+
+        // Globals the generated runtime refers to. A module-level `const` shadows a global
+        // for the whole file, so a constant with one of these names either breaks the
+        // runtime (TDZ on `Object`) or silently changes what emitted code reads.
+        let shadows_global = |key: &str| {
+            matches!(key, "Object" | "undefined")
+                || ((has_typed_error || enabled_mocks) && key == "Error")
+                || (needs_channel_mapping && key == "Symbol")
+                || ((is_raw_request_used || cfg.semantic_types.is_some())
+                    && matches!(key, "Array" | "Uint8Array"))
+        };
 
         let mut constants = cfg.constants.iter().collect::<Vec<_>>();
         constants.sort_by_key(|(a, _)| *a);
         for (name, value) in constants.iter() {
-            validate_constant_name(name, &runtime_names)?;
+            validate_constant_name(name, &runtime_names, shadows_global)?;
 
             let mut as_constt = None;
             // `as const` isn't supported in JS so are conditional on that.
@@ -2354,14 +2408,19 @@ fn is_reserved_ndt_name(name: &str, jsdoc: bool, mocks: bool) -> bool {
         || (mocks && RESERVED_NDT_NAMES_MOCKS_ONLY.contains(&name))
 }
 
-/// Rejects a [@Builder::constant@](crate::Builder::constant) key the bindings could not
+/// Rejects a [`Builder::constant`](crate::Builder::constant) key the bindings could not
 /// declare.
 ///
 /// The key is part of the public export -- it is what the frontend imports -- so it is
 /// emitted verbatim and is neither renamed nor quoted. That means it has to be a valid
-/// JavaScript identifier, and it must not be one of the runtime names in @emitted@, which
-/// are exactly the ones this export declares for its configuration.
-fn validate_constant_name(key: &str, emitted: &[&str]) -> Result<(), Error> {
+/// JavaScript binding name, it must not be one of the runtime names in `emitted`, which are
+/// exactly the ones this export declares for its configuration, and it must not shadow a
+/// global in `shadowed_globals` that emitted runtime code reads.
+fn validate_constant_name(
+    key: &str,
+    emitted: &[Cow<'_, str>],
+    shadows_global: impl Fn(&str) -> bool,
+) -> Result<(), Error> {
     if !is_js_identifier(key) {
         return Err(Error::framework(
             format!(
@@ -2371,10 +2430,30 @@ fn validate_constant_name(key: &str, emitted: &[&str]) -> Result<(), Error> {
         ));
     }
 
-    if emitted.contains(&key) {
+    // The same strict-mode set that generated parameter names avoid. A reserved word is a
+    // legal object key but not a legal binding, so it cannot follow `export const`.
+    if is_reserved_parameter_name(key) {
+        return Err(Error::framework(
+            format!(
+                "Constant '{key}' is a JavaScript reserved word, so the bindings can't declare it. Rename the constant."
+            ),
+            "",
+        ));
+    }
+
+    if emitted.iter().any(|name| name.as_ref() == key) {
         return Err(Error::framework(
             format!(
                 "Constant '{key}' would collide with the '{key}' the generated runtime declares. Rename the constant so the bindings don't redeclare it."
+            ),
+            "",
+        ));
+    }
+
+    if shadows_global(key) {
+        return Err(Error::framework(
+            format!(
+                "Constant '{key}' would shadow the '{key}' global that the generated runtime uses. Rename the constant."
             ),
             "",
         ));
@@ -3473,5 +3552,167 @@ mod tests {
         assert!(ts.contains("export const typedError = 1 as const;"), "{ts}");
 
         fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
+    }
+
+    fn constant_test_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "tauri-specta-constant-{name}-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).expect("failed to create test output directory");
+        dir
+    }
+
+    #[test]
+    fn constant_keys_cannot_be_reserved_words() {
+        let dir = constant_test_dir("reserved");
+        // Reserved words are legal object keys but not legal bindings, and the same set is
+        // already avoided for generated parameter names.
+        for key in ["class", "default", "await", "arguments"] {
+            for jsdoc in [false, true] {
+                let error = if jsdoc {
+                    Builder::<tauri::Wry>::new()
+                        .constant(key, 1)
+                        .export(JSDoc::default(), dir.join("reserved.js"))
+                } else {
+                    Builder::<tauri::Wry>::new()
+                        .constant(key, 1)
+                        .export(Typescript::default(), dir.join("reserved.ts"))
+                }
+                .expect_err("a reserved word cannot be declared with export const");
+                assert!(
+                    error.to_string().contains("is a JavaScript reserved word"),
+                    "{key} (jsdoc: {jsdoc}): {error}"
+                );
+                assert!(error.to_string().contains(key), "{error}");
+            }
+        }
+        fs::remove_dir_all(dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn constant_keys_cannot_collide_with_type_imports() {
+        let dir = constant_test_dir("type-imports");
+        // TypeScript imports InvokeOptions whenever commands are generated, which is a
+        // module binding even though it is only used in type position.
+        let error = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .constant("InvokeOptions", 1)
+            .export(Typescript::default(), dir.join("commands.ts"))
+            .expect_err("the InvokeOptions type import occupies the name");
+        assert!(
+            error
+                .to_string()
+                .contains("would collide with the 'InvokeOptions'"),
+            "{error}"
+        );
+
+        // JSDoc declares it with an @typedef, which creates no binding.
+        let jsdoc_path = dir.join("commands.js");
+        Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .constant("InvokeOptions", 1)
+            .export(JSDoc::default(), &jsdoc_path)
+            .expect("JSDoc has no InvokeOptions binding to collide with");
+        let js = fs::read_to_string(&jsdoc_path).expect("failed to read JSDoc bindings");
+        assert!(js.contains("export const InvokeOptions = 1;"), "{js}");
+
+        // Without commands the type is not imported at all.
+        let plain_path = dir.join("plain.ts");
+        Builder::<tauri::Wry>::new()
+            .constant("InvokeOptions", 1)
+            .export(Typescript::default(), &plain_path)
+            .expect("an export without commands does not import InvokeOptions");
+        let ts = fs::read_to_string(&plain_path).expect("failed to read TypeScript bindings");
+        assert!(
+            ts.contains("export const InvokeOptions = 1 as const;"),
+            "{ts}"
+        );
+
+        fs::remove_dir_all(dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn constant_keys_cannot_shadow_runtime_globals() {
+        let dir = constant_test_dir("globals");
+
+        // makeEvent always calls Object.assign, and a no-argument invoke passes
+        // undefined, so both are read unconditionally.
+        for key in ["Object", "undefined"] {
+            let error = Builder::<tauri::Wry>::new()
+                .constant(key, 1)
+                .export(Typescript::default(), dir.join("globals.ts"))
+                .expect_err("a constant must not shadow a global the runtime reads");
+            assert!(error.to_string().contains("would shadow the '"), "{error}");
+            assert!(error.to_string().contains(key), "{error}");
+        }
+
+        // Symbol is only read by channel mapping, and Error only by typed errors and mocks,
+        // so both are legal for a configuration that emits neither.
+        let plain_path = dir.join("plain.ts");
+        Builder::<tauri::Wry>::new()
+            .error_handling(ErrorHandlingMode::Throw)
+            .constant("Symbol", 1)
+            .constant("Error", 1)
+            .export(Typescript::default(), &plain_path)
+            .expect("a Throw export with no channels reads neither global");
+
+        // The default Result handling declares typedError, which tests instanceof Error.
+        let error = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .error_handling(ErrorHandlingMode::Result)
+            .constant("Error", 1)
+            .export(Typescript::default(), dir.join("typed.ts"))
+            .expect_err("typedError reads the Error global");
+        assert!(
+            error
+                .to_string()
+                .contains("would shadow the 'Error' global"),
+            "{error}"
+        );
+
+        fs::remove_dir_all(dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn constant_keys_cannot_collide_with_layout_bindings() {
+        let dir = constant_test_dir("layout");
+        let namespaces = dir.join("namespaces.ts");
+
+        // nested_semantic_bytes registers a named type from this crate, so the layouts
+        // below generate the module bindings they would for a real application.
+        for key in ["$s$", "tauri_specta"] {
+            let error = Builder::<tauri::Wry>::new()
+                .commands(collect_commands![nested_semantic_bytes])
+                .constant(key, 1)
+                .export(
+                    Typescript::default().layout(Layout::Namespaces),
+                    &namespaces,
+                )
+                .expect_err("the Namespaces layout re-exports modules as values");
+            assert!(error.to_string().contains(key), "{key}: {error}");
+        }
+
+        // The Files layout aliases the full module path, joined with dollar signs.
+        let files = dir.join("files");
+        let error = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nested_semantic_bytes])
+            .constant("tauri_specta$lang$js_ts$tests", 1)
+            .export(Typescript::default().layout(Layout::Files), &files)
+            .expect_err("the Files layout imports the module under its aliased path");
+        assert!(
+            error.to_string().contains("tauri_specta$lang$js_ts$tests"),
+            "{error}"
+        );
+
+        // JSDoc describes the same module with a @typedef, so it creates no binding.
+        let jsdoc_files = dir.join("jsdoc-files");
+        Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nested_semantic_bytes])
+            .constant("tauri_specta$lang$js_ts$tests", 1)
+            .export(JSDoc::default().layout(Layout::Files), &jsdoc_files)
+            .expect("JSDoc module documentation is not a binding");
+
+        fs::remove_dir_all(dir).expect("failed to remove test output directory");
     }
 }
