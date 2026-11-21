@@ -389,7 +389,12 @@ const TIME_BATCHES: usize = 5;
 const ALLOC_ITERATIONS: usize = 5;
 
 fn bench_path(label: &str, extension: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("tauri-specta-bench-{label}.{extension}"))
+    // Include the process id: an interleaved baseline/head comparison runs two benchmark
+    // processes at once, and a shared name would have them delete each other's output.
+    std::env::temp_dir().join(format!(
+        "tauri-specta-bench-{}-{label}.{extension}",
+        std::process::id()
+    ))
 }
 
 fn print_output_bytes(label: &str, path: &PathBuf) {
@@ -466,7 +471,6 @@ fn bench_export<L: LanguageExt + Clone>(
     builder: &Builder<MockRuntime>,
     language: L,
     extension: &str,
-    profiler: &mut Option<dhat::Profiler>,
 ) where
     L::Error: std::fmt::Debug,
 {
@@ -483,7 +487,6 @@ fn bench_export<L: LanguageExt + Clone>(
     print_output_bytes(label, &path);
 
     // Allocation tracking is enabled only for the second pass over each workload.
-    profiler.take();
     let tracking = dhat::Profiler::builder().testing().build();
     measure_allocations(label, || {
         builder.export(language.clone(), black_box(&path)).unwrap();
@@ -507,33 +510,8 @@ fn main() {
         .unwrap();
     bench_emit("event_emit", &event_app);
 
-    let mut profiler = None;
-    bench_export(
-        "export_ts",
-        &builder,
-        Typescript::default(),
-        "ts",
-        &mut profiler,
-    );
-    bench_export(
-        "export_jsdoc",
-        &builder,
-        JSDoc::default(),
-        "js",
-        &mut profiler,
-    );
-    bench_export(
-        "export_ts_mocks",
-        &mocks,
-        Typescript::default(),
-        "ts",
-        &mut profiler,
-    );
-    bench_export(
-        "export_ts_empty",
-        &empty,
-        Typescript::default(),
-        "ts",
-        &mut profiler,
-    );
+    bench_export("export_ts", &builder, Typescript::default(), "ts");
+    bench_export("export_jsdoc", &builder, JSDoc::default(), "js");
+    bench_export("export_ts_mocks", &mocks, Typescript::default(), "ts");
+    bench_export("export_ts_empty", &empty, Typescript::default(), "ts");
 }
