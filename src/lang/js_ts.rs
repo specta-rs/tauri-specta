@@ -127,11 +127,10 @@ fn runtime(
         .as_ref()
         .unwrap_or(exporter.types);
 
-    // Reserved from a rough estimate so the large blocks appended below (the rendered
-    // commands, events and user types) don't repeatedly copy everything written so far.
-    // The always-emitted runtime -- imports, `tauriEvents` and `makeEvent` -- is about 4 KB on
-    // its own; each command adds its accessor, and a JSDoc export adds the signature again in
-    // `@param`/`@returns` documentation.
+    // Imports, `tauriEvents` and `makeEvent` are appended first, then the rendered commands,
+    // events and user types. The always-emitted runtime is about 4 KB on its own; each
+    // command adds its accessor, and a JSDoc export adds the signature again in
+    // `@param`/`@returns` documentation. The buffer grows as it is written.
     let mut out = String::new();
     let mut needs_channel_mapping = false;
 
@@ -1204,9 +1203,9 @@ const BUILTIN_EVENTS: &[BuiltinEvent] = &[
 /// Append `value` to `out` as a JavaScript string literal.
 ///
 /// The result is what `serde_json::to_string` produces for the same string: only `"`, `\`
-/// and control characters are escaped, and non-ASCII text is written verbatim. Command and
-/// event names are plain ASCII, so this is almost always a pair of quotes around the
-/// original bytes.
+/// and control characters are escaped, and non-ASCII text is written verbatim. Names are
+/// usually ASCII, so this is almost always a pair of quotes around the original bytes, but
+/// the event derive accepts non-ASCII letters and command renames accept anything.
 fn write_js_string_literal(out: &mut String, value: &str) {
     out.push('"');
 
@@ -1344,8 +1343,9 @@ fn command_arguments(
 ) -> Result<Vec<(String, String)>, Error> {
     let mut arguments = Vec::with_capacity(command.args.len());
     for arg in &command.args {
-        // A name is taken if an earlier argument, a runtime helper or the trailing
-        // `options` parameter would shadow it.
+        // A name is taken if an earlier argument or a runtime helper already uses it. The
+        // trailing `options` parameter is renamed instead (see the caller), so an argument
+        // may keep that name.
         let name = command_parameter_name(&arg.name, |name| {
             reserved_names.contains(&name) || arguments.iter().any(|(used, _)| used == name)
         });
