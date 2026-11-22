@@ -131,6 +131,13 @@ fn runtime(
     // events and user types. The always-emitted runtime is about 4 KB on its own; each
     // command adds its accessor, and a JSDoc export adds the signature again in
     // `@param`/`@returns` documentation. The buffer grows as it is written.
+    if let Some((name, error)) = cfg.constant_errors.first() {
+        return Err(Error::framework(
+            format!("failed to serialize constant '{name}' for the bindings: {error}"),
+            "",
+        ));
+    }
+
     let mut out = String::new();
     let mut needs_channel_mapping = false;
 
@@ -3561,6 +3568,41 @@ mod tests {
         ));
         fs::create_dir_all(&dir).expect("failed to create test output directory");
         dir
+    }
+
+    #[derive(Debug)]
+    struct Unserializable;
+
+    impl Serialize for Unserializable {
+        fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+            Err(<S::Error as serde::ser::Error>::custom(
+                "value cannot be serialized",
+            ))
+        }
+    }
+
+    #[test]
+    fn constant_serialization_failures_are_reported_at_export() {
+        let dir = constant_test_dir("serialize");
+
+        // The builder chain has nowhere to return an error and must not panic, so the
+        // failure is deferred to export.
+        let error = Builder::<tauri::Wry>::new()
+            .constant("BROKEN", Unserializable)
+            .export(Typescript::default(), dir.join("broken.ts"))
+            .expect_err("a constant that cannot be serialized fails export");
+        assert!(
+            error
+                .to_string()
+                .contains("failed to serialize constant 'BROKEN'"),
+            "{error}"
+        );
+        assert!(
+            error.to_string().contains("value cannot be serialized"),
+            "{error}"
+        );
+
+        fs::remove_dir_all(dir).expect("failed to remove test output directory");
     }
 
     #[test]

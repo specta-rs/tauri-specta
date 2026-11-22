@@ -43,11 +43,17 @@ fn panic_message(payload: &(dyn Any + Send)) -> &str {
 #[test]
 fn mounting_the_same_type_twice_is_allowed() {
     let app = tauri::test::mock_app();
-    let builder = Builder::new().plugin_name("one").events(collect_events![Shared]);
+    let builder = Builder::new()
+        .plugin_name("one")
+        .events(collect_events![Shared]);
     let delivered = count_deliveries(&app, "plugin:one:shared");
 
-    builder.mount_events(&app).expect("the first mount succeeds");
-    builder.mount_events(&app).expect("remounting the same type is allowed");
+    builder
+        .mount_events(&app)
+        .expect("the first mount succeeds");
+    builder
+        .mount_events(&app)
+        .expect("remounting the same type is allowed");
     Shared(1).emit(&app).unwrap();
 
     assert_eq!(delivered.load(Ordering::Relaxed), 1);
@@ -215,7 +221,9 @@ fn remounting_after_an_emit_keeps_delivering() {
         .events(collect_events![Shared]);
     let delivered = count_deliveries(&app, "plugin:bench:shared");
 
-    builder.mount_events(&app).expect("the first mount succeeds");
+    builder
+        .mount_events(&app)
+        .expect("the first mount succeeds");
     Shared(1).emit(&app).unwrap();
 
     // The first emit populates the cached Tauri name. A second mount must keep it.

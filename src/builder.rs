@@ -177,6 +177,11 @@ pub struct BuilderConfiguration {
     pub types: Types,
     /// Constants exported alongside generated bindings.
     pub constants: BTreeMap<Cow<'static, str>, serde_json::Value>,
+    /// Constants whose value could not be serialized, as `(key, error)`.
+    ///
+    /// `Builder::constant` cannot fail without breaking its builder signature, so a
+    /// serialization failure is deferred and reported when the bindings are exported.
+    pub(crate) constant_errors: Vec<(Cow<'static, str>, String)>,
     /// Implementation source used for typed frontend error helpers.
     pub typed_error_impl: Cow<'static, str>,
     /// Semantic type handling configuration for supported exporters.
@@ -399,6 +404,9 @@ impl<R: Runtime> Builder<R> {
     /// the configured layout already declares (a command or event accessor object, a
     /// TypeScript type import, a namespace alias, ...). Keys are never renamed or quoted.
     ///
+    /// A value that cannot be serialized to JSON is reported by export as well; the
+    /// builder call itself cannot fail.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -406,12 +414,16 @@ impl<R: Runtime> Builder<R> {
     ///
     /// let mut builder = Builder::<tauri::Wry>::new().constant("CONSTANT_NAME","ANY_CONSTANT_VALUE");
     /// ```
-    #[track_caller]
     pub fn constant<T: Serialize>(mut self, k: impl Into<Cow<'static, str>>, v: T) -> Self {
-        self.cfg.constants.insert(
-            k.into(),
-            serde_json::to_value(v).expect("Tauri Specta failed to serialize constant"),
-        );
+        let key = k.into();
+        match serde_json::to_value(v) {
+            Ok(value) => {
+                self.cfg.constants.insert(key, value);
+            }
+            // Deferred rather than panicked: the builder chain has nowhere to return an
+            // error, and export already reports failures.
+            Err(error) => self.cfg.constant_errors.push((key, error.to_string())),
+        }
         self
     }
 
@@ -597,9 +609,11 @@ impl<R: Runtime> Builder<R> {
         // Tauri only validates the name when the event is first used, where `emit` returns an
         // error and `listen` panics. Check it before touching Tauri state so an invalid
         // config cannot leave a half-mounted registry behind.
-        if let Some(&event) = self.cfg.events.keys().find(|name| {
-            !is_valid_tauri_event_name(&resolve_tauri_event_name(plugin_name, name))
-        }) {
+        if let Some(&event) =
+            self.cfg.events.keys().find(|name| {
+                !is_valid_tauri_event_name(&resolve_tauri_event_name(plugin_name, name))
+            })
+        {
             return Err(MountEventsError::InvalidEventName {
                 event,
                 resolved: resolve_tauri_event_name(plugin_name, event).into_owned(),
@@ -609,10 +623,12 @@ impl<R: Runtime> Builder<R> {
         let registry = EventRegistry::get_or_manage(handle);
         let mut map = registry.0.write().expect("Failed to lock EventRegistry");
 
-        if let Some((event, mounted_plugin)) = self.cfg.events.iter().find_map(|(&name, (tid, _))| {
-            let mounted = map.get(tid)?.plugin_name;
-            (mounted != plugin_name).then_some((name, mounted))
-        }) {
+        if let Some((event, mounted_plugin)) =
+            self.cfg.events.iter().find_map(|(&name, (tid, _))| {
+                let mounted = map.get(tid)?.plugin_name;
+                (mounted != plugin_name).then_some((name, mounted))
+            })
+        {
             return Err(MountEventsError::NamespaceConflict {
                 event,
                 mounted: resolve_tauri_event_name(mounted_plugin, event).into_owned(),
