@@ -615,9 +615,12 @@ impl<R: Runtime> Builder<R> {
         }
 
         // Event types are keyed by Rust type, so each builder's events are independent
-        // entries.
+        // entries. A conflicting namespace was rejected above, so an event type that is
+        // already mounted is mounted under this plugin name; keeping that entry preserves
+        // the Tauri name it has already cached.
         for (tid, _) in self.cfg.events.values() {
-            map.insert(*tid, EventRegistryMeta { plugin_name });
+            map.entry(*tid)
+                .or_insert_with(|| EventRegistryMeta::new(plugin_name));
         }
 
         Ok(())
