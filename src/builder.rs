@@ -1,8 +1,9 @@
 use std::{any::TypeId, borrow::Cow, collections::BTreeMap, fmt, path::Path};
 
 use crate::{
-    Casing, Command, Commands, EventRegistry, Events, LanguageExt, event::EventRegistryMeta,
-    name::resolve_tauri_event_name,
+    Casing, Command, Commands, EventRegistry, Events, LanguageExt,
+    event::EventRegistryMeta,
+    name::{is_valid_tauri_event_name, resolve_tauri_event_name},
 };
 use serde::Serialize;
 use specta::{Type, Types, datatype::Reference};
@@ -76,7 +77,7 @@ pub enum ErrorHandlingMode {
 /// tauri::Builder::default()
 ///     .invoke_handler(builder.invoke_handler()) // < Required for commands to work
 ///     .setup(move |app| {
-///         builder.mount_events(app); // < Required for events to work
+///         builder.mount_events(app)?; // < Required for events to work
 ///
 ///         Ok(())
 ///     })
@@ -104,7 +105,7 @@ pub enum ErrorHandlingMode {
 /// tauri::Builder::default()
 ///     .invoke_handler(builder.invoke_handler()) // < Required for commands to work
 ///     .setup(move |app| {
-///         builder.mount_events(app); // < Required for events to work
+///         builder.mount_events(app)?; // < Required for events to work
 ///
 ///         Ok(())
 ///     })
@@ -220,6 +221,42 @@ impl<R: Runtime> Clone for Builder<R> {
             type_registrations: self.type_registrations.clone(),
         }
     }
+}
+
+/// An error from [`Builder::mount_events`].
+///
+/// The mount registers nothing when it returns an error, so the registry is left in the
+/// state it was in before the call.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum MountEventsError {
+    /// An event resolves to a name Tauri does not accept.
+    ///
+    /// Tauri only checks this when the event is first used, where `emit` returns an error
+    /// and `listen` panics.
+    #[error(
+        "Event '{event}' would mount as '{resolved}', which is not a valid Tauri event name. Tauri only accepts alphanumeric characters, '-', '/', ':' and '_', so change the event's `#[tauri_specta(event_name = ...)]` or the plugin name."
+    )]
+    InvalidEventName {
+        /// The event's own name, before the plugin namespace.
+        event: &'static str,
+        /// The name the event would be mounted under.
+        resolved: String,
+    },
+    /// An event type is already mounted under a different namespace on this app.
+    ///
+    /// The same Rust event type cannot resolve to two Tauri names.
+    #[error(
+        "Event '{event}' is already mounted as '{mounted}' and cannot also be mounted as '{requested}' in the same Tauri app. Use a distinct Rust event type for each namespace."
+    )]
+    NamespaceConflict {
+        /// The event's own name.
+        event: &'static str,
+        /// The Tauri name it is already mounted under.
+        mounted: String,
+        /// The Tauri name this mount would use.
+        requested: String,
+    },
 }
 
 impl<R: Runtime> Builder<R> {
@@ -510,13 +547,27 @@ impl<R: Runtime> Builder<R> {
 
     /// Mount all of the events in the builder onto a Tauri app.
     ///
-    /// This should be called within [`tauri::Builder::setup`](tauri::Builder::setup) like the example below.
+    /// This should be called within [`tauri::Builder::setup`](tauri::Builder::setup) like the
+    /// example below.
     ///
-    /// # Panics
+    /// Each builder mounts only the event types it collected. A different builder may mount
+    /// a different Rust type that resolves to the same Tauri event name: Tauri addresses
+    /// events by name, so those two types are indistinguishable at the wire. Keep names
+    /// unique across an app if that matters to you; `collect_events!` already rejects
+    /// duplicate names within one collection.
     ///
-    /// Panics if an event type is already mounted in a different namespace on this app.
-    /// Use a distinct Rust event type for each plugin or application namespace.
     /// Mounting the same event type again in the same namespace is allowed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error, without registering any event from this builder, when:
+    ///
+    /// - an event's resolved name is not one Tauri accepts (alphanumeric characters, `-`,
+    ///   `/`, `:` and `_`), which otherwise fails later at `emit` or `listen`;
+    /// - an event type is already mounted under a different namespace on this app, which
+    ///   would make its Rust and generated accessors disagree about the Tauri name.
+    ///
+    /// Use a distinct Rust event type for each plugin or application namespace.
     ///
     /// # Example
     ///
@@ -527,35 +578,49 @@ impl<R: Runtime> Builder<R> {
     ///
     /// tauri::Builder::default()
     ///     .setup(move |app| {
-    ///         builder.mount_events(app);
+    ///         builder.mount_events(app)?;
     ///
     ///         Ok(())
     ///     })
     ///     .run(tauri::test::mock_context(tauri::test::noop_assets()))
     ///     .expect("error while running tauri application");
     /// ```
-    #[allow(clippy::panic)]
-    pub fn mount_events(&self, handle: &impl Manager<R>) {
-        let registry = EventRegistry::get_or_manage(handle);
-        let mut map = registry.0.write().expect("Failed to lock EventRegistry");
+    pub fn mount_events(&self, handle: &impl Manager<R>) -> Result<(), MountEventsError> {
         let plugin_name = self.cfg.plugin_name;
 
-        if let Some((name, previous)) = self.cfg.events.iter().find_map(|(&name, (tid, _))| {
-            let previous = map.get(tid)?.plugin_name;
-            (previous != plugin_name).then_some((name, previous))
+        // Tauri only validates the name when the event is first used, where `emit` returns an
+        // error and `listen` panics. Check it before touching Tauri state so an invalid
+        // config cannot leave a half-mounted registry behind.
+        if let Some(&event) = self.cfg.events.keys().find(|name| {
+            !is_valid_tauri_event_name(&resolve_tauri_event_name(plugin_name, name))
         }) {
-            // A rejected mount must leave the registry usable even if the caller catches the panic.
-            drop(map);
-            let previous = resolve_tauri_event_name(previous, name);
-            let requested = resolve_tauri_event_name(plugin_name, name);
-            panic!(
-                "Event type for '{previous}' is already mounted and cannot also be mounted as '{requested}' in the same Tauri app. Use a distinct Rust event type for each namespace."
-            );
+            return Err(MountEventsError::InvalidEventName {
+                event,
+                resolved: resolve_tauri_event_name(plugin_name, event).into_owned(),
+            });
         }
 
+        let registry = EventRegistry::get_or_manage(handle);
+        let mut map = registry.0.write().expect("Failed to lock EventRegistry");
+
+        if let Some((event, mounted_plugin)) = self.cfg.events.iter().find_map(|(&name, (tid, _))| {
+            let mounted = map.get(tid)?.plugin_name;
+            (mounted != plugin_name).then_some((name, mounted))
+        }) {
+            return Err(MountEventsError::NamespaceConflict {
+                event,
+                mounted: resolve_tauri_event_name(mounted_plugin, event).into_owned(),
+                requested: resolve_tauri_event_name(plugin_name, event).into_owned(),
+            });
+        }
+
+        // Event types are keyed by Rust type, so each builder's events are independent
+        // entries.
         for (tid, _) in self.cfg.events.values() {
             map.insert(*tid, EventRegistryMeta { plugin_name });
         }
+
+        Ok(())
     }
 
     /// Export the bindings to the filesystem using the provided exporter.

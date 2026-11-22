@@ -139,7 +139,7 @@
 //!         .invoke_handler(builder.invoke_handler())
 //!         .setup(move |app| {
 //!             // Still required if you use events.
-//!             builder.mount_events(app);
+//!             builder.mount_events(app)?;
 //!             Ok(())
 //!         })
 //!         .run(tauri::generate_context!())
@@ -211,7 +211,7 @@
 //!         .invoke_handler(builder.invoke_handler())
 //!         .setup(move |app| {
 //!             // This is also required if you want to use events
-//!             builder.mount_events(app);
+//!             builder.mount_events(app)?;
 //!
 //!             Ok(())
 //!         })
@@ -365,7 +365,7 @@
 //!         .invoke_handler(builder.invoke_handler())
 //!         .setup(move |app| {
 //!             // Ensure you mount your events!
-//!             builder.mount_events(app);
+//!             builder.mount_events(app)?;
 //!
 //!             // Now you can use them
 //!
@@ -586,7 +586,7 @@ mod lang;
 mod macros;
 mod name;
 
-pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
+pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode, MountEventsError};
 pub use casing::Casing;
 #[doc(hidden)]
 pub use commands::CollectedCommands;

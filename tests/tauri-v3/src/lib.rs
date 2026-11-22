@@ -23,7 +23,7 @@ mod tests {
             .invoke_handler(builder.invoke_handler())
             .build(tauri::test::mock_context(tauri::test::noop_assets()))
             .unwrap();
-        builder.mount_events(&app);
+        builder.mount_events(&app).unwrap();
         app
     }
 
