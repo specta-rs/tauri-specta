@@ -150,10 +150,12 @@ impl TypeRegistration {
             }
             Self::Events(events) => {
                 cfg.events = events
-                    .0
+                    .events
                     .iter()
                     .map(|(name, build)| (*name, build(&mut cfg.types)))
                     .collect();
+                cfg.duplicate_event_names
+                    .clone_from(&events.duplicate_names);
             }
             Self::ExplicitType(register) => register(&mut cfg.types),
             Self::ExplicitTypes(types) => cfg.types.extend(types),
@@ -173,6 +175,8 @@ pub struct BuilderConfiguration {
     pub error_handling: ErrorHandlingMode,
     /// Event names mapped to their type metadata.
     pub events: BTreeMap<&'static str, (TypeId, Reference)>,
+    /// Event names registered more than once in one collection, reported at mount/export.
+    pub(crate) duplicate_event_names: Vec<&'static str>,
     /// Collected Specta types referenced by commands, events, and manual registrations.
     pub types: Types,
     /// Constants exported alongside generated bindings.
@@ -248,6 +252,16 @@ pub enum MountEventsError {
         /// The name the event would be mounted under.
         resolved: String,
     },
+    /// An event name is registered more than once in one collection.
+    ///
+    /// Only the first type could ever be reached, so the collection is rejected.
+    #[error(
+        "Event '{event}' is registered more than once in this collection. Give each Rust event type a distinct name with `#[tauri_specta(event_name = ...)]`."
+    )]
+    DuplicateEventName {
+        /// The duplicated event name.
+        event: &'static str,
+    },
     /// An event type is already mounted under a different namespace on this app.
     ///
     /// The same Rust event type cannot resolve to two Tauri names.
@@ -286,6 +300,7 @@ impl<R: Runtime> Builder<R> {
             // when multiple registrations supply the same type.
             self.type_registrations.remove(index);
             self.cfg.types = Types::default();
+            self.cfg.duplicate_event_names.clear();
             for previous in &self.type_registrations {
                 previous.apply(&self.commands, &mut self.cfg);
             }
@@ -580,6 +595,8 @@ impl<R: Runtime> Builder<R> {
     ///
     /// Returns an error, without registering any event from this builder, when:
     ///
+    /// - an event name is registered more than once in one collection, where only one of
+    ///   the types could ever be reached;
     /// - an event's resolved name is not one Tauri accepts (alphanumeric characters, `-`,
     ///   `/`, `:` and `_`), which otherwise fails later at `emit` or `listen`;
     /// - an event type is already mounted under a different namespace on this app, which
@@ -604,6 +621,10 @@ impl<R: Runtime> Builder<R> {
     ///     .expect("error while running tauri application");
     /// ```
     pub fn mount_events(&self, handle: &impl Manager<R>) -> Result<(), MountEventsError> {
+        if let Some(&event) = self.cfg.duplicate_event_names.first() {
+            return Err(MountEventsError::DuplicateEventName { event });
+        }
+
         let plugin_name = self.cfg.plugin_name;
 
         // Tauri only validates the name when the event is first used, where `emit` returns an

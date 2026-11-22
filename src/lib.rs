@@ -658,20 +658,25 @@ pub mod internal {
 
     /// called by `collect_events` to register events to an `Events`
     #[allow(clippy::panic)]
-    pub fn register_event<E: Event>(Events(events): &mut Events) {
-        if events
-            .insert(E::NAME, |types| {
-                (
-                    TypeId::of::<E>(),
-                    match E::definition(types) {
-                        DataType::Reference(r) => r,
-                        _ => panic!("Can't register event {} with non-reference type", E::NAME),
-                    },
-                )
-            })
-            .is_some()
-        {
-            panic!("Another event with name {} is already registered!", E::NAME)
+    pub fn register_event<E: Event>(events: &mut Events) {
+        let definition: fn(&mut Types) -> (TypeId, specta::datatype::Reference) = |types| {
+            (
+                TypeId::of::<E>(),
+                match E::definition(types) {
+                    DataType::Reference(r) => r,
+                    _ => panic!("Can't register event {} with non-reference type", E::NAME),
+                },
+            )
+        };
+
+        // Keep the first type and record the conflict. The panic here used to abort
+        // builder construction; mount and export report it instead.
+        if events.events.contains_key(E::NAME) {
+            if !events.duplicate_names.contains(&E::NAME) {
+                events.duplicate_names.push(E::NAME);
+            }
+        } else {
+            events.events.insert(E::NAME, definition);
         }
     }
 }

@@ -131,6 +131,15 @@ fn runtime(
     // events and user types. The always-emitted runtime is about 4 KB on its own; each
     // command adds its accessor, and a JSDoc export adds the signature again in
     // `@param`/`@returns` documentation. The buffer grows as it is written.
+    if let Some(name) = cfg.duplicate_event_names.first() {
+        return Err(Error::framework(
+            format!(
+                "event '{name}' is registered more than once in this collection, so the bindings can't describe it. Give each Rust event type a distinct name."
+            ),
+            "",
+        ));
+    }
+
     if let Some((name, error)) = cfg.constant_errors.first() {
         return Err(Error::framework(
             format!("failed to serialize constant '{name}' for the bindings: {error}"),

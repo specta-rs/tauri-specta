@@ -35,6 +35,13 @@
 ///     ]);
 /// ```
 ///
+/// # Duplicate names
+///
+/// Two event types in one collection that resolve to the same Tauri event name are
+/// reported by [`Builder::mount_events`](crate::Builder::mount_events) and by export,
+/// rather than panicking while the collection is built. The first registration is kept;
+/// give one of them a different name with `#[tauri_specta(event_name = "...")]`.
+///
 /// # Invalid event names
 ///
 /// Tauri only allows alphanumeric characters, `-`, `/`, `:` and `_` in an event

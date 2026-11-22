@@ -16,7 +16,15 @@ use crate::name::resolve_tauri_event_name;
 /// This acts to seal the implementation details of the macro.
 #[derive(Clone, Default)]
 #[allow(clippy::type_complexity)]
-pub struct Events(pub(crate) BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>);
+pub struct Events {
+    pub(crate) events: BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>,
+    /// Names registered more than once in one collection.
+    ///
+    /// The first registration is kept and the conflict is reported by
+    /// [`Builder::mount_events`](crate::Builder::mount_events) and by export, so a
+    /// duplicate does not abort setup.
+    pub(crate) duplicate_names: Vec<&'static str>,
+}
 
 impl Events {
     /// Combines two event collections.
@@ -25,7 +33,8 @@ impl Events {
     /// `other` replaces the event in `self`.
     #[must_use]
     pub fn merge(mut self, other: Self) -> Self {
-        self.0.extend(other.0);
+        self.events.extend(other.events);
+        self.duplicate_names.extend(other.duplicate_names);
         self
     }
 }

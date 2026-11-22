@@ -166,6 +166,40 @@ fn the_same_name_may_be_used_in_a_different_namespace() {
     assert_eq!(delivered.load(Ordering::Relaxed), 1);
 }
 
+#[derive(Clone, Serialize, Type, Event)]
+#[tauri_specta(event_name = "duplicate-name")]
+struct DuplicateA(u32);
+
+#[derive(Clone, Serialize, Type, Event)]
+#[tauri_specta(event_name = "duplicate-name")]
+struct DuplicateB(u32);
+
+#[test]
+fn rejects_a_duplicate_name_in_one_collection() {
+    let app = tauri::test::mock_app();
+    // Building the collection no longer panics; the conflict is reported at mount, before
+    // the registry is touched.
+    let builder = Builder::new().events(collect_events![DuplicateA, DuplicateB]);
+
+    let error = builder
+        .mount_events(&app)
+        .expect_err("two types cannot share one event name in one collection");
+    assert!(error.to_string().contains("'duplicate-name'"), "{error}");
+    assert!(
+        error.to_string().contains("registered more than once"),
+        "{error}"
+    );
+
+    // The registry is untouched, so a valid builder still mounts.
+    let delivered = count_deliveries(&app, "shared");
+    Builder::new()
+        .events(collect_events![Shared])
+        .mount_events(&app)
+        .expect("a valid collection still mounts");
+    Shared(1).emit(&app).unwrap();
+    assert_eq!(delivered.load(Ordering::Relaxed), 1);
+}
+
 #[derive(Clone, Serialize, Type)]
 struct InvalidName(u32);
 
