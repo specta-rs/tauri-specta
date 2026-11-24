@@ -278,7 +278,7 @@ fn channel_as_a_command_result_is_rejected() {
         &Builder::<MockRuntime>::new().commands(collect_commands![channel_result]),
         "channel_result",
     )
-    .expect_err("a Rust-created channel has no frontend callback to send to");
+    .expect_err("a returned channel arrives as a string, not a frontend channel");
 
     assert!(err.contains("channel_result"), "unexpected error: {err}");
     assert!(
@@ -298,7 +298,7 @@ fn channel_inside_a_result_is_rejected_as_a_result() {
         &Builder::<MockRuntime>::new().commands(collect_commands![channel_in_result_wrapper]),
         "channel_in_result_wrapper",
     )
-    .expect_err("wrapping the channel in a `Result` doesn't give it a frontend callback");
+    .expect_err("wrapping the channel in a `Result` doesn't make it usable in the frontend");
 
     assert!(
         err.contains("can only be a direct command argument"),

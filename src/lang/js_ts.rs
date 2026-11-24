@@ -1875,7 +1875,7 @@ fn validate_channel_signature_datatype(
 fn channel_result_error(subject: &str) -> Error {
     Error::framework(
         format!(
-            "`tauri::ipc::Channel` is used as {subject}, but a channel can only be a direct command argument. Tauri sends messages through the callback of a channel created on the frontend, so a channel created on the Rust side has no callback to send to and the caller would receive the `__CHANNEL__:<id>` string. Declare the channel as a command argument and send from the command instead."
+            "`tauri::ipc::Channel` is used as {subject}, but a channel can only be a direct command argument. Tauri serializes a returned channel as its `__CHANNEL__:<id>` string, and the frontend API never turns that string back into a `Channel`, so the caller would receive a string it cannot listen on. Declare the channel as a command argument and send from the command instead."
         ),
         "",
     )
