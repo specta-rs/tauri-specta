@@ -138,23 +138,17 @@ V3 requires Rust 1.95+ and v3-compatible Tauri plugins; the v2 examples' build a
 plugin dependencies are not a v3 application template.
 
 **Known limitations:** published v3 does not yet provide Specta implementations
-for IPC `Request`/`Response`, and its frontend API does not yet have
-`Channel.deserialize`. Generated semantic channel bindings use that method when
-the frontend API has it and otherwise register the transform on the channel's
-handler, so the published v3 API runs the fallback; removing it is
-[tracked here](https://github.com/specta-rs/tauri-specta/issues/289). See the
+for IPC `Request`/`Response`. See the
 [v3 consumer fixture](https://github.com/specta-rs/tauri-specta/blob/main/tests/tauri-v3/README.md)
 for coverage and details. Newer Tauri alphas **and v3 stable** are excluded until
 the dependency upper bound is updated. The range also admits earlier 3.0.0 alphas,
 but only alpha.6 is tested; pin that version for experimental v3 support.
 
-Semantic mappings remain attached to their channel, including when passed to an
+Semantic payloads are deserialized by wrapping the channel's `onmessage`, so the
+channel must be extensible: frozen and sealed channels are not supported. The
+mapping remains attached to the channel, including when passed to an
 untransformed command. Use a fresh channel when switching payload contracts, and
 give commands that need different transforms their own channel.
-On `@tauri-apps/api` 2.13+ the transform is registered with
-`Channel.deserialize`, which supports frozen and sealed channels; on older APIs
-the binding wraps the channel's `onmessage` instead, which needs an extensible
-channel.
 
 ## Development
 

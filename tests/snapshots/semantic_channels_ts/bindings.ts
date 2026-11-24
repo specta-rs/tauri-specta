@@ -59,20 +59,10 @@ export type SemanticUrl = URL;
 
 /* Tauri Specta runtime */
 function __TAURI_DESERIALIZE_CHANNEL<T>(channel: Channel<T>, transform: (value: any) => T): Channel<T> {
-    const nativeDeserialize = (channel as Channel<T> & { deserialize?: (transform: (payload: unknown) => T) => Channel<T> }).deserialize;
-    if (typeof nativeDeserialize === "function") {
-        return nativeDeserialize.call(channel, transform);
-    }
-    // This frontend API has no `Channel.deserialize` yet (Tauri v3 alphas and v2 before
-    // 2.13), so register the transform on the channel's own handler instead. That keeps
-    // the channel the caller passed, and the callback id Tauri addresses.
-    if (!Object.isExtensible(channel)) {
-        throw new TypeError("tauri-specta: this channel is frozen or sealed, which this frontend API cannot support. Update @tauri-apps/api so Channel.deserialize is available.");
-    }
-    const handler = channel.onmessage;
+    if (!Object.isExtensible(channel)) throw new TypeError("tauri-specta: a semantic channel payload wraps onmessage, so the channel must be extensible");
+    const state = { handler: channel.onmessage };
     Reflect.deleteProperty(channel, "onmessage");
-    const state = { handler, transform };
-    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
+    channel.onmessage = (value) => state.handler.call(channel, transform(value));
     Object.defineProperty(channel, "onmessage", {
         configurable: true,
         get: () => state.handler,
@@ -80,7 +70,6 @@ function __TAURI_DESERIALIZE_CHANNEL<T>(channel: Channel<T>, transform: (value: 
     });
     return channel;
 }
-
 
 type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 

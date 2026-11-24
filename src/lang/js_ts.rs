@@ -1909,7 +1909,7 @@ fn channel_nested_error(site: ChannelSite<'_>, signature_subject: &str) -> Error
 /// The JavaScript expression that adapts one command argument for the IPC.
 ///
 /// A `Channel` payload is decoded as messages arrive, so the transform is
-/// registered on the channel itself: `.deserialize(...)` keeps the channel the
+/// registered by wrapping the channel's `onmessage`, which keeps the channel the
 /// caller passed (and the callback id Rust addresses) intact. Every other argument
 /// is transformed before it is sent.
 fn invoke_argument(
@@ -1930,9 +1930,8 @@ fn invoke_argument(
             semantic_types_runtime_types,
         )
         .map(|transform| jsdoc_transform(transform, "v", jsdoc))
-        // The helper uses `Channel.deserialize` when the frontend API has it and falls
-        // back to the channel's own handler when it doesn't, so the binding runs against
-        // released APIs too.
+        // The helper registers the transform by wrapping the channel's handler; it keeps
+        // the caller's channel and the callback id Tauri addresses.
         .map(|transform| format!("__TAURI_DESERIALIZE_CHANNEL({input}, (v) => {transform})"))
     } else {
         render_result_transform_for_phase(
@@ -2351,28 +2350,17 @@ function mockCommandHandler(handler, name, args) {
 }"#;
 
 const DESERIALIZE_CHANNEL_IMPL_TS: &str = r#"function __TAURI_DESERIALIZE_CHANNEL<T>(channel: Channel<T>, transform: (value: any) => T): Channel<T> {
-    const nativeDeserialize = (channel as Channel<T> & { deserialize?: (transform: (payload: unknown) => T) => Channel<T> }).deserialize;
-    if (typeof nativeDeserialize === "function") {
-        return nativeDeserialize.call(channel, transform);
-    }
-    // This frontend API has no `Channel.deserialize` yet (Tauri v3 alphas and v2 before
-    // 2.13), so register the transform on the channel's own handler instead. That keeps
-    // the channel the caller passed, and the callback id Tauri addresses.
-    if (!Object.isExtensible(channel)) {
-        throw new TypeError("tauri-specta: this channel is frozen or sealed, which this frontend API cannot support. Update @tauri-apps/api so Channel.deserialize is available.");
-    }
-    const handler = channel.onmessage;
+    if (!Object.isExtensible(channel)) throw new TypeError("tauri-specta: a semantic channel payload wraps onmessage, so the channel must be extensible");
+    const state = { handler: channel.onmessage };
     Reflect.deleteProperty(channel, "onmessage");
-    const state = { handler, transform };
-    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
+    channel.onmessage = (value) => state.handler.call(channel, transform(value));
     Object.defineProperty(channel, "onmessage", {
         configurable: true,
         get: () => state.handler,
         set: (handler: (value: T) => void) => { state.handler = handler; },
     });
     return channel;
-}
-"#;
+}"#;
 
 const DESERIALIZE_CHANNEL_IMPL_JS: &str = r#"/**
  * @template T
@@ -2381,28 +2369,17 @@ const DESERIALIZE_CHANNEL_IMPL_JS: &str = r#"/**
  * @returns {Channel<T>}
  */
 function __TAURI_DESERIALIZE_CHANNEL(channel, transform) {
-    const nativeDeserialize = /** @type {Channel<T> & { deserialize?: (transform: (payload: unknown) => T) => Channel<T> }} */ (channel).deserialize;
-    if (typeof nativeDeserialize === "function") {
-        return nativeDeserialize.call(channel, transform);
-    }
-    // This frontend API has no `Channel.deserialize` yet (Tauri v3 alphas and v2 before
-    // 2.13), so register the transform on the channel's own handler instead. That keeps
-    // the channel the caller passed, and the callback id Tauri addresses.
-    if (!Object.isExtensible(channel)) {
-        throw new TypeError("tauri-specta: this channel is frozen or sealed, which this frontend API cannot support. Update @tauri-apps/api so Channel.deserialize is available.");
-    }
-    const handler = channel.onmessage;
+    if (!Object.isExtensible(channel)) throw new TypeError("tauri-specta: a semantic channel payload wraps onmessage, so the channel must be extensible");
+    const state = { handler: channel.onmessage };
     Reflect.deleteProperty(channel, "onmessage");
-    const state = { handler, transform };
-    channel.onmessage = (value) => state.handler.call(channel, state.transform(value));
+    channel.onmessage = (value) => state.handler.call(channel, transform(value));
     Object.defineProperty(channel, "onmessage", {
         configurable: true,
         get: () => state.handler,
         set: (handler) => { state.handler = handler; },
     });
     return channel;
-}
-"#;
+}"#;
 
 const MAKE_EVENT_IMPL_TS: &str = r#"type EventEmit<T> = [T] extends [null] ? () => Promise<void> : (payload: T) => Promise<void>;
 

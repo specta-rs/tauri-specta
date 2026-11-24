@@ -311,7 +311,7 @@ fn channel_inside_a_result_is_rejected_as_a_result() {
 }
 
 #[test]
-fn semantic_channel_payload_is_deserialized_by_the_channel() {
+fn semantic_channel_payload_is_transformed_before_the_handler() {
     let builder = Builder::<MockRuntime>::new()
         .commands(collect_commands![semantic_channel_arg])
         .semantic_types(semantic_types());
@@ -320,16 +320,17 @@ fn semantic_channel_payload_is_deserialized_by_the_channel() {
 
     let bindings = export(&builder, "semantic_channel").expect("semantic channel payload exports");
     assert!(bindings.contains(expected), "{bindings}");
-    // The helper prefers the frontend API's own method and falls back to the channel's
-    // handler, so the binding works against released APIs too.
-    assert!(
-        bindings.contains("typeof nativeDeserialize === \"function\""),
-        "{bindings}"
-    );
+    // The transform is registered on the caller's channel by wrapping its handler, so
+    // no replacement channel or frontend API feature is needed.
     assert!(
         bindings.contains("Reflect.deleteProperty(channel, \"onmessage\")"),
         "{bindings}"
     );
+    assert!(
+        bindings.contains("Object.isExtensible(channel)"),
+        "{bindings}"
+    );
+    assert!(!bindings.contains(".deserialize("), "{bindings}");
     assert!(!bindings.contains("mapChannel"), "{bindings}");
     assert!(!bindings.contains("new Channel("), "{bindings}");
 
@@ -342,13 +343,11 @@ fn semantic_channel_payload_is_deserialized_by_the_channel() {
     .expect("semantic channel payload exports for JSDoc");
     assert!(jsdoc.contains(expected), "{jsdoc}");
     assert!(
-        jsdoc.contains("typeof nativeDeserialize === \"function\""),
-        "{jsdoc}"
-    );
-    assert!(
         jsdoc.contains("Reflect.deleteProperty(channel, \"onmessage\")"),
         "{jsdoc}"
     );
+    assert!(jsdoc.contains("Object.isExtensible(channel)"), "{jsdoc}");
+    assert!(!jsdoc.contains(".deserialize("), "{jsdoc}");
     assert!(!jsdoc.contains("mapChannel"), "{jsdoc}");
     assert!(!jsdoc.contains("new Channel("), "{jsdoc}");
 }
