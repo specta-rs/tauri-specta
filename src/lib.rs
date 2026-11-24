@@ -518,14 +518,12 @@
 //! This enables you to support richer types which have a non-JSON runtime shape for example [`Date`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date), [`Uint8Array`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array), or [`URL`](https://developer.mozilla.org/en-US/docs/Web/API/URL).
 //!
 //! To enable this feature pass in a configuration, like the following:
-//! ```rs
+//! ```rust
 //! use specta_typescript::semantic;
 //!
-//! tauri_specta::Builder::new()
+//! let builder = tauri_specta::Builder::<tauri::Wry>::new()
 //!     // This will enable the built-in rules. Refer to the `semantic` module docs for more information.
-//!     .semantic_types(semantic::Types::default())
-//!     // ...
-//! #;
+//!     .semantic_types(semantic::Configuration::default());
 //! ```
 //!
 //! Checkout the [`semantic`](specta_typescript::semantic) module docs for more information.
