@@ -322,9 +322,10 @@
 //! When a channel's payload contains a [semantic type](#semantic-frontend-types),
 //! the generated binding registers the payload transform by wrapping the channel's
 //! `onmessage`, so the channel you pass (and the id Tauri addresses) is the one
-//! the binding sends. The channel must be extensible, and a channel carries one
-//! transform, so don't pass the same channel instance to commands whose payloads
-//! need different ones.
+//! the binding sends. Set the handler before calling the command, and create a
+//! fresh channel for each command call: Tauri gives every invocation its own
+//! message index sequence and end signal for the same callback id, so a channel
+//! cannot be shared between commands.
 //!
 //! ## Custom types
 //!

@@ -323,11 +323,11 @@ fn semantic_channel_payload_is_transformed_before_the_handler() {
     // The transform is registered on the caller's channel by wrapping its handler, so
     // no replacement channel or frontend API feature is needed.
     assert!(
-        bindings.contains("Reflect.deleteProperty(channel, \"onmessage\")"),
+        bindings.contains("const handler = channel.onmessage"),
         "{bindings}"
     );
     assert!(
-        bindings.contains("Object.isExtensible(channel)"),
+        bindings.contains("handler.call(channel, transform(value))"),
         "{bindings}"
     );
     assert!(!bindings.contains(".deserialize("), "{bindings}");
@@ -343,10 +343,13 @@ fn semantic_channel_payload_is_transformed_before_the_handler() {
     .expect("semantic channel payload exports for JSDoc");
     assert!(jsdoc.contains(expected), "{jsdoc}");
     assert!(
-        jsdoc.contains("Reflect.deleteProperty(channel, \"onmessage\")"),
+        jsdoc.contains("const handler = channel.onmessage"),
         "{jsdoc}"
     );
-    assert!(jsdoc.contains("Object.isExtensible(channel)"), "{jsdoc}");
+    assert!(
+        jsdoc.contains("handler.call(channel, transform(value))"),
+        "{jsdoc}"
+    );
     assert!(!jsdoc.contains(".deserialize("), "{jsdoc}");
     assert!(!jsdoc.contains("mapChannel"), "{jsdoc}");
     assert!(!jsdoc.contains("new Channel("), "{jsdoc}");

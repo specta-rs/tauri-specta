@@ -4,6 +4,10 @@ import { afterEach, test } from "node:test";
 
 // The caller supplies its own installed Tauri API, so these tests exercise the
 // same generated runtime against v2 and v3 without accidentally importing v2.
+//
+// Each test builds a fresh channel per command call. Tauri gives every command
+// invocation its own message index sequence and end signal for the same callback
+// id, so reusing one channel across invocations loses messages.
 export function channelTests({ Channel, mockIPC, clearMocks }, ts, js) {
   globalThis.window = { crypto: webcrypto };
   afterEach(() => clearMocks());
@@ -31,7 +35,7 @@ export function channelTests({ Channel, mockIPC, clearMocks }, ts, js) {
       assert.equal(window.__TAURI_INTERNALS__.callbacks.size, 0);
     });
 
-    test(`${name} semantic channels allow late handlers and remapping without stacking`, async () => {
+    test(`${name} semantic channels transform handlers set before the call`, async () => {
       mockIPC(() => {});
       const OriginalURL = globalThis.URL;
       let transforms = 0;
@@ -40,41 +44,32 @@ export function channelTests({ Channel, mockIPC, clearMocks }, ts, js) {
       };
       try {
         const channel = new Channel();
-        await api.commands.streamUrls(channel);
         const values = [];
-        const handler = (payload) => values.push(payload.url);
-        channel.onmessage = handler;
-        assert.equal(channel.onmessage, handler);
+        channel.onmessage = (payload) => values.push(payload.url);
         await api.commands.streamUrls(channel);
-        // A different generated module must also replace, not stack, transforms.
-        await (api === ts ? js : ts).commands.streamUrls(channel);
         window.__TAURI_INTERNALS__.callbacks.get(channel.id)({
           index: 0, message: { url: "https://example.com/" },
         });
         assert.equal(transforms, 1);
         assert.equal(values[0].hostname, "example.com");
-        assert.equal(window.__TAURI_INTERNALS__.callbacks.size, 1);
       } finally {
         globalThis.URL = OriginalURL;
       }
     });
 
-    test(`${name} mapped channels retain their mapping; plain contracts need a fresh channel`, async () => {
+    test(`${name} each command call uses its own channel mapping`, async () => {
       mockIPC(() => {});
       const values = [];
       const mapped = new Channel((value) => values.push(value.url));
       await api.commands.streamUrls(mapped);
-      // Deliberately mixing contracts demonstrates the documented restriction:
-      // a plain command does not reset the mapping on an existing channel.
-      await api.commands.plainUrls(mapped);
       window.__TAURI_INTERNALS__.callbacks.get(mapped.id)({
         index: 0, message: { url: "https://example.com/" },
       });
       assert.ok(values[0] instanceof URL);
 
-      const fresh = new Channel((value) => values.push(value.url));
-      await api.commands.plainUrls(fresh);
-      window.__TAURI_INTERNALS__.callbacks.get(fresh.id)({
+      const plain = new Channel((value) => values.push(value.url));
+      await api.commands.plainUrls(plain);
+      window.__TAURI_INTERNALS__.callbacks.get(plain.id)({
         index: 0, message: { url: "https://example.com/" },
       });
       assert.equal(values[1], "https://example.com/");

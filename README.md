@@ -144,11 +144,11 @@ for coverage and details. Newer Tauri alphas **and v3 stable** are excluded unti
 the dependency upper bound is updated. The range also admits earlier 3.0.0 alphas,
 but only alpha.6 is tested; pin that version for experimental v3 support.
 
-Semantic payloads are deserialized by wrapping the channel's `onmessage`, so the
-channel must be extensible: frozen and sealed channels are not supported. The
-mapping remains attached to the channel, including when passed to an
-untransformed command. Use a fresh channel when switching payload contracts, and
-give commands that need different transforms their own channel.
+Semantic payloads are deserialized by wrapping the channel's `onmessage`, so set
+the handler before calling the command. Create a fresh channel for each command
+call: Tauri gives every invocation its own message index sequence and end signal
+for the same callback id, so reusing a channel across commands loses messages. A
+channel's transform is therefore per command.
 
 ## Development
 

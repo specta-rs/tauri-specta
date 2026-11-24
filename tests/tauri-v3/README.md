@@ -71,12 +71,11 @@ channel argument types, plugin-prefixed exports, query generation, and generated
 mocks against the real v3 frontend API in all four error-handling modes.
 Shared semantic-channel tests run against both frontend majors in TypeScript and
 JSDoc, checking the original channel/callback id, ordered delivery, end-message
-cleanup, late handler assignment, and repeated/cross-module registration without
-stacking transforms. The adapter registers the transform by wrapping the
-channel's `onmessage`. Mapping remains attached when a channel is passed to an
-untransformed command: use a fresh channel when switching payload contracts, and
-give commands that need different transforms their own channel. Wrapping needs an
-extensible channel, so frozen and sealed channels are not supported.
+cleanup, and that handlers set before the call receive transformed values. The
+adapter registers the transform by wrapping the channel's `onmessage`. Each
+command call needs a fresh channel: Tauri gives every invocation its own message
+index sequence and end signal for the same callback id, so a channel cannot be
+shared between commands.
 
 ## Known gaps
 

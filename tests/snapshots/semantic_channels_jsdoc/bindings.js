@@ -127,15 +127,8 @@ export const tauriEvents = {
  * @returns {Channel<T>}
  */
 function __TAURI_DESERIALIZE_CHANNEL(channel, transform) {
-    if (!Object.isExtensible(channel)) throw new TypeError("tauri-specta: a semantic channel payload wraps onmessage, so the channel must be extensible");
-    const state = { handler: channel.onmessage };
-    Reflect.deleteProperty(channel, "onmessage");
-    channel.onmessage = (value) => state.handler.call(channel, transform(value));
-    Object.defineProperty(channel, "onmessage", {
-        configurable: true,
-        get: () => state.handler,
-        set: (handler) => { state.handler = handler; },
-    });
+    const handler = channel.onmessage;
+    channel.onmessage = (value) => handler.call(channel, transform(value));
     return channel;
 }
 
