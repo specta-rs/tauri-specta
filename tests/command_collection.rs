@@ -5,14 +5,17 @@ use tauri::test::MockRuntime;
 use tauri_specta::{Commands, collect_commands};
 
 #[tauri::command]
+#[specta::specta]
 fn export() {}
 
 #[tauri::command]
+#[specta::specta]
 fn types(first: String) -> String {
     first
 }
 
 #[tauri::command]
+#[specta::specta]
 fn collected(first: String, second: String) -> String {
     first + &second
 }

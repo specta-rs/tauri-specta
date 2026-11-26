@@ -117,86 +117,104 @@ struct StructEvent {
 
 /// A command with a doc comment.
 #[tauri::command]
+#[specta::specta]
 fn greet(my_name: String) -> String {
     format!("Hello, {my_name}!")
 }
 
 #[tauri::command]
+#[specta::specta]
 fn unit_command() {}
 
 #[tauri::command(async)]
+#[specta::specta]
 async fn async_command(delay_ms: u32) -> u32 {
     delay_ms
 }
 
 #[tauri::command]
+#[specta::specta]
 fn many_args(a: String, b: i32, c: bool, d: Vec<String>, e: Option<String>) -> bool {
     c
 }
 
 #[tauri::command]
+#[specta::specta]
 fn echo_profile(profile: Profile) -> Profile {
     profile
 }
 
 #[tauri::command]
+#[specta::specta]
 fn tuple_types(point: Point) -> Wrapper {
     Wrapper(format!("{}:{}", point.0, point.1))
 }
 
 #[tauri::command]
+#[specta::specta]
 fn enums(tagged: TaggedEnum, untagged: UntaggedEnum) -> TaggedEnum {
     tagged
 }
 
 #[tauri::command]
+#[specta::specta]
 fn phase_specific_rename(input: PhaseSpecificRename) -> PhaseSpecificRename {
     input
 }
 
 #[tauri::command]
+#[specta::specta]
 fn big_numbers(input: BigNumbers) -> BigNumbers {
     input
 }
 
 #[tauri::command]
+#[specta::specta]
 fn plain_error() -> Result<String, PlainError> {
     Err(PlainError::NotFound)
 }
 
 #[tauri::command]
+#[specta::specta]
 fn tagged_error() -> Result<Profile, TaggedError> {
     Err(TaggedError::Parse { line: 7 })
 }
 
 #[tauri::command]
+#[specta::specta]
 fn nullable_result() -> Result<Option<String>, PlainError> {
     Ok(None)
 }
 
 #[tauri::command]
+#[specta::specta]
 fn bigint_result() -> Result<u64, u64> {
     Ok(42)
 }
 
 #[tauri::command]
+#[specta::specta]
 fn maybe() -> Option<String> {
     None
 }
 
 #[tauri::command]
+#[specta::specta]
 fn with_channel(channel: tauri::ipc::Channel<i32>) {}
 
 #[tauri::command]
+#[specta::specta]
 fn skipped_args(state: tauri::State<'_, String>, visible: String) -> String {
     visible
 }
 
 #[tauri::command]
+#[specta::specta]
 fn generic<R: tauri::Runtime>(window: tauri::Window<R>) {}
 
 #[deprecated = "This is a deprecated command"]
 #[tauri::command]
+#[specta::specta]
 fn deprecated_command() {}
 
 // ----- builders -----
@@ -250,11 +268,13 @@ fn empty() -> Builder<MockRuntime> {
 /// `valueOf` are `Object.prototype` members, so a lookup that doesn't check own
 /// properties finds an inherited function instead of reporting the command as unmocked.
 #[tauri::command]
+#[specta::specta]
 fn to_string() -> String {
     "to string".to_string()
 }
 
 #[tauri::command]
+#[specta::specta]
 fn value_of() -> String {
     "value of".to_string()
 }

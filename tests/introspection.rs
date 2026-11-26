@@ -1,6 +1,6 @@
 //! Commands collected through Tauri's IPC introspection (`#[tauri::command]` only).
 
-#![cfg(feature = "typescript")]
+#![cfg(all(feature = "introspection", feature = "typescript"))]
 #![allow(missing_docs, dead_code, clippy::unwrap_used)]
 
 use std::fs;

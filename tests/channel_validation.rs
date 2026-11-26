@@ -70,31 +70,37 @@ struct SemanticPayload {
 // ----- commands -----
 
 #[tauri::command]
+#[specta::specta]
 fn channel_in_result() -> HasChannel {
     unimplemented!()
 }
 
 #[tauri::command]
+#[specta::specta]
 fn channel_through_outer() -> OuterChannel {
     unimplemented!()
 }
 
 #[tauri::command]
+#[specta::specta]
 fn recursive_result() -> Node {
     unimplemented!()
 }
 
 #[tauri::command]
+#[specta::specta]
 fn channel_arg(channel: tauri::ipc::Channel<u32>) {
     let _ = channel;
 }
 
 #[tauri::command]
+#[specta::specta]
 fn payload_channel_arg(channel: tauri::ipc::Channel<ChannelPayload>) {
     let _ = channel;
 }
 
 #[tauri::command]
+#[specta::specta]
 fn semantic_channel_arg(channel: tauri::ipc::Channel<SemanticPayload>) {
     let _ = channel;
 }
