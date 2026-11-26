@@ -1,9 +1,5 @@
 # Tauri v3 consumer tests
 
-> **Temporarily broken.** `collect_commands!` reads Tauri's command metadata, which
-> `tauri = 3.0.0-alpha.6` does not expose yet. These tests fail until a Tauri v3
-> build contains tauri-apps/tauri#15326.
-
 This standalone workspace tests the real library manifests against published
 `tauri = 3.0.0-alpha.6`, without inheriting the main workspace's v2 patch. Its
 frontend install uses `@tauri-apps/api = 3.0.0-alpha.3`. Both lockfiles are

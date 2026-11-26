@@ -1,7 +1,7 @@
 //! Regression coverage for https://github.com/specta-rs/tauri-specta/issues/260.
 //!
 //! `#[tauri::command(rename = "...")]` changes the name Tauri's invoke handler matches
-//! against while the generated accessor keeps following the Rust identifier. These
+//! against, but `#[specta::specta]` names the function after its Rust identifier. These
 //! tests guard that the generated bindings invoke the renamed name while the frontend
 //! accessor still follows the Rust identifier.
 
@@ -18,27 +18,32 @@ use tauri_specta::{Builder, Casing, collect_commands};
 // macros at the crate root of the test crate, which collides with the other commands.
 
 #[tauri::command(rename = "renamed_greet")]
+#[specta::specta]
 fn greet() -> String {
     "hi".to_string()
 }
 
 #[tauri::command(rename = "renamed_greet_world")]
+#[specta::specta]
 fn greet_world() -> String {
     "hi".to_string()
 }
 
 #[tauri::command(rename = "renamed_generic")]
+#[specta::specta]
 fn generic_command<R: tauri::Runtime>(_app: tauri::AppHandle<R>) -> String {
     "generic".to_string()
 }
 
 #[tauri::command]
+#[specta::specta]
 fn unrenamed() -> String {
     "plain".to_string()
 }
 
 mod nested {
     #[tauri::command(rename = "nested_renamed")]
+    #[specta::specta]
     pub fn nested_command() -> String {
         "nested".to_string()
     }
@@ -47,6 +52,7 @@ mod nested {
 mod outer {
     pub mod inner {
         #[tauri::command(rename = "deep_renamed")]
+        #[specta::specta]
         pub fn deep_command() -> String {
             "deep".to_string()
         }

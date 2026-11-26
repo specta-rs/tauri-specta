@@ -10,8 +10,11 @@
 //! # Backend setup
 //!
 //! Annotate commands with `#[tauri::command]` and pass separate command collections
-//! to [`CommandSet::new`]. The string returned by [`CommandSet::build`] must be
-//! supplied to the TypeScript exporter with `Typescript::with_raw`.
+//! to [`CommandSet::new`]. Enable `tauri-specta`'s `introspection` feature so
+//! commands need nothing else; without it (and on the published Tauri v3
+//! prerelease) add `#[specta::specta]` to every command. The string returned by
+//! [`CommandSet::build`] must be supplied to the TypeScript exporter with
+//! `Typescript::with_raw`.
 //!
 //! ```rust,no_run
 //! use specta_typescript::Typescript;
@@ -86,7 +89,9 @@
 //! Function casing changes the generated query, mutation, and command accessor
 //! properties only. It does not change the Tauri command string or command
 //! arguments in the runtime IPC message. Argument renaming is configured per
-//! command; Tauri's `rename_all` is applied by the generated bindings.
+//! command; with the `introspection` feature Tauri's `rename_all` is used directly,
+//! otherwise keep `#[tauri::command(rename_all = "...")]` and
+//! `#[specta(rename_all = "...")]` aligned.
 //!
 //! # Frameworks
 //!
@@ -221,7 +226,8 @@ impl<R: Runtime> CommandSet<R> {
     /// This changes frontend accessor properties only. It does not change the
     /// underlying Tauri command string or rename command arguments. Argument
     /// renaming is a separate per-command IPC contract configured with matching
-    /// `#[tauri::command(rename_all = "...")]` attribute.
+    /// `#[tauri::command(rename_all = "...")]` attribute (and, without the
+    /// `introspection` feature, `#[specta(rename_all = "...")]`).
     ///
     /// ```rust
     /// use tauri_specta::{Casing, collect_commands};
@@ -533,16 +539,19 @@ mod tests {
     use super::{CommandSet, TanstackQueryFramework};
 
     #[tauri::command]
+    #[specta::specta]
     fn get_user(user_id: u32) -> String {
         format!("user-{user_id}")
     }
 
     #[tauri::command]
+    #[specta::specta]
     fn rename_user(user_id: u32, display_name: String) {
         let _ = (user_id, display_name);
     }
 
     #[tauri::command]
+    #[specta::specta]
     fn set_rank(_1st: String) {
         let _ = _1st;
     }

@@ -20,11 +20,13 @@ struct PlainPayload {
 }
 
 #[tauri::command]
+#[specta::specta]
 fn stream_urls(channel: tauri::ipc::Channel<Payload>) {
     let _ = channel;
 }
 
 #[tauri::command]
+#[specta::specta]
 fn plain_urls(channel: tauri::ipc::Channel<PlainPayload>) {
     let _ = channel;
 }

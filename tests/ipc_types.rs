@@ -6,29 +6,36 @@ use tauri::test::MockRuntime;
 use tauri_specta::{Builder, LanguageExt, collect_commands};
 
 #[tauri::command]
+#[specta::specta]
 fn ipc(request: tauri::ipc::Request<'_>) -> tauri::ipc::Response {
     let _ = request;
     tauri::ipc::Response::new(Vec::<u8>::new())
 }
 
 #[tauri::command]
+#[specta::specta]
 fn fallible_ipc() -> Result<tauri::ipc::Response, String> {
     Ok(tauri::ipc::Response::new("null".to_string()))
 }
 
 #[tauri::command]
+#[specta::specta]
 fn mixed(todo: String, request: tauri::ipc::Request<'_>) -> String {
     let _ = request;
     todo
 }
 
+// Only Tauri's command metadata can describe an unnamed argument: `#[specta::specta]`
+// requires named ones, so this command and its test need the `introspection` collector.
 #[tauri::command]
 fn unnamed_request(_: tauri::ipc::Request<'_>) {}
 
 #[tauri::command]
+#[specta::specta]
 fn no_args() {}
 
 #[tauri::command]
+#[specta::specta]
 fn option_names(options: String, invoke_options: String) {
     let _ = (options, invoke_options);
 }
@@ -90,6 +97,7 @@ fn raw_ipc_uses_sdk_request_types_and_unknown_response() {
     );
 }
 
+#[cfg(feature = "introspection")]
 #[test]
 fn raw_request_does_not_require_an_argument_name() {
     let builder = Builder::<MockRuntime>::new().commands(collect_commands![unnamed_request]);

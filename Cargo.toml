@@ -16,7 +16,8 @@ categories = ["web-programming", "asynchronous"]
 # `--no-deps` matters: RUSTDOCFLAGS applies to every crate rustdoc builds, and some
 # dependencies still gate removed nightly features behind `cfg(docsrs)`.
 [package.metadata."docs.rs"]
-# `all-features` would add nothing here; the API is the same in every combination.
+# Not `all-features`: `introspection` needs a Tauri build with
+# tauri-apps/tauri#15326, which docs.rs cannot get from crates.io yet.
 features = ["derive", "javascript", "typescript"]
 
 [features]
@@ -25,7 +26,11 @@ features = ["derive", "javascript", "typescript"]
 # default features and depend on Tauri v3 yourself to use v3.
 default = ["v2"]
 v2 = ["dep:tauri-specta-pin"]
-derive = []
+# Read command types from Tauri's IPC introspection, so commands do not need
+# `#[specta::specta]`. Requires a Tauri build with tauri-apps/tauri#15326 (merged,
+# unreleased); it becomes part of the default set once Tauri ships it.
+introspection = ["dep:tauri-specta-macros"]
+derive = ["dep:tauri-specta-macros"]
 javascript = ["dep:specta-typescript"]
 typescript = ["dep:specta-typescript"]
 
@@ -34,9 +39,9 @@ workspace = true
 
 [dependencies]
 # Public
-specta.workspace = true
+specta = { workspace = true, features = ["function"] }
 specta-typescript = { workspace = true, optional = true }
-tauri-specta-macros = { version = "=2.0.0-rc.29", path = "./macros" }
+tauri-specta-macros = { version = "=2.0.0-rc.29", optional = true, path = "./macros" }
 tauri-specta-pin = { version = "0.1.0", optional = true, path = "./crates/tauri-specta-pin" }
 serde = "1"
 serde_json = "1"
@@ -45,6 +50,7 @@ tauri = { workspace = true, features = ["specta"] }
 
 # Private
 heck = "0.5"
+paste = "1"
 specta-serde = { workspace = true }
 specta-util = { workspace = true }
 
