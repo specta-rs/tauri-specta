@@ -170,9 +170,9 @@
 //! Ordinary commands, events, semantic channel payload transforms, and query
 //! exports use the shared implementation on the published frontend APIs.
 //!
-//! Tauri Specta's range admits earlier 3.0.0 alphas, but only alpha.6 is tested;
-//! newer alphas and v3 stable need a tested dependency-bound update. Pin the
-//! exact version, as every v3 snippet above does.
+//! Tauri Specta's range admits every 3.0.0 alpha, but only alpha.6 is tested;
+//! v3 betas and v3 stable need a tested dependency-bound update. Pin the exact
+//! version, as every v3 snippet above does.
 //!
 //! Disabling default features without adding a Tauri dependency of your own leaves
 //! the selection to Cargo's highest match, which is the v3 prerelease.

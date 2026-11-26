@@ -142,9 +142,9 @@ for IPC `Request`/`Response`. Semantic channel transforms work with the publishe
 frontend APIs through a same-channel fallback; they do not require an unreleased
 `Channel.deserialize` method. See the
 [v3 consumer fixture](https://github.com/specta-rs/tauri-specta/blob/main/tests/tauri-v3/README.md)
-for coverage and details. Newer Tauri alphas **and v3 stable** are excluded until
-the dependency upper bound is updated. The range also admits earlier 3.0.0 alphas,
-but only alpha.6 is tested; pin that version for experimental v3 support.
+for coverage and details. The range admits every 3.0.0 alpha, but only alpha.6 is
+tested; pin that version for experimental v3 support. Tauri v3 betas **and v3
+stable** are excluded until the dependency upper bound is updated.
 
 Semantic mappings remain attached to their channel, including when passed to an
 untransformed command. Use a fresh channel when switching payload contracts, and
