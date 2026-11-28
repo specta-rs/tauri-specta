@@ -35,6 +35,28 @@
 ///     ]);
 /// ```
 ///
+/// # Duplicate names
+///
+/// Two event types in one collection that resolve to the same Tauri event name are
+/// reported by [`Builder::mount_events`](crate::Builder::mount_events) and by export,
+/// rather than panicking while the collection is built. The first registration is kept;
+/// give one of them a different name with `#[tauri_specta(event_name = "...")]`.
+///
+/// # Invalid event names
+///
+/// Tauri only allows alphanumeric characters, `-`, `/`, `:` and `_` in an event
+/// name. A derived name that cannot be emitted or listened to is rejected at compile
+/// time rather than failing during `emit` or `listen`.
+///
+/// ```compile_fail
+/// # use serde::{Serialize, Deserialize};
+/// # use specta::Type;
+/// # use tauri_specta::Event;
+/// #[derive(Serialize, Deserialize, Type, Event)]
+/// #[tauri_specta(event_name = "bad\"name")]
+/// struct InvalidEvent(String);
+/// ```
+///
 #[macro_export]
 macro_rules! collect_events {
     ($($event:path),* $(,)?) => {{

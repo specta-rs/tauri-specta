@@ -1,8 +1,8 @@
 use std::{
     any::TypeId,
-    borrow::Cow,
     collections::{BTreeMap, HashMap},
-    sync::RwLock,
+    ops::Deref,
+    sync::{Arc, OnceLock, RwLock},
 };
 
 use serde::{Serialize, de::DeserializeOwned};
@@ -11,12 +11,20 @@ use tauri::{Emitter, EventId, EventTarget, Listener, Manager, Runtime};
 
 use crate::name::resolve_tauri_event_name;
 
-/// A wrapper around the output of the `collect_commands` macro.
+/// A wrapper around the output of the `collect_events` macro.
 ///
 /// This acts to seal the implementation details of the macro.
 #[derive(Clone, Default)]
 #[allow(clippy::type_complexity)]
-pub struct Events(pub(crate) BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>);
+pub struct Events {
+    pub(crate) events: BTreeMap<&'static str, fn(&mut Types) -> (TypeId, Reference)>,
+    /// Names registered more than once in one collection.
+    ///
+    /// The first registration is kept and the conflict is reported by
+    /// [`Builder::mount_events`](crate::Builder::mount_events) and by export, so a
+    /// duplicate does not abort setup.
+    pub(crate) duplicate_names: Vec<&'static str>,
+}
 
 impl Events {
     /// Combines two event collections.
@@ -25,7 +33,8 @@ impl Events {
     /// `other` replaces the event in `self`.
     #[must_use]
     pub fn merge(mut self, other: Self) -> Self {
-        self.0.extend(other.0);
+        self.events.extend(other.events);
+        self.duplicate_names.extend(other.duplicate_names);
         self
     }
 }
@@ -33,6 +42,49 @@ impl Events {
 #[derive(Default)]
 pub(crate) struct EventRegistryMeta {
     pub plugin_name: Option<&'static str>,
+    /// The prefixed Tauri name, formatted once per mounted event type.
+    ///
+    /// Only a plugin namespace needs a name that is not `E::NAME`, and an app may emit
+    /// an event thousands of times, so the `format!` result is cached here rather than
+    /// rebuilt on every dispatch. It is shared behind an `Arc` so a dispatch can drop the
+    /// registry lock before calling into Tauri instead of holding it across user code.
+    resolved_name: OnceLock<Arc<str>>,
+}
+
+impl EventRegistryMeta {
+    pub fn new(plugin_name: Option<&'static str>) -> Self {
+        Self {
+            plugin_name,
+            resolved_name: OnceLock::new(),
+        }
+    }
+}
+
+/// The name a mounted event is emitted and listened to under.
+///
+/// Borrowing the event's own `'static` name is free; a plugin-prefixed name is shared
+/// from the registry cache, so resolving it again is a refcount bump rather than a
+/// `format!`.
+pub(crate) enum EventName {
+    Static(&'static str),
+    Cached(Arc<str>),
+}
+
+impl Deref for EventName {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        match self {
+            Self::Static(name) => name,
+            Self::Cached(name) => name,
+        }
+    }
+}
+
+impl From<EventName> for String {
+    fn from(name: EventName) -> Self {
+        String::from(&*name)
+    }
 }
 
 /// A struct for managing events that is put into Tauri's state.
@@ -42,7 +94,7 @@ pub(crate) struct EventRegistry(pub(crate) RwLock<HashMap<TypeId, EventRegistryM
 impl EventRegistry {
     /// gets the name of the event (taking into account plugin prefixes) and ensuring it was correctly mounted to the current app.
     #[allow(clippy::panic)]
-    pub fn get_event_name<E: Event, R: Runtime>(handle: &impl Manager<R>) -> Cow<'static, str> {
+    pub fn get_event_name<E: Event, R: Runtime>(handle: &impl Manager<R>) -> EventName {
         let this = handle.try_state::<EventRegistry>().expect(
             "EventRegistry not found in Tauri state - Did you forget to call Builder::mount_events?",
         ).inner();
@@ -52,7 +104,16 @@ impl EventRegistry {
             .get(&TypeId::of::<E>())
             .unwrap_or_else(|| panic!("Event {} not found in registry!", E::NAME));
 
-        resolve_tauri_event_name(meta.plugin_name, E::NAME)
+        match meta.plugin_name {
+            None => EventName::Static(E::NAME),
+            Some(plugin_name) => EventName::Cached(
+                meta.resolved_name
+                    .get_or_init(|| {
+                        Arc::from(resolve_tauri_event_name(Some(plugin_name), E::NAME).into_owned())
+                    })
+                    .clone(),
+            ),
+        }
     }
 
     pub fn get_or_manage<R: Runtime>(handle: &impl Manager<R>) -> tauri::State<'_, Self> {

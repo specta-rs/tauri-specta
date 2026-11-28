@@ -131,7 +131,7 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
-            builder.mount_events(app);
+            builder.mount_events(app)?;
 
             Greeted::listen(app, |event| {
                 dbg!(event.payload);

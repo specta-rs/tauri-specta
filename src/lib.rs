@@ -15,7 +15,7 @@
 //! ```sh
 //! cargo add tauri@2.0 specta@=2.0.0-rc.28 specta-typescript@0.0.15
 //! # `javascript` for JSDoc, `typescript` for Typescript
-//! cargo add tauri-specta@=2.0.0-rc.28 --features derive,typescript,javascript
+//! cargo add tauri-specta@=2.0.0-rc.29 --features derive,typescript,javascript
 //! ```
 //!
 //! <section class="warning">
@@ -139,7 +139,7 @@
 //!         .invoke_handler(builder.invoke_handler())
 //!         .setup(move |app| {
 //!             // Still required if you use events.
-//!             builder.mount_events(app);
+//!             builder.mount_events(app)?;
 //!             Ok(())
 //!         })
 //!         .run(tauri::generate_context!())
@@ -211,7 +211,7 @@
 //!         .invoke_handler(builder.invoke_handler())
 //!         .setup(move |app| {
 //!             // This is also required if you want to use events
-//!             builder.mount_events(app);
+//!             builder.mount_events(app)?;
 //!
 //!             Ok(())
 //!         })
@@ -365,7 +365,7 @@
 //!         .invoke_handler(builder.invoke_handler())
 //!         .setup(move |app| {
 //!             // Ensure you mount your events!
-//!             builder.mount_events(app);
+//!             builder.mount_events(app)?;
 //!
 //!             // Now you can use them
 //!
@@ -584,7 +584,7 @@ mod lang;
 mod macros;
 mod name;
 
-pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode};
+pub use builder::{Builder, BuilderConfiguration, ErrorHandlingMode, MountEventsError};
 pub use casing::Casing;
 #[doc(hidden)]
 pub use commands::CollectedCommands;
@@ -644,31 +644,37 @@ pub mod internal {
         metadata: tauri::ipc::CommandMetadata,
         accessor: &'static str,
         types: &mut Types,
+        arg_types: &mut Vec<Option<DataType>>,
     ) -> Command
     where
         F: crate::commands::CommandSignature<M>,
         F::Args: crate::commands::CommandArguments<F::ArgMarkers>,
         F::Result: crate::commands::CommandResult<F::ResultMarker>,
     {
-        f.into_command(metadata, Cow::Borrowed(accessor), types)
+        f.into_command(metadata, Cow::Borrowed(accessor), types, arg_types)
     }
 
     /// called by `collect_events` to register events to an `Events`
     #[allow(clippy::panic)]
-    pub fn register_event<E: Event>(Events(events): &mut Events) {
-        if events
-            .insert(E::NAME, |types| {
-                (
-                    TypeId::of::<E>(),
-                    match E::definition(types) {
-                        DataType::Reference(r) => r,
-                        _ => panic!("Can't register event {} with non-reference type", E::NAME),
-                    },
-                )
-            })
-            .is_some()
-        {
-            panic!("Another event with name {} is already registered!", E::NAME)
+    pub fn register_event<E: Event>(events: &mut Events) {
+        let definition: fn(&mut Types) -> (TypeId, specta::datatype::Reference) = |types| {
+            (
+                TypeId::of::<E>(),
+                match E::definition(types) {
+                    DataType::Reference(r) => r,
+                    _ => panic!("Can't register event {} with non-reference type", E::NAME),
+                },
+            )
+        };
+
+        // Keep the first type and record the conflict. The panic here used to abort
+        // builder construction; mount and export report it instead.
+        if events.events.contains_key(E::NAME) {
+            if !events.duplicate_names.contains(&E::NAME) {
+                events.duplicate_names.push(E::NAME);
+            }
+        } else {
+            events.events.insert(E::NAME, definition);
         }
     }
 }

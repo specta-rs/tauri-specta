@@ -42,7 +42,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     PluginBuilder::new(PLUGIN_NAME)
         .invoke_handler(builder.invoke_handler())
         .setup(move |app, _| {
-            builder.mount_events(app);
+            builder.mount_events(app)?;
 
             let app = app.clone();
             std::thread::spawn(move || {

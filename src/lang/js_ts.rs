@@ -22,8 +22,8 @@ impl LanguageExt for specta_typescript::Typescript {
     type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let cfg = cfg.clone();
-        let types = hide_ipc_standins(hide_unused_std_result_type(&cfg, cfg.types.clone()));
+        let mut cfg = cfg.clone();
+        let types = export_types(&mut cfg);
         let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
@@ -56,8 +56,8 @@ impl LanguageExt for specta_typescript::JSDoc {
     type Error = Error;
 
     fn export(self, cfg: &BuilderConfiguration, path: &Path) -> Result<(), Self::Error> {
-        let cfg = cfg.clone();
-        let types = hide_ipc_standins(hide_unused_std_result_type(&cfg, cfg.types.clone()));
+        let mut cfg = cfg.clone();
+        let types = export_types(&mut cfg);
         let format = SpectaFormat::new(&cfg);
 
         Exporter::from(self)
@@ -86,6 +86,21 @@ impl LanguageExt for specta_typescript::JSDoc {
     }
 }
 
+/// The type graph the generated runtime and the user's types are rendered from.
+///
+/// `hide_*` need an owned graph, and `export` already owns a clone of the configuration, so
+/// the graph is moved out of that clone instead of being copied a second time. That is only
+/// safe without semantic types: `runtime` re-derives the semantic runtime type graph from
+/// `cfg.types`, so it still needs the original there.
+fn export_types(cfg: &mut BuilderConfiguration) -> Types {
+    if cfg.semantic_types.is_some() {
+        return hide_ipc_standins(hide_unused_std_result_type(cfg, cfg.types.clone()));
+    }
+
+    let types = std::mem::take(&mut cfg.types);
+    hide_ipc_standins(hide_unused_std_result_type(cfg, types))
+}
+
 fn runtime(
     mut exporter: FrameworkExporter,
     cfg: &BuilderConfiguration,
@@ -111,6 +126,26 @@ fn runtime(
     let semantic_types_runtime_types = semantic_types_runtime_types
         .as_ref()
         .unwrap_or(exporter.types);
+
+    // Imports, `tauriEvents` and `makeEvent` are appended first, then the rendered commands,
+    // events and user types. The always-emitted runtime is about 4 KB on its own; each
+    // command adds its accessor, and a JSDoc export adds the signature again in
+    // `@param`/`@returns` documentation. The buffer grows as it is written.
+    if let Some(name) = cfg.duplicate_event_names.first() {
+        return Err(Error::framework(
+            format!(
+                "event '{name}' is registered more than once in this collection, so the bindings can't describe it. Give each Rust event type a distinct name."
+            ),
+            "",
+        ));
+    }
+
+    if let Some((name, error)) = cfg.constant_errors.first() {
+        return Err(Error::framework(
+            format!("failed to serialize constant '{name}' for the bindings: {error}"),
+            "",
+        ));
+    }
 
     let mut out = String::new();
     let mut needs_channel_mapping = false;
@@ -138,19 +173,26 @@ fn runtime(
         ));
     }
 
+    // `Casing::apply` allocates an accessor per command, and the same accessor is
+    // needed by the duplicate check below, the `commands` object and the mock handlers.
+    let accessors: Vec<Cow<'_, str>> = cfg
+        .commands
+        .iter()
+        .map(|command| {
+            cfg.function_casing
+                .apply(cfg.command_accessor_name(command))
+        })
+        .collect();
+
     {
         // Two differently named commands can still produce one accessor (e.g. `my_cmd` and
         // `MyCmd`), which silently keeps only the last. This has to run at export because
         // the accessor depends on the final `function_casing`, which can be set after the
         // commands were registered. Literal duplicates are rejected earlier, when they are
         // registered (see `Builder::commands`).
-        let mut seen: BTreeMap<String, &str> = BTreeMap::new();
-        for command in cfg.commands.iter() {
-            let accessor = cfg
-                .function_casing
-                .apply(cfg.command_accessor_name(command))
-                .into_owned();
-            if let Some(first) = seen.get(&accessor) {
+        let mut seen: BTreeMap<&str, &str> = BTreeMap::new();
+        for (accessor, command) in accessors.iter().zip(cfg.commands.iter()) {
+            if let Some(first) = seen.get(accessor.as_ref()) {
                 return Err(Error::framework(
                     format!(
                         "Commands '{first}' and '{}' would both export as '{accessor}'. Rename one of them so the generated bindings don't conflict.",
@@ -163,21 +205,30 @@ fn runtime(
         }
     }
 
+    // Every channel reference resolves through the stand-in `NamedDataType` Tauri's derives
+    // register for `tauri::ipc::Channel`, so a graph without one cannot contain a channel
+    // anywhere. That makes the walks below no-ops for most exports, which is worth checking
+    // for once rather than traversing every type and signature to discover.
+    let has_channel_standin = exporter.types.into_unsorted_iter().any(is_channel_ndt);
+
     // A `Channel` is only usable as a whole command argument or result. Anywhere else it
     // renders as a bare reference name with no definition, so fail the export rather than
     // emitting bindings that don't type-check. This runs for both the TypeScript and JSDoc
     // exporters because it is part of the shared runtime path.
-    validate_channel_placement(cfg, exporter.types)?;
+    if has_channel_standin {
+        validate_channel_placement(cfg, exporter.types)?;
+    }
 
-    let is_channel_used = cfg.commands.iter().any(|command| {
-        // Check if any argument is a Channel
-        command
-            .args
-            .iter()
-            .any(|arg| is_channel_type(&arg.ty, exporter.types))
-            // Check if result contains a Channel
-            || command.result.as_ref().is_some_and(|dt| is_channel_type(dt, exporter.types))
-    });
+    let is_channel_used = has_channel_standin
+        && cfg.commands.iter().any(|command| {
+            // Check if any argument is a Channel
+            command
+                .args
+                .iter()
+                .any(|arg| is_channel_type(&arg.ty, exporter.types))
+                // Check if result contains a Channel
+                || command.result.as_ref().is_some_and(|dt| is_channel_type(dt, exporter.types))
+        });
     let has_typed_error = enabled_commands
         && cfg.error_handling != ErrorHandlingMode::Throw
         && cfg.commands.iter().any(|command| {
@@ -237,7 +288,10 @@ fn runtime(
     // Commands
     if enabled_commands {
         let mut s = Struct::named();
-        for command in &cfg.commands {
+        // Reused across commands so the per-command bookkeeping doesn't allocate.
+        let mut seen_keys: Vec<&str> = Vec::new();
+        let mut reserved_names: Vec<&str> = Vec::with_capacity(3);
+        for (command, accessor) in cfg.commands.iter().zip(&accessors) {
             let named_args = command
                 .args
                 .iter()
@@ -246,9 +300,9 @@ fn runtime(
             let raw_request = named_args.len() != command.args.len();
             // A payload object cannot carry two independent values under the same key.
             // Check Tauri's normalized keys, not the generated parameter names.
-            let mut seen_keys = BTreeSet::new();
+            seen_keys.clear();
             for arg in &named_args {
-                if !seen_keys.insert(arg.name.as_ref()) {
+                if seen_keys.contains(&arg.name.as_ref()) {
                     return Err(Error::framework(
                         format!(
                             "Command '{}' uses the IPC payload key '{}' more than once. Rename one of the parameters or change `rename_all` so their keys are distinct.",
@@ -257,6 +311,7 @@ fn runtime(
                         "",
                     ));
                 }
+                seen_keys.push(arg.name.as_ref());
             }
             if raw_request && cfg.mocks {
                 return Err(Error::framework(
@@ -264,22 +319,17 @@ fn runtime(
                     "raw IPC request commands are not supported by generated mocks",
                 ));
             }
-            let command_name_escaped = serde_json::to_string(&resolve_tauri_command_name(
-                cfg.plugin_name,
-                command.name.as_ref(),
-            ))
-            .map_err(|err| {
-                Error::framework("failed to serialize a command name for bindings", err)
-            })?;
+            let command_name = resolve_tauri_command_name(cfg.plugin_name, command.name.as_ref());
 
             let result = command
                 .result
                 .as_ref()
                 .and_then(|dt| extract_std_result(dt, exporter.types));
             let typed_result = result.filter(|_| cfg.error_handling != ErrorHandlingMode::Throw);
-            let mut used_names = BTreeSet::from(["__TAURI_INVOKE".to_string()]);
+            reserved_names.clear();
+            reserved_names.push("__TAURI_INVOKE");
             if typed_result.is_some() {
-                used_names.insert("typedError".into());
+                reserved_names.push("typedError");
             }
             if cfg.semantic_types.is_some()
                 && command
@@ -287,57 +337,82 @@ fn runtime(
                     .iter()
                     .any(|arg| is_channel_type(&arg.ty, exporter.types))
             {
-                used_names.insert("mapChannel".into());
+                reserved_names.push("mapChannel");
             }
             let mut arguments = command_arguments(
                 command,
                 &exporter,
                 cfg,
                 semantic_types_runtime_types,
-                &mut used_names,
+                &reserved_names,
             )?;
             let mixed_request = raw_request && !named_args.is_empty();
             if mixed_request {
-                let fields = arguments
+                let mut fields = String::new();
+                for ((_, ty), arg) in arguments
                     .iter()
                     .zip(&command.args)
                     .filter(|(_, arg)| !is_ipc_type(&arg.ty, exporter.types, "TAURI_REQUEST"))
+                {
+                    if !fields.is_empty() {
+                        fields.push_str("; ");
+                    }
                     // `value` is the IPC payload object, so its keys are Tauri's keys.
-                    .map(|((_, ty), arg)| Ok(format!("{}: {ty}", js_object_key(&arg.name)?)))
-                    .collect::<Result<Vec<_>, Error>>()?
-                    .join("; ");
+                    fields.push_str(&js_object_key(&arg.name));
+                    fields.push_str(": ");
+                    fields.push_str(ty);
+                }
                 arguments = vec![("value".into(), format!("{{ {fields} }}"))];
             } else if raw_request {
                 arguments.truncate(1);
             }
-            let mut options_name = "options".to_string();
-            while arguments.iter().any(|(name, _)| name == &options_name) {
-                options_name = format!("_{options_name}");
+            let options_name = {
+                let mut options_name: Cow<'_, str> = Cow::Borrowed("options");
+                while arguments
+                    .iter()
+                    .any(|(name, _)| name == options_name.as_ref())
+                {
+                    options_name = Cow::Owned(format!("_{options_name}"));
+                }
+                options_name
+            };
+            arguments.push((
+                {
+                    let mut name = String::with_capacity(options_name.len() + 1);
+                    name.push_str(&options_name);
+                    name.push('?');
+                    name
+                },
+                "InvokeOptions".to_string(),
+            ));
+
+            let mut fn_arguments = String::new();
+            for (index, (name, dt)) in arguments.iter().enumerate() {
+                if index > 0 {
+                    fn_arguments.push_str(", ");
+                }
+                if jsdoc {
+                    fn_arguments.push_str(name.trim_end_matches('?'));
+                } else {
+                    fn_arguments.push_str(name);
+                    fn_arguments.push_str(": ");
+                    fn_arguments.push_str(dt);
+                }
             }
-            arguments.push((format!("{options_name}?"), "InvokeOptions".into()));
 
-            let fn_arguments = arguments
-                .iter()
-                .map(|(name, dt)| {
-                    let mut arg = if jsdoc {
-                        name.trim_end_matches('?').to_string()
-                    } else {
-                        name.to_string()
-                    };
-                    if !jsdoc {
-                        arg.push_str(": ");
-                        arg.push_str(dt);
-                    }
-                    arg
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
+            // The `(name, …)` payload object Tauri's `invoke` receives, written straight
+            // into the call instead of being assembled separately.
+            let mut invoke_args =
+                String::with_capacity(command_name.len() + command.args.len() * 32 + 16);
+            invoke_args.push('(');
+            write_js_string_literal(&mut invoke_args, &command_name);
+            invoke_args.push_str(", ");
 
-            let arguments_invoke_obj = if mixed_request {
-                let mut fields = Vec::new();
+            if mixed_request {
+                let mut fields = String::new();
                 for arg in named_args {
                     // Read the original IPC key, not a generated parameter name.
-                    let input = js_member_access("value", &arg.name)?;
+                    let input = js_member_access("value", &arg.name);
                     if let Some(transform) = invoke_argument(
                         &input,
                         &arg.ty,
@@ -347,55 +422,64 @@ fn runtime(
                         jsdoc,
                     ) {
                         needs_channel_mapping |= is_channel_type(&arg.ty, exporter.types);
-                        fields.push(format!("{}: {transform}", js_object_key(&arg.name)?));
+                        if !fields.is_empty() {
+                            fields.push_str(", ");
+                        }
+                        fields.push_str(&js_object_key(&arg.name));
+                        fields.push_str(": ");
+                        fields.push_str(&transform);
                     }
                 }
-                let value = if fields.is_empty() {
-                    "value".to_string()
+                if fields.is_empty() {
+                    invoke_args.push_str("value");
                 } else {
-                    format!("{{ ...value, {} }}", fields.join(", "))
-                };
-                format!(", {value}, {options_name}")
+                    invoke_args.push_str("{ ...value, ");
+                    invoke_args.push_str(&fields);
+                    invoke_args.push_str(" }");
+                }
             } else if raw_request {
                 let name = &arguments[0].0;
-                format!(", Array.isArray({name}) ? new Uint8Array({name}) : {name}, {options_name}")
+                invoke_args.push_str("Array.isArray(");
+                invoke_args.push_str(name);
+                invoke_args.push_str(") ? new Uint8Array(");
+                invoke_args.push_str(name);
+                invoke_args.push_str(") : ");
+                invoke_args.push_str(name);
             } else if command.args.is_empty() {
-                format!(", undefined, {options_name}")
+                invoke_args.push_str("undefined");
             } else {
-                format!(
-                    ", {{ {} }}, {options_name}",
-                    command
-                        .args
-                        .iter()
-                        .zip(&arguments)
-                        .map(|(arg, (param, _))| {
-                            let key = arg.name.as_ref();
-                            let value = invoke_argument(
-                                param,
-                                &arg.ty,
-                                &exporter,
-                                cfg,
-                                semantic_types_runtime_types,
-                                jsdoc,
-                            );
-                            needs_channel_mapping |=
-                                value.is_some() && is_channel_type(&arg.ty, exporter.types);
+                invoke_args.push_str("{ ");
+                for (index, (arg, (param, _))) in command.args.iter().zip(&arguments).enumerate() {
+                    if index > 0 {
+                        invoke_args.push_str(", ");
+                    }
+                    let key = arg.name.as_ref();
+                    let value = invoke_argument(
+                        param,
+                        &arg.ty,
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                        jsdoc,
+                    );
+                    needs_channel_mapping |=
+                        value.is_some() && is_channel_type(&arg.ty, exporter.types);
 
-                            Ok(match value {
-                                None if key == param => param.clone(),
-                                value => format!(
-                                    "{}: {}",
-                                    js_object_key(key)?,
-                                    value.as_deref().unwrap_or(param)
-                                ),
-                            })
-                        })
-                        .collect::<Result<Vec<_>, Error>>()?
-                        .join(", ")
-                )
-            };
+                    match value {
+                        None if key == param => invoke_args.push_str(param),
+                        value => {
+                            invoke_args.push_str(&js_object_key(key));
+                            invoke_args.push_str(": ");
+                            invoke_args.push_str(value.as_deref().unwrap_or(param));
+                        }
+                    }
+                }
+                invoke_args.push_str(" }");
+            }
 
-            let invoke_args = format!("({command_name_escaped}{arguments_invoke_obj})",);
+            invoke_args.push_str(", ");
+            invoke_args.push_str(&options_name);
+            invoke_args.push(')');
 
             let body = if let Some((dt_ok, dt_err)) = typed_result {
                 let semantic_err_type = apply_semantic_type_for_phase(
@@ -566,118 +650,124 @@ fn runtime(
                 }
             };
 
-            let mut field = Field::new(define(format!("({fn_arguments}) => {body}")).into());
+            let mut field_ts = String::with_capacity(fn_arguments.len() + body.len() + 8);
+            field_ts.push('(');
+            field_ts.push_str(&fn_arguments);
+            field_ts.push_str(") => ");
+            field_ts.push_str(&body);
+
+            let mut field = Field::new(define(field_ts).into());
             field.deprecated = command.deprecated.clone();
-            field.docs = {
+            field.docs = if jsdoc {
                 let mut docs = command.docs.to_string();
-
-                if jsdoc {
-                    if !docs.is_empty() {
-                        docs.push('\n');
-                    }
-
-                    docs.push_str(
-                        &arguments
-                            .iter()
-                            .map(|(name, dt)| {
-                                if let Some(name) = name.strip_suffix('?') {
-                                    format!("@param {{{dt}}} [{name}]")
-                                } else {
-                                    format!("@param {{{dt}}} {name}")
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n"),
-                    );
-
-                    if !arguments.is_empty() {
-                        docs.push('\n');
-                    }
-
-                    let returns = if let Some((dt_ok, dt_err)) = typed_result {
-                        let ok_semantic_type = has_semantic_type_for_phase(
-                            dt_ok,
-                            Phase::Deserialize,
-                            "v.data",
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                        );
-                        let err_semantic_type = has_semantic_type_for_phase(
-                            dt_err,
-                            Phase::Deserialize,
-                            "v.error",
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                        );
-                        let ok = render_reference_dt_for_phase(
-                            dt_ok,
-                            if ok_semantic_type {
-                                Phase::Deserialize
-                            } else {
-                                Phase::Serialize
-                            },
-                            Phase::Deserialize,
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                        )?;
-                        let err = render_reference_dt_for_phase(
-                            dt_err,
-                            if err_semantic_type {
-                                Phase::Deserialize
-                            } else {
-                                Phase::Serialize
-                            },
-                            Phase::Deserialize,
-                            &exporter,
-                            cfg,
-                            semantic_types_runtime_types,
-                        )?;
-
-                        result_type(cfg.error_handling, &ok, &err)
-                    } else {
-                        let output_dt = result.map(|(ok, _)| ok).or(command.result.as_ref());
-                        let output_semantic_type = output_dt.is_some_and(|dt| {
-                            has_semantic_type_for_phase(
-                                dt,
-                                Phase::Deserialize,
-                                "v",
-                                &exporter,
-                                cfg,
-                                semantic_types_runtime_types,
-                            )
-                        });
-
-                        match output_dt {
-                            Some(dt) => render_reference_dt_for_phase(
-                                dt,
-                                if output_semantic_type {
-                                    Phase::Deserialize
-                                } else {
-                                    Phase::Serialize
-                                },
-                                Phase::Deserialize,
-                                &exporter,
-                                cfg,
-                                semantic_types_runtime_types,
-                            )?,
-                            None => "void".to_string(),
-                        }
-                    };
-
-                    docs.push_str(&format!("@returns {{Promise<{returns}>}}"));
+                if !docs.is_empty() {
+                    docs.push('\n');
                 }
 
+                for (index, (name, dt)) in arguments.iter().enumerate() {
+                    if index > 0 {
+                        docs.push('\n');
+                    }
+                    if let Some(name) = name.strip_suffix('?') {
+                        docs.push_str("@param {");
+                        docs.push_str(dt);
+                        docs.push_str("} [");
+                        docs.push_str(name);
+                        docs.push(']');
+                    } else {
+                        docs.push_str("@param {");
+                        docs.push_str(dt);
+                        docs.push_str("} ");
+                        docs.push_str(name);
+                    }
+                }
+
+                if !arguments.is_empty() {
+                    docs.push('\n');
+                }
+
+                let returns = if let Some((dt_ok, dt_err)) = typed_result {
+                    let ok_semantic_type = has_semantic_type_for_phase(
+                        dt_ok,
+                        Phase::Deserialize,
+                        "v.data",
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    );
+                    let err_semantic_type = has_semantic_type_for_phase(
+                        dt_err,
+                        Phase::Deserialize,
+                        "v.error",
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    );
+                    let ok = render_reference_dt_for_phase(
+                        dt_ok,
+                        if ok_semantic_type {
+                            Phase::Deserialize
+                        } else {
+                            Phase::Serialize
+                        },
+                        Phase::Deserialize,
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    )?;
+                    let err = render_reference_dt_for_phase(
+                        dt_err,
+                        if err_semantic_type {
+                            Phase::Deserialize
+                        } else {
+                            Phase::Serialize
+                        },
+                        Phase::Deserialize,
+                        &exporter,
+                        cfg,
+                        semantic_types_runtime_types,
+                    )?;
+
+                    result_type(cfg.error_handling, &ok, &err)
+                } else {
+                    let output_dt = result.map(|(ok, _)| ok).or(command.result.as_ref());
+                    let output_semantic_type = output_dt.is_some_and(|dt| {
+                        has_semantic_type_for_phase(
+                            dt,
+                            Phase::Deserialize,
+                            "v",
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        )
+                    });
+
+                    match output_dt {
+                        Some(dt) => render_reference_dt_for_phase(
+                            dt,
+                            if output_semantic_type {
+                                Phase::Deserialize
+                            } else {
+                                Phase::Serialize
+                            },
+                            Phase::Deserialize,
+                            &exporter,
+                            cfg,
+                            semantic_types_runtime_types,
+                        )?,
+                        None => "void".to_string(),
+                    }
+                };
+
+                docs.push_str("@returns {Promise<");
+                docs.push_str(&returns);
+                docs.push_str(">}");
+
                 docs.into()
+            } else {
+                command.docs.clone()
             };
-            s = s.field(
-                cfg.function_casing
-                    .apply(cfg.command_accessor_name(command))
-                    .into_owned(),
-                field,
-            );
+            s = s.field(accessor.to_string(), field);
         }
 
         out.push_str("\n/** Commands */");
@@ -689,10 +779,10 @@ fn runtime(
     // Events
     if has_user_events {
         let mut s = Struct::named();
-        let mut accessors = BTreeMap::new();
+        let mut event_accessors = BTreeMap::new();
         for (name, (_, r)) in &cfg.events {
             let accessor = cfg.function_casing.apply(name);
-            if let Some(first) = accessors.insert(accessor.clone(), name) {
+            if let Some(first) = event_accessors.insert(accessor.clone(), name) {
                 return Err(Error::framework(
                     format!(
                         "Events '{first}' and '{name}' would both export as '{accessor}'. Rename one of them so the generated bindings don't conflict."
@@ -700,10 +790,7 @@ fn runtime(
                     "",
                 ));
             }
-            let event_name_escaped =
-                serde_json::to_string(&resolve_tauri_event_name(cfg.plugin_name, name)).map_err(
-                    |err| Error::framework("failed to serialize an event name for bindings", err),
-                )?;
+            let event_name = resolve_tauri_event_name(cfg.plugin_name, name);
 
             let event_dt = DataType::Reference(r.clone());
             let listen_ty = render_reference_dt_for_phase(
@@ -731,7 +818,7 @@ fn runtime(
                 field_ts.push('>');
             }
             field_ts.push('(');
-            field_ts.push_str(&event_name_escaped);
+            write_js_string_literal(&mut field_ts, &event_name);
             let serialize_transform = render_result_transform_for_phase(
                 &event_dt,
                 Phase::Serialize,
@@ -821,9 +908,92 @@ fn runtime(
     if !cfg.constants.is_empty() {
         out.push_str("\n/* Constants */");
 
+        // The names this configuration's runtime declares. A constant key is emitted as
+        // `export const <key> = ...`, so declaring one of these would either be a
+        // duplicate declaration or silently shadow the runtime's own binding.
+        let mut runtime_names: Vec<Cow<'_, str>> = Vec::with_capacity(20);
+        runtime_names.extend(["__TAURI_EVENT", "makeEvent", "tauriEvents"].map(Cow::Borrowed));
+        if enabled_commands {
+            runtime_names.extend(["__TAURI_INVOKE", "commands"].map(Cow::Borrowed));
+            // TypeScript imports these as types, which still occupy the module scope.
+            // JSDoc declares the same names as `@typedef` comments, which create no
+            // binding, so a constant may use them there.
+            if !jsdoc {
+                runtime_names.push(Cow::Borrowed("InvokeOptions"));
+                if is_raw_request_used {
+                    runtime_names.push(Cow::Borrowed("InvokeArgs"));
+                }
+            }
+        }
+        if has_user_events {
+            runtime_names.push(Cow::Borrowed("events"));
+        }
+        if is_channel_used {
+            runtime_names.push(Cow::Borrowed("Channel"));
+        }
+        if has_typed_error {
+            runtime_names.push(Cow::Borrowed("typedError"));
+            if !cfg.typed_error_impl.is_empty() && !jsdoc {
+                runtime_names.push(Cow::Borrowed("_assertTypedErrorFollowsContract"));
+            }
+        }
+        if needs_channel_mapping {
+            runtime_names.extend(["mapChannel", "channelTransform"].map(Cow::Borrowed));
+        }
+        if enabled_mocks {
+            runtime_names.extend(["__TAURI_MOCK_IPC", "mockCommands"].map(Cow::Borrowed));
+            if enabled_commands {
+                runtime_names.push(Cow::Borrowed("mockCommandHandler"));
+            }
+        }
+        // TypeScript's `Namespaces` layout declares `namespace $s$` and re-exports every
+        // top-level module and root-module type as a value, and its `Files` layout imports
+        // each referenced module into the file that holds the constants. Those bindings
+        // share the module scope with the constants. JSDoc uses `@typedef` comments for the
+        // same information (and rejects `Namespaces` outright), so it has no conflict.
+        if !jsdoc && matches!(exporter.layout, Layout::Namespaces | Layout::Files) {
+            let rendered = exporter
+                .types
+                .into_unsorted_iter()
+                .filter(|ndt| ndt.ty.is_some())
+                .collect::<Vec<_>>();
+            if exporter.layout == Layout::Namespaces && !rendered.is_empty() {
+                runtime_names.push(Cow::Borrowed("$s$"));
+            }
+            for ndt in rendered {
+                if ndt.module_path.is_empty() {
+                    // `export import <name> = $s$.<name>` for a root-module type.
+                    if exporter.layout == Layout::Namespaces {
+                        runtime_names.push(Cow::Borrowed(ndt.name.as_ref()));
+                    }
+                } else if exporter.layout == Layout::Namespaces {
+                    // `export import <first segment> = $s$.<first segment>`.
+                    if let Some(module) = ndt.module_path.split("::").next() {
+                        runtime_names.push(Cow::Borrowed(module));
+                    }
+                } else {
+                    // `import type * as <full path with $ separators> from "./...";`
+                    runtime_names.push(Cow::Owned(ndt.module_path.replace("::", "$")));
+                }
+            }
+        }
+
+        // Globals the generated runtime refers to. A module-level `const` shadows a global
+        // for the whole file, so a constant with one of these names either breaks the
+        // runtime (TDZ on `Object`) or silently changes what emitted code reads.
+        let shadows_global = |key: &str| {
+            matches!(key, "Object" | "undefined")
+                || ((has_typed_error || enabled_mocks) && key == "Error")
+                || (needs_channel_mapping && key == "Symbol")
+                || ((is_raw_request_used || cfg.semantic_types.is_some())
+                    && matches!(key, "Array" | "Uint8Array"))
+        };
+
         let mut constants = cfg.constants.iter().collect::<Vec<_>>();
         constants.sort_by_key(|(a, _)| *a);
         for (name, value) in constants.iter() {
+            validate_constant_name(name, &runtime_names, shadows_global)?;
+
             let mut as_constt = None;
             // `as const` isn't supported in JS so are conditional on that.
             if !jsdoc {
@@ -892,12 +1062,13 @@ fn runtime(
         out.push_str("\n/* Tauri Specta mocks */\n\n");
         out.push_str(&mock_handlers_declaration(
             cfg,
+            &accessors,
             &exporter,
             semantic_types_runtime_types,
             jsdoc,
         )?);
         out.push('\n');
-        out.push_str(&mock_commands_impl(cfg, jsdoc)?);
+        out.push_str(&mock_commands_impl(cfg, &accessors, jsdoc)?);
         if enabled_commands {
             out.push('\n');
             out.push_str(if jsdoc {
@@ -1045,26 +1216,77 @@ const BUILTIN_EVENTS: &[BuiltinEvent] = &[
     },
 ];
 
+/// Append `value` to `out` as a JavaScript string literal.
+///
+/// The result is what `serde_json::to_string` produces for the same string: only `"`, `\`
+/// and control characters are escaped, and non-ASCII text is written verbatim. Names are
+/// usually ASCII, so this is almost always a pair of quotes around the original bytes, but
+/// the event derive accepts non-ASCII letters and command renames accept anything.
+fn write_js_string_literal(out: &mut String, value: &str) {
+    out.push('"');
+
+    // Every byte that needs escaping is ASCII, so slicing on its index stays on a char
+    // boundary.
+    let mut start = 0;
+    for (index, byte) in value.bytes().enumerate() {
+        let escaped = match byte {
+            0x08 => 'b',
+            b'\t' => 't',
+            b'\n' => 'n',
+            0x0c => 'f',
+            b'\r' => 'r',
+            b'"' => '"',
+            b'\\' => '\\',
+            byte if byte < 0x20 => {
+                out.push_str(&value[start..index]);
+                out.push('\\');
+                out.push('u');
+                out.push('0');
+                out.push('0');
+                out.push(char::from_digit(u32::from(byte >> 4), 16).unwrap_or('0'));
+                out.push(char::from_digit(u32::from(byte & 0xf), 16).unwrap_or('0'));
+                start = index + 1;
+                continue;
+            }
+            _ => continue,
+        };
+
+        out.push_str(&value[start..index]);
+        out.push('\\');
+        out.push(escaped);
+        start = index + 1;
+    }
+
+    out.push_str(&value[start..]);
+    out.push('"');
+}
+
 /// An accessor or IPC payload key as it should appear in an object literal or type.
 ///
 /// Accessors are usually plain identifiers, but [`Casing::KebabCase`](crate::Casing)
 /// produces keys like `hello-world`, which have to be quoted. This is the same rule
 /// `specta_typescript` applies to struct field names.
-fn js_object_key(accessor: &str) -> Result<String, Error> {
+fn js_object_key(accessor: &str) -> Cow<'_, str> {
     if is_js_identifier(accessor) {
-        Ok(accessor.to_string())
+        Cow::Borrowed(accessor)
     } else {
-        serde_json::to_string(accessor)
-            .map_err(|err| Error::framework("failed to serialize a JavaScript property key", err))
+        let mut key = String::with_capacity(accessor.len() + 2);
+        write_js_string_literal(&mut key, accessor);
+        Cow::Owned(key)
     }
 }
 
 /// A read of `object`'s [`js_object_key`] property named `accessor`.
-fn js_member_access(object: &str, accessor: &str) -> Result<String, Error> {
+fn js_member_access<'a>(object: &str, accessor: &'a str) -> Cow<'a, str> {
     if is_js_identifier(accessor) {
-        Ok(format!("{object}.{accessor}"))
+        Cow::Owned(format!("{object}.{accessor}"))
     } else {
-        Ok(format!("{object}[{}]", js_object_key(accessor)?))
+        let mut access = String::with_capacity(object.len() + accessor.len() + 4);
+        access.push_str(object);
+        access.push('[');
+        write_js_string_literal(&mut access, accessor);
+        access.push(']');
+        Cow::Owned(access)
     }
 }
 
@@ -1085,17 +1307,15 @@ fn is_js_identifier(name: &str) -> bool {
 /// frontend-facing API here any more than it does for `commands` itself.
 fn mock_handlers_declaration(
     cfg: &BuilderConfiguration,
+    accessors: &[Cow<'_, str>],
     exporter: &FrameworkExporter,
     semantic_types_runtime_types: &Types,
     jsdoc: bool,
 ) -> Result<String, Error> {
     let mut handlers = Vec::new();
 
-    for command in cfg.commands.iter() {
-        let key = js_object_key(
-            &cfg.function_casing
-                .apply(cfg.command_accessor_name(command)),
-        )?;
+    for (command, accessor) in cfg.commands.iter().zip(accessors) {
+        let key = js_object_key(accessor);
         let (arguments, result) =
             mock_handler_signature(command, exporter, cfg, semantic_types_runtime_types)?;
         handlers.push(format!(
@@ -1135,28 +1355,32 @@ fn command_arguments(
     exporter: &FrameworkExporter,
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
-    used_names: &mut BTreeSet<String>,
+    reserved_names: &[&str],
 ) -> Result<Vec<(String, String)>, Error> {
-    command
-        .args
-        .iter()
-        .map(|arg| {
-            Ok((
-                command_parameter_name(&arg.name, used_names),
-                render_reference_dt_for_phase(
-                    &arg.ty,
-                    Phase::Deserialize,
-                    Phase::Serialize,
-                    exporter,
-                    cfg,
-                    semantic_types_runtime_types,
-                )?,
-            ))
-        })
-        .collect()
+    let mut arguments = Vec::with_capacity(command.args.len());
+    for arg in &command.args {
+        // A name is taken if an earlier argument or a runtime helper already uses it. The
+        // trailing `options` parameter is renamed instead (see the caller), so an argument
+        // may keep that name.
+        let name = command_parameter_name(&arg.name, |name| {
+            reserved_names.contains(&name) || arguments.iter().any(|(used, _)| used == name)
+        });
+        arguments.push((
+            name,
+            render_reference_dt_for_phase(
+                &arg.ty,
+                Phase::Deserialize,
+                Phase::Serialize,
+                exporter,
+                cfg,
+                semantic_types_runtime_types,
+            )?,
+        ));
+    }
+    Ok(arguments)
 }
 
-fn command_parameter_name(key: &str, used_names: &mut BTreeSet<String>) -> String {
+fn command_parameter_name(key: &str, is_taken: impl Fn(&str) -> bool) -> String {
     let mut name = key.to_lower_camel_case();
     if !is_js_identifier(&name) {
         name.insert(0, '_');
@@ -1165,7 +1389,7 @@ fn command_parameter_name(key: &str, used_names: &mut BTreeSet<String>) -> Strin
             name = "_arg".into();
         }
     }
-    while is_reserved_parameter_name(&name) || !used_names.insert(name.clone()) {
+    while is_reserved_parameter_name(&name) || is_taken(&name) {
         name.insert(0, '_');
     }
     name
@@ -1265,8 +1489,8 @@ fn mock_handler_signature(
             "(args: {{ {} }})",
             arguments
                 .iter()
-                .map(|(name, dt)| Ok(format!("{}: {dt}", js_object_key(name)?)))
-                .collect::<Result<Vec<_>, Error>>()?
+                .map(|(name, dt)| format!("{}: {dt}", js_object_key(name)))
+                .collect::<Vec<_>>()
                 .join("; ")
         )
     };
@@ -1380,7 +1604,11 @@ fn validate_mock_transforms(
 
 /// The `mockCommands` installer, which routes each registered Tauri command name to its
 /// handler.
-fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String, Error> {
+fn mock_commands_impl(
+    cfg: &BuilderConfiguration,
+    accessors: &[Cow<'_, str>],
+    jsdoc: bool,
+) -> Result<String, Error> {
     let mut out = String::new();
     out.push_str(if jsdoc {
         MOCK_CALL_TYPES_JS
@@ -1415,24 +1643,20 @@ fn mock_commands_impl(cfg: &BuilderConfiguration, jsdoc: bool) -> Result<String,
     out.push_str("    __TAURI_MOCK_IPC((cmd, args) => {\n");
     out.push_str("        switch (cmd) {\n");
 
-    for command in cfg.commands.iter() {
-        let accessor = cfg
-            .function_casing
-            .apply(cfg.command_accessor_name(command))
-            .into_owned();
-        let access = js_member_access("mockHandlers", &accessor)?;
+    for (command, accessor) in cfg.commands.iter().zip(accessors) {
+        let access = js_member_access("mockHandlers", accessor);
         // The recorded name is the accessor, not the Tauri command name, so a test can
         // assert against the same name it uses for `commands`.
-        let accessor_literal = serde_json::to_string(&accessor)
-            .map_err(|err| Error::framework("failed to serialize a command accessor", err))?;
-        let command_name = serde_json::to_string(&resolve_tauri_command_name(
-            cfg.plugin_name,
-            command.name.as_ref(),
-        ))
-        .map_err(|err| Error::framework("failed to serialize a command name for bindings", err))?;
-        out.push_str(&format!(
-            "            case {command_name}: calls.push({{ command: {accessor_literal}, args }}); return mockCommandHandler({access}, {command_name}, args);\n"
-        ));
+        let command_name = resolve_tauri_command_name(cfg.plugin_name, command.name.as_ref());
+        out.push_str("            case ");
+        write_js_string_literal(&mut out, &command_name);
+        out.push_str(": calls.push({ command: ");
+        write_js_string_literal(&mut out, accessor);
+        out.push_str(", args }); return mockCommandHandler(");
+        out.push_str(&access);
+        out.push_str(", ");
+        write_js_string_literal(&mut out, &command_name);
+        out.push_str(", args);\n");
     }
 
     // Record before dispatching, so a call that fails is still part of the history. A
@@ -1483,27 +1707,31 @@ fn runtime_scope_name(
 struct SpectaFormat {
     disable_serde_phases: bool,
     semantic_types: Option<semantic::Configuration>,
-    remapper: Remapper,
+    /// `None` unless bigints are cast to `number`. Remapping without rules just walks the
+    /// type graph, so leaving it out keeps the default export from paying for it.
+    remapper: Option<Remapper>,
 }
 
 impl SpectaFormat {
     fn new(cfg: &BuilderConfiguration) -> Self {
-        let mut remapper = Remapper::new();
+        let mut remapper = None;
 
         if cfg.dangerously_cast_bigints_to_number {
             // Creating a virtual `Types` here is a bad pattern but given we know Specta doesn't use it, it's safe.
             let number = <specta_typescript::Number as Type>::definition(&mut Types::default());
-            remapper = remapper
-                .rule(DataType::Primitive(Primitive::usize), number.clone())
-                .rule(DataType::Primitive(Primitive::isize), number.clone())
-                .rule(DataType::Primitive(Primitive::u64), number.clone())
-                .rule(DataType::Primitive(Primitive::i64), number.clone())
-                .rule(DataType::Primitive(Primitive::u128), number.clone())
-                .rule(DataType::Primitive(Primitive::i128), number.clone())
-                .rule(
-                    <specta_typescript::BigInt as Type>::definition(&mut Types::default()),
-                    number,
-                );
+            remapper = Some(
+                Remapper::new()
+                    .rule(DataType::Primitive(Primitive::usize), number.clone())
+                    .rule(DataType::Primitive(Primitive::isize), number.clone())
+                    .rule(DataType::Primitive(Primitive::u64), number.clone())
+                    .rule(DataType::Primitive(Primitive::i64), number.clone())
+                    .rule(DataType::Primitive(Primitive::u128), number.clone())
+                    .rule(DataType::Primitive(Primitive::i128), number.clone())
+                    .rule(
+                        <specta_typescript::BigInt as Type>::definition(&mut Types::default()),
+                        number,
+                    ),
+            );
         }
 
         Self {
@@ -1522,12 +1750,15 @@ impl Format for SpectaFormat {
             specta_serde::PhasesFormat.map_types(types)
         }?;
 
-        Ok(match &self.semantic_types {
-            Some(semantic_types) => Cow::Owned(
-                self.remapper
-                    .remap_types(semantic_types.apply_types(&types).into_owned()),
-            ),
-            None => Cow::Owned(self.remapper.remap_types(types.into_owned())),
+        Ok(match (&self.semantic_types, &self.remapper) {
+            (Some(semantic_types), Some(remapper)) => {
+                Cow::Owned(remapper.remap_types(semantic_types.apply_types(&types).into_owned()))
+            }
+            (Some(semantic_types), None) => {
+                Cow::Owned(semantic_types.apply_types(&types).into_owned())
+            }
+            (None, Some(remapper)) => Cow::Owned(remapper.remap_types(types.into_owned())),
+            (None, None) => types,
         })
     }
 
@@ -1542,7 +1773,10 @@ impl Format for SpectaFormat {
             specta_serde::PhasesFormat.map_type(types, dt)?
         };
 
-        Ok(Cow::Owned(self.remapper.remap_dt(dt.into_owned())))
+        Ok(match &self.remapper {
+            Some(remapper) => Cow::Owned(remapper.remap_dt(dt.into_owned())),
+            None => dt,
+        })
     }
 }
 
@@ -2001,6 +2235,10 @@ fn render_result_transform_for_phase(
     cfg: &BuilderConfiguration,
     semantic_types_runtime_types: &Types,
 ) -> Option<String> {
+    // Only a semantic rule can produce a transform, and the phase selection below exists
+    // to feed that rule lookup -- so without semantic types there is nothing to render.
+    cfg.semantic_types.as_ref()?;
+
     // Keep named references so Specta can match registered semantic rules before
     // descending into the type's fields.
     let dt = specta_serde::select_phase_datatype(dt, semantic_types_runtime_types, phase);
@@ -2184,6 +2422,60 @@ fn is_reserved_ndt_name(name: &str, jsdoc: bool, mocks: bool) -> bool {
     RESERVED_NDT_NAMES.contains(&name)
         || (!jsdoc && RESERVED_NDT_NAMES_TS_ONLY.contains(&name))
         || (mocks && RESERVED_NDT_NAMES_MOCKS_ONLY.contains(&name))
+}
+
+/// Rejects a [`Builder::constant`](crate::Builder::constant) key the bindings could not
+/// declare.
+///
+/// The key is part of the public export -- it is what the frontend imports -- so it is
+/// emitted verbatim and is neither renamed nor quoted. That means it has to be a valid
+/// JavaScript binding name, it must not be one of the runtime names in `emitted`, which are
+/// exactly the ones this export declares for its configuration, and it must not shadow a
+/// global in `shadowed_globals` that emitted runtime code reads.
+fn validate_constant_name(
+    key: &str,
+    emitted: &[Cow<'_, str>],
+    shadows_global: impl Fn(&str) -> bool,
+) -> Result<(), Error> {
+    if !is_js_identifier(key) {
+        return Err(Error::framework(
+            format!(
+                "Constant '{key}' is not a valid JavaScript identifier, so the bindings can't declare it. Rename it to a valid identifier."
+            ),
+            "",
+        ));
+    }
+
+    // The same strict-mode set that generated parameter names avoid. A reserved word is a
+    // legal object key but not a legal binding, so it cannot follow `export const`.
+    if is_reserved_parameter_name(key) {
+        return Err(Error::framework(
+            format!(
+                "Constant '{key}' is a JavaScript reserved word, so the bindings can't declare it. Rename the constant."
+            ),
+            "",
+        ));
+    }
+
+    if emitted.iter().any(|name| name.as_ref() == key) {
+        return Err(Error::framework(
+            format!(
+                "Constant '{key}' would collide with the '{key}' the generated runtime declares. Rename the constant so the bindings don't redeclare it."
+            ),
+            "",
+        ));
+    }
+
+    if shadows_global(key) {
+        return Err(Error::framework(
+            format!(
+                "Constant '{key}' would shadow the '{key}' global that the generated runtime uses. Rename the constant."
+            ),
+            "",
+        ));
+    }
+
+    Ok(())
 }
 
 const FRAMEWORK_HEADER: &str =
@@ -2527,6 +2819,7 @@ mod tests {
     };
     use specta_typescript::{JSDoc, Layout, Typescript, define, semantic};
 
+    use super::write_js_string_literal;
     use crate::{Builder, ErrorHandlingMode, collect_commands};
 
     #[tauri::command]
@@ -3174,5 +3467,303 @@ mod tests {
             .expect("failed to export TypeScript bindings");
         let ts = fs::read_to_string(&result_path).expect("failed to read TypeScript bindings");
         assert!(ts.contains("BigInt(v.error)"), "{ts}");
+    }
+
+    /// The bindings used to quote these strings with serde_json, so the hand-written
+    /// escaper has to agree with it for every string, not only the ASCII identifiers that
+    /// are almost always what gets quoted.
+    #[test]
+    fn javascript_string_literals_match_serde_json() {
+        let cases = [
+            "",
+            "greet",
+            "plugin:my-plugin|greet",
+            "hello-world",
+            "with space",
+            "quote\"inside",
+            "back\\slash",
+            "new\nline",
+            "tab\there",
+            "carriage\rreturn",
+            "backspace\u{8}here",
+            "form\u{c}feed",
+            "nul\0byte",
+            "control\u{1f}",
+            "delete\u{7f}",
+            "unicode: h\u{e9}llo \u{2713} \u{65e5}\u{672c}\u{8a9e}",
+            "emoji \u{1f389}\"quoted\"",
+        ];
+
+        for case in cases {
+            let mut out = String::new();
+            write_js_string_literal(&mut out, case);
+            assert_eq!(
+                out,
+                serde_json::to_string(case).expect("failed to serialize a test string"),
+                "escaping {case:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn constant_keys_must_be_identifiers_that_do_not_collide_with_the_runtime() {
+        let output_dir = std::env::temp_dir().join(format!(
+            "tauri-specta-constant-names-test-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&output_dir).expect("failed to create test output directory");
+
+        // An ordinary key is still emitted as written.
+        let valid_path = output_dir.join("valid.ts");
+        Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .constant("APP_NAME", "Bench")
+            .export(Typescript::default(), &valid_path)
+            .expect("a valid constant key should export");
+        let ts = fs::read_to_string(&valid_path).expect("failed to read TypeScript bindings");
+        assert!(
+            ts.contains("export const APP_NAME = \"Bench\" as const;"),
+            "{ts}"
+        );
+
+        // @commands@ is the generated accessor object of the same export, so the two would
+        // declare the same binding.
+        let collision = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .constant("commands", 1)
+            .export(Typescript::default(), output_dir.join("collision.ts"))
+            .expect_err("a constant named after the generated commands object is rejected");
+        assert!(
+            collision
+                .to_string()
+                .contains("Constant 'commands' would collide with the 'commands'"),
+            "{collision}"
+        );
+
+        // Keys that are not identifiers cannot appear after @export const@.
+        for key in ["my-const", "1bad"] {
+            let error = Builder::<tauri::Wry>::new()
+                .constant(key, 1)
+                .export(Typescript::default(), output_dir.join("invalid.ts"))
+                .expect_err("a constant key that is not an identifier is rejected");
+            assert!(
+                error
+                    .to_string()
+                    .contains("is not a valid JavaScript identifier"),
+                "{error}"
+            );
+            assert!(error.to_string().contains(key), "{error}");
+        }
+
+        // @typedError@ is only declared by the modes that emit it, so it is a legal key for
+        // an export that never declares it.
+        let throw_path = output_dir.join("throw.ts");
+        Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .error_handling(ErrorHandlingMode::Throw)
+            .constant("typedError", 1)
+            .export(Typescript::default(), &throw_path)
+            .expect("a Throw-mode export does not declare typedError");
+        let ts = fs::read_to_string(&throw_path).expect("failed to read TypeScript bindings");
+        assert!(ts.contains("export const typedError = 1 as const;"), "{ts}");
+
+        fs::remove_dir_all(output_dir).expect("failed to remove test output directory");
+    }
+
+    fn constant_test_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "tauri-specta-constant-{name}-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).expect("failed to create test output directory");
+        dir
+    }
+
+    #[derive(Debug)]
+    struct Unserializable;
+
+    impl Serialize for Unserializable {
+        fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+            Err(<S::Error as serde::ser::Error>::custom(
+                "value cannot be serialized",
+            ))
+        }
+    }
+
+    #[test]
+    fn constant_serialization_failures_are_reported_at_export() {
+        let dir = constant_test_dir("serialize");
+
+        // The builder chain has nowhere to return an error and must not panic, so the
+        // failure is deferred to export.
+        let error = Builder::<tauri::Wry>::new()
+            .constant("BROKEN", Unserializable)
+            .export(Typescript::default(), dir.join("broken.ts"))
+            .expect_err("a constant that cannot be serialized fails export");
+        assert!(
+            error
+                .to_string()
+                .contains("failed to serialize constant 'BROKEN'"),
+            "{error}"
+        );
+        assert!(
+            error.to_string().contains("value cannot be serialized"),
+            "{error}"
+        );
+
+        fs::remove_dir_all(dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn constant_keys_cannot_be_reserved_words() {
+        let dir = constant_test_dir("reserved");
+        // Reserved words are legal object keys but not legal bindings, and the same set is
+        // already avoided for generated parameter names.
+        for key in ["class", "default", "await", "arguments"] {
+            for jsdoc in [false, true] {
+                let error = if jsdoc {
+                    Builder::<tauri::Wry>::new()
+                        .constant(key, 1)
+                        .export(JSDoc::default(), dir.join("reserved.js"))
+                } else {
+                    Builder::<tauri::Wry>::new()
+                        .constant(key, 1)
+                        .export(Typescript::default(), dir.join("reserved.ts"))
+                }
+                .expect_err("a reserved word cannot be declared with export const");
+                assert!(
+                    error.to_string().contains("is a JavaScript reserved word"),
+                    "{key} (jsdoc: {jsdoc}): {error}"
+                );
+                assert!(error.to_string().contains(key), "{error}");
+            }
+        }
+        fs::remove_dir_all(dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn constant_keys_cannot_collide_with_type_imports() {
+        let dir = constant_test_dir("type-imports");
+        // TypeScript imports InvokeOptions whenever commands are generated, which is a
+        // module binding even though it is only used in type position.
+        let error = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .constant("InvokeOptions", 1)
+            .export(Typescript::default(), dir.join("commands.ts"))
+            .expect_err("the InvokeOptions type import occupies the name");
+        assert!(
+            error
+                .to_string()
+                .contains("would collide with the 'InvokeOptions'"),
+            "{error}"
+        );
+
+        // JSDoc declares it with an @typedef, which creates no binding.
+        let jsdoc_path = dir.join("commands.js");
+        Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .constant("InvokeOptions", 1)
+            .export(JSDoc::default(), &jsdoc_path)
+            .expect("JSDoc has no InvokeOptions binding to collide with");
+        let js = fs::read_to_string(&jsdoc_path).expect("failed to read JSDoc bindings");
+        assert!(js.contains("export const InvokeOptions = 1;"), "{js}");
+
+        // Without commands the type is not imported at all.
+        let plain_path = dir.join("plain.ts");
+        Builder::<tauri::Wry>::new()
+            .constant("InvokeOptions", 1)
+            .export(Typescript::default(), &plain_path)
+            .expect("an export without commands does not import InvokeOptions");
+        let ts = fs::read_to_string(&plain_path).expect("failed to read TypeScript bindings");
+        assert!(
+            ts.contains("export const InvokeOptions = 1 as const;"),
+            "{ts}"
+        );
+
+        fs::remove_dir_all(dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn constant_keys_cannot_shadow_runtime_globals() {
+        let dir = constant_test_dir("globals");
+
+        // makeEvent always calls Object.assign, and a no-argument invoke passes
+        // undefined, so both are read unconditionally.
+        for key in ["Object", "undefined"] {
+            let error = Builder::<tauri::Wry>::new()
+                .constant(key, 1)
+                .export(Typescript::default(), dir.join("globals.ts"))
+                .expect_err("a constant must not shadow a global the runtime reads");
+            assert!(error.to_string().contains("would shadow the '"), "{error}");
+            assert!(error.to_string().contains(key), "{error}");
+        }
+
+        // Symbol is only read by channel mapping, and Error only by typed errors and mocks,
+        // so both are legal for a configuration that emits neither.
+        let plain_path = dir.join("plain.ts");
+        Builder::<tauri::Wry>::new()
+            .error_handling(ErrorHandlingMode::Throw)
+            .constant("Symbol", 1)
+            .constant("Error", 1)
+            .export(Typescript::default(), &plain_path)
+            .expect("a Throw export with no channels reads neither global");
+
+        // The default Result handling declares typedError, which tests instanceof Error.
+        let error = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nullable_result])
+            .error_handling(ErrorHandlingMode::Result)
+            .constant("Error", 1)
+            .export(Typescript::default(), dir.join("typed.ts"))
+            .expect_err("typedError reads the Error global");
+        assert!(
+            error
+                .to_string()
+                .contains("would shadow the 'Error' global"),
+            "{error}"
+        );
+
+        fs::remove_dir_all(dir).expect("failed to remove test output directory");
+    }
+
+    #[test]
+    fn constant_keys_cannot_collide_with_layout_bindings() {
+        let dir = constant_test_dir("layout");
+        let namespaces = dir.join("namespaces.ts");
+
+        // nested_semantic_bytes registers a named type from this crate, so the layouts
+        // below generate the module bindings they would for a real application.
+        for key in ["$s$", "tauri_specta"] {
+            let error = Builder::<tauri::Wry>::new()
+                .commands(collect_commands![nested_semantic_bytes])
+                .constant(key, 1)
+                .export(
+                    Typescript::default().layout(Layout::Namespaces),
+                    &namespaces,
+                )
+                .expect_err("the Namespaces layout re-exports modules as values");
+            assert!(error.to_string().contains(key), "{key}: {error}");
+        }
+
+        // The Files layout aliases the full module path, joined with dollar signs.
+        let files = dir.join("files");
+        let error = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nested_semantic_bytes])
+            .constant("tauri_specta$lang$js_ts$tests", 1)
+            .export(Typescript::default().layout(Layout::Files), &files)
+            .expect_err("the Files layout imports the module under its aliased path");
+        assert!(
+            error.to_string().contains("tauri_specta$lang$js_ts$tests"),
+            "{error}"
+        );
+
+        // JSDoc describes the same module with a @typedef, so it creates no binding.
+        let jsdoc_files = dir.join("jsdoc-files");
+        Builder::<tauri::Wry>::new()
+            .commands(collect_commands![nested_semantic_bytes])
+            .constant("tauri_specta$lang$js_ts$tests", 1)
+            .export(JSDoc::default().layout(Layout::Files), &jsdoc_files)
+            .expect("JSDoc module documentation is not a binding");
+
+        fs::remove_dir_all(dir).expect("failed to remove test output directory");
     }
 }
